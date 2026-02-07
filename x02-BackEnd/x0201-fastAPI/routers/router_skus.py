@@ -63,6 +63,18 @@ def create_sku(sku: schemas.SkuCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Database error")
 
 
+@router.post("/skus/duplicate", response_model=schemas.Sku)
+def duplicate_sku_endpoint(dup_data: schemas.SkuDuplicate, db: Session = Depends(get_db)):
+    """Duplicate an existing SKU and all its steps."""
+    try:
+        return crud.duplicate_sku(db=db, dup_data=dup_data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error duplicating SKU: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.put("/skus/{sku_db_id}", response_model=schemas.Sku)
 def update_sku(sku_db_id: int, sku: schemas.SkuCreate, db: Session = Depends(get_db)):
     """Update SKU."""

@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useQuasar } from 'quasar'
 import { appConfig } from '~/appConfig/config'
-import VueApexCharts from 'vue3-apexcharts'
+// import VueApexCharts from 'vue3-apexcharts'
 
 const $q = useQuasar()
 
@@ -68,9 +68,9 @@ const fetchStatus = async () => {
     if (!response.ok) throw new Error('Failed to fetch server status')
     status.value = await response.json()
     error.value = null
-  } catch (e: any) {
+  } catch (e) {
     console.error(e)
-    error.value = e.message
+    error.value = (e as any).message
   } finally {
     loading.value = false
   }
@@ -81,7 +81,7 @@ const fetchHistory = async () => {
     const response = await fetch(`${appConfig.apiBaseUrl}/server-status/history`)
     if (!response.ok) throw new Error('Failed to fetch server history')
     history.value = await response.json()
-  } catch (e: any) {
+  } catch (e) {
     console.error('History fetch error:', e)
   }
 }
@@ -364,7 +364,7 @@ onUnmounted(() => {
               <div class="text-subtitle1 text-weight-bold">CPU History (1h)</div>
             </q-card-section>
             <q-card-section>
-              <VueApexCharts
+              <apexchart
                 height="250"
                 :options="baseChartOptions"
                 :series="cpuSeries"
@@ -379,7 +379,7 @@ onUnmounted(() => {
               <div class="text-subtitle1 text-weight-bold">Memory History (1h)</div>
             </q-card-section>
             <q-card-section>
-              <VueApexCharts
+              <apexchart
                 height="250"
                 :options="baseChartOptions"
                 :series="memSeries"

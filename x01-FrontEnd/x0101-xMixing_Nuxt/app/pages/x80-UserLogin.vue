@@ -55,7 +55,7 @@ const handleLogin = async () => {
         position: 'top',
       })
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Login error:', error)
     $q.notify({
       type: 'negative',

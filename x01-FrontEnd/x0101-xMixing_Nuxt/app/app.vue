@@ -65,12 +65,6 @@ const handleLogout = async () => {
     <q-page-container>
       <NuxtPage />
     </q-page-container>
-
-    <q-footer elevated class="bg-primary text-white">
-      <q-toolbar>
-        <q-toolbar-title> "xMixingControl © 2026 Created by xDev" </q-toolbar-title>
-      </q-toolbar>
-    </q-footer>
   </q-layout>
 </template>
 

@@ -1054,7 +1054,7 @@ const onFileSelected = async (event: Event) => {
         const err = await response.json()
         throw new Error(err.detail || 'Import failed')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Import error:', error)
       $q.notify({
         type: 'negative',
@@ -1069,7 +1069,8 @@ const onFileSelected = async (event: Event) => {
   }
 }
 
-
+}
+// Closing brace added to fix unmatched opening in onFileSelected
 </script>
 
 <template>

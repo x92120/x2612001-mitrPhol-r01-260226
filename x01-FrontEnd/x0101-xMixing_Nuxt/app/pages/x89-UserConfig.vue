@@ -147,7 +147,7 @@ const saveUserChanges = async () => {
       }
       throw new Error(errorMessage)
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating user:', error)
     $q.notify({
       type: 'negative',
@@ -184,7 +184,7 @@ const createUser = async () => {
       const errorData = await response.json()
       throw new Error(errorData.detail || 'Failed to create user')
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating user:', error)
     $q.notify({
       type: 'negative',

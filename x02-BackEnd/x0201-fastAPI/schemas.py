@@ -237,6 +237,12 @@ class Sku(SkuBase):
     class Config:
         from_attributes = True
 
+class SkuDuplicate(BaseModel):
+    source_sku_id: str
+    new_sku_id: str
+    new_sku_name: str
+    creat_by: str = "system"
+
 # Production Batch Schema
 class ProductionBatchBase(BaseModel):
     batch_id: str

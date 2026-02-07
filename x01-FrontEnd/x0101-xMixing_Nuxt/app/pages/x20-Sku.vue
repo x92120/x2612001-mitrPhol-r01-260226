@@ -134,11 +134,15 @@ const showSkuDialog = ref(false)
 const showStepDialog = ref(false)
 const showActionDialog = ref(false)
 const showPhaseDialog = ref(false)
+const showDuplicateDialog = ref(false)
 
 const isCreatingSku = ref(false)
 const isEditMode = ref(false)
 const isSavingAction = ref(false)
 const isActionEdit = ref(false)
+const isDuplicating = ref(false)
+const actionSearch = ref('')
+const phaseSearch = ref('')
 
 // --- Forms ---
 const editingSkuId = ref<number | undefined>(undefined)
@@ -148,6 +152,12 @@ const skuForm = ref({
   std_batch_size: 0,
   uom: 'kg',
   status: 'Active'
+})
+
+const duplicateForm = ref({
+  source_sku_id: '',
+  new_sku_id: '',
+  new_sku_name: ''
 })
 
 const editingStep = ref<SkuStep | null>(null)
@@ -313,6 +323,25 @@ const filteredSkus = computed(() => {
   return skus
 })
 
+const filteredSkuActions = computed(() => {
+  if (!actionSearch.value) return skuActions.value
+  const needle = actionSearch.value.toLowerCase()
+  return skuActions.value.filter(a => 
+    a.action_code.toLowerCase().includes(needle) || 
+    a.action_description.toLowerCase().includes(needle)
+  )
+})
+
+const filteredSkuPhases = computed(() => {
+  if (!phaseSearch.value) return skuPhases.value
+  const needle = phaseSearch.value.toLowerCase()
+  return skuPhases.value.filter(p => 
+    p.phase_id.toString().toLowerCase().includes(needle) || 
+    (p.phase_code || '').toLowerCase().includes(needle) || 
+    p.phase_description.toLowerCase().includes(needle)
+  )
+})
+
 // ============================================================================
 // API SERVICES & UTILITIES
 // ============================================================================
@@ -337,8 +366,10 @@ const fetchSkuSteps = async (skuId: string) => {
 }
 
 const fetchActions = async () => {
+  isLoading.value = true
   try { skuActions.value = await fetch(`${appConfig.apiBaseUrl}/sku-actions/`).then(res => res.json()) } 
   catch (e) { console.error(e) }
+  finally { isLoading.value = false }
 }
 
 const fetchDestinations = async () => {
@@ -347,8 +378,10 @@ const fetchDestinations = async () => {
 }
 
 const fetchPhases = async () => {
+  isLoading.value = true
   try { skuPhases.value = await fetch(`${appConfig.apiBaseUrl}/sku-phases/`).then(res => res.json()) } 
   catch (e) { console.error(e) }
+  finally { isLoading.value = false }
 }
 
 const fetchIngredients = async () => {
@@ -565,7 +598,40 @@ const deleteSku = (sku: SkuMaster) => {
 }
 
 const copySku = (sku: SkuMaster) => {
-  $q.notify({ type: 'info', message: 'Copy SKU functionality to be implemented', icon: 'info' })
+  duplicateForm.value = {
+    source_sku_id: sku.sku_id,
+    new_sku_id: `${sku.sku_id}-COPY`,
+    new_sku_name: `${sku.sku_name} (Copy)`
+  }
+  showDuplicateDialog.value = true
+}
+
+const saveDuplicateSku = async () => {
+  if (!duplicateForm.value.new_sku_id || !duplicateForm.value.new_sku_name) {
+    return $q.notify({ type: 'warning', message: 'Please fill all mandatory fields' })
+  }
+  
+  isDuplicating.value = true
+  try {
+    const response = await fetch(`${appConfig.apiBaseUrl}/skus/duplicate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(duplicateForm.value)
+    })
+    
+    if (response.ok) {
+      $q.notify({ type: 'positive', message: 'SKU duplicated successfully' })
+      showDuplicateDialog.value = false
+      await fetchSkuMasters()
+    } else {
+      const error = await response.json()
+      $q.notify({ type: 'negative', message: error.detail || 'Duplication failed' })
+    }
+  } catch (e) {
+    $q.notify({ type: 'negative', message: 'Network error or server down' })
+  } finally {
+    isDuplicating.value = false
+  }
 }
 
 // ============================================================================
@@ -1023,7 +1089,7 @@ onMounted(refreshAll)
                 <div class="col-4">
                     <q-select
                       v-model="stepForm.action_code"
-                      :options="skuActions.map(a => ({ label: a.action_code, value: a.action_code }))"
+                      :options="skuActions.map(a => ({ label: `${a.action_code} - ${a.action_description}`, value: a.action_code }))"
                       label="Action Code"
                       outlined
                       dense
@@ -1378,6 +1444,66 @@ onMounted(refreshAll)
       </q-card>
     </q-dialog>
 
+    <!-- SKU Duplicate Dialog -->
+    <q-dialog v-model="showDuplicateDialog">
+      <q-card style="min-width: 500px" class="q-pa-md">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">
+            <q-icon name="content_copy" color="accent" class="q-mr-sm" />
+            Duplicate SKU: {{ duplicateForm.source_sku_id }}
+          </div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section class="q-pt-md">
+          <div class="text-subtitle2 text-grey-7 q-mb-md">
+            This will copy all production steps and settings from the source SKU to the new one.
+          </div>
+          
+          <div class="q-gutter-y-md">
+            <q-input
+              v-model="duplicateForm.new_sku_id"
+              label="New SKU ID *"
+              outlined
+              dense
+              autofocus
+              :rules="[val => !!val || 'New SKU ID is required']"
+              hint="Unique identifier for the new SKU"
+            />
+
+            <q-input
+              v-model="duplicateForm.new_sku_name"
+              label="New SKU Name *"
+              outlined
+              dense
+              :rules="[val => !!val || 'New SKU Name is required']"
+              hint="Descriptive name for the new SKU"
+            />
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-pa-md q-gutter-sm">
+          <q-btn
+            label="CANCEL"
+            color="grey-7"
+            flat
+            v-close-popup
+            class="q-px-md"
+          />
+          <q-btn
+            label="DUPLICATE SKU"
+            color="accent"
+            unelevated
+            @click="saveDuplicateSku"
+            :loading="isDuplicating"
+            icon="content_copy"
+            class="q-px-lg"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
 
 
     <!-- SKU Action Dialog -->
@@ -1412,9 +1538,30 @@ onMounted(refreshAll)
            </div>
 
            <q-separator class="q-mb-md" />
-           <div class="text-subtitle2 q-mb-sm text-grey-8 uppercase text-bold">Existing Actions</div>
+           
+           <div class="row items-center q-mb-sm">
+             <div class="text-subtitle2 text-grey-8 uppercase text-bold">Existing Actions</div>
+             <q-space />
+             <q-btn flat round dense icon="refresh" color="primary" @click="fetchActions" :loading="isLoading" size="sm">
+               <q-tooltip>Refresh Actions</q-tooltip>
+             </q-btn>
+           </div>
+
+           <q-input 
+             v-model="actionSearch" 
+             placeholder="Filter actions..." 
+             dense 
+             outlined 
+             class="q-mb-sm"
+             clearable
+           >
+             <template v-slot:prepend>
+               <q-icon name="search" />
+             </template>
+           </q-input>
+
            <q-list bordered separator style="max-height: 300px; overflow-y: auto" class="rounded-borders">
-             <q-item v-for="action in skuActions" :key="action.action_code">
+             <q-item v-for="action in filteredSkuActions" :key="action.action_code">
                <q-item-section>
                  <q-item-label class="text-bold text-primary">{{ action.action_code }}</q-item-label>
                  <q-item-label caption>{{ action.action_description }}</q-item-label>
@@ -1426,9 +1573,9 @@ onMounted(refreshAll)
                  </div>
                </q-item-section>
              </q-item>
-              <q-item v-if="skuActions.length === 0">
-                 <q-item-section class="text-center text-grey">No actions defined</q-item-section>
-              </q-item>
+                <q-item v-if="filteredSkuActions.length === 0">
+                  <q-item-section class="text-center text-grey">No matching actions found</q-item-section>
+               </q-item>
            </q-list>
         </q-card-section>
 
@@ -1469,9 +1616,30 @@ onMounted(refreshAll)
            </div>
 
            <q-separator class="q-mb-md" />
-           <div class="text-subtitle2 q-mb-sm text-grey-8 uppercase text-bold">Existing Phases</div>
+           
+           <div class="row items-center q-mb-sm">
+             <div class="text-subtitle2 text-grey-8 uppercase text-bold">Existing Phases</div>
+             <q-space />
+             <q-btn flat round dense icon="refresh" color="primary" @click="fetchPhases" :loading="isLoading" size="sm">
+               <q-tooltip>Refresh Phases</q-tooltip>
+             </q-btn>
+           </div>
+
+           <q-input 
+             v-model="phaseSearch" 
+             placeholder="Filter phases..." 
+             dense 
+             outlined 
+             class="q-mb-sm"
+             clearable
+           >
+             <template v-slot:prepend>
+               <q-icon name="search" />
+             </template>
+           </q-input>
+
            <q-list bordered separator style="max-height: 300px; overflow-y: auto" class="rounded-borders">
-             <q-item v-for="phase in skuPhases" :key="phase.phase_id">
+             <q-item v-for="phase in filteredSkuPhases" :key="phase.phase_id">
                <q-item-section avatar v-if="phase.phase_code">
                  <q-badge color="primary">{{ phase.phase_code }}</q-badge>
                </q-item-section>

@@ -93,6 +93,49 @@ def delete_sku(db: Session, sku_db_id: int) -> Optional[models.Sku]:
         db.rollback()
         raise RuntimeError(f"Database error: {str(e)}")
 
+def duplicate_sku(db: Session, dup_data: schemas.SkuDuplicate) -> models.Sku:
+    try:
+        # 1. Fetch source SKU
+        source_sku = db.query(models.Sku).filter(models.Sku.sku_id == dup_data.source_sku_id).first()
+        if not source_sku:
+            raise ValueError(f"Source SKU {dup_data.source_sku_id} not found")
+
+        # 2. Check if new SKU ID exists
+        if db.query(models.Sku).filter(models.Sku.sku_id == dup_data.new_sku_id).first():
+            raise ValueError(f"Target SKU ID {dup_data.new_sku_id} already exists")
+
+        # 3. Create new SKU Header
+        new_sku = models.Sku(
+            sku_id=dup_data.new_sku_id,
+            sku_name=dup_data.new_sku_name,
+            std_batch_size=source_sku.std_batch_size,
+            uom=source_sku.uom,
+            status="Active",
+            creat_by=dup_data.creat_by,
+            update_by=dup_data.creat_by
+        )
+        db.add(new_sku)
+        db.flush() # Flush to get it ready for relationship or ensure identity
+
+        # 4. Copy Steps
+        source_steps = db.query(models.SkuStep).filter(models.SkuStep.sku_id == dup_data.source_sku_id).all()
+        for step in source_steps:
+            # Create a new step instance by copying values
+            # We exclude 'id', 'created_at', 'updated_at' and 'sku_id'
+            step_dict = {column.name: getattr(step, column.name) for column in step.__table__.columns if column.name not in ["id", "created_at", "updated_at", "sku_id"]}
+            step_dict["sku_id"] = new_sku.sku_id
+            
+            new_step = models.SkuStep(**step_dict)
+            db.add(new_step)
+
+        db.commit()
+        db.refresh(new_sku)
+        return new_sku
+
+    except Exception as e:
+        db.rollback()
+        raise e
+
 # SkuAction CRUD
 def get_sku_actions(db: Session, skip: int = 0, limit: int = 100) -> List[models.SkuAction]:
     return db.query(models.SkuAction).offset(skip).limit(limit).all()
@@ -100,7 +143,8 @@ def get_sku_actions(db: Session, skip: int = 0, limit: int = 100) -> List[models
 def create_sku_action(db: Session, action: schemas.SkuActionCreate) -> models.SkuAction:
     db_action = models.SkuAction(
         action_code=action.action_code,
-        description=action.description
+        action_description=action.action_description,
+        component_filter=action.component_filter
     )
     db.add(db_action)
     db.commit()

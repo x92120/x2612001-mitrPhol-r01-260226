@@ -126,6 +126,7 @@ const recentActivities = ref([
     time: '2 hours ago',
     icon: 'play_circle',
     color: 'green',
+    user: 'Operator-01',
   },
   {
     id: 2,
@@ -134,6 +135,7 @@ const recentActivities = ref([
     time: '5 hours ago',
     icon: 'add_circle',
     color: 'blue',
+    user: 'cj (Admin)',
   },
   {
     id: 3,
@@ -142,6 +144,7 @@ const recentActivities = ref([
     time: '1 day ago',
     icon: 'local_shipping',
     color: 'purple',
+    user: 'Warehouse-Staff',
   },
   {
     id: 4,
@@ -150,6 +153,7 @@ const recentActivities = ref([
     time: '2 days ago',
     icon: 'check_circle',
     color: 'green',
+    user: 'Operator-01',
   },
 ])
 
@@ -159,7 +163,7 @@ const quickAccessMenus = ref([
     label: 'Create SKU',
     icon: 'create_new_folder',
     color: 'cyan-7',
-    path: '/x20-Recipe',
+    path: '/x20-Sku',
     permission: 'sku_management',
     description: 'Create new product SKU definitions'
   },
@@ -175,7 +179,7 @@ const quickAccessMenus = ref([
     label: 'Plan Batch',
     icon: 'event_note',
     color: 'warning',
-    path: '/x30-PreBatch',
+    path: '/x30-ProductionPlan',
     permission: 'prepare_batch',
     description: 'Schedule and prepare new batches'
   },
@@ -183,7 +187,7 @@ const quickAccessMenus = ref([
     label: 'Start Production',
     icon: 'play_arrow',
     color: 'light-green-7',
-    path: '/x40-ProductionPlan',
+    path: '/x40-PreBatch',
     permission: 'production_planning',
     description: 'Initiate production for planned batches'
   },
@@ -207,12 +211,22 @@ const canAccess = (permission: string) => {
           <q-card-section class="q-py-lg">
             <div class="row items-center no-wrap">
               <div class="col">
-                <div class="text-h4 q-mb-sm text-weight-bold">Welcome to xBatch</div>
-                <div class="text-subtitle2">
+                <div class="row items-center q-mb-sm">
+                  <q-avatar size="56px" class="q-mr-md shadow-2">
+                    <div class="bg-white text-primary text-h5 text-weight-bold full-width full-height flex flex-center">
+                      {{ user?.full_name?.charAt(0) || user?.username?.charAt(0) || 'U' }}
+                    </div>
+                  </q-avatar>
+                  <div>
+                    <div class="text-h4 text-weight-bold">Welcome, {{ user?.full_name || user?.username || 'Guest' }}</div>
+                    <div class="text-subtitle1 text-grey-3">{{ user?.role || 'Guest User' }} | {{ user?.department || 'Production' }}</div>
+                  </div>
+                </div>
+                <div class="text-subtitle2 text-grey-2">
                   Manage your batches, recipes, and production efficiently
                 </div>
-                <div class="text-caption q-mt-md">
-                  Last Login: Today at 17:10 PM | Status: System Operational
+                <div class="text-caption q-mt-md text-grey-4">
+                  Account Status: <span class="text-weight-bold text-green-3">Active</span> | System: Operational
                 </div>
               </div>
               <div class="col-auto q-pl-md gt-xs">
@@ -291,7 +305,13 @@ const canAccess = (permission: string) => {
               :title="activity.title"
               :subtitle="activity.time"
             >
-              <div>{{ activity.description }}</div>
+              <div class="column">
+                <span>{{ activity.description }}</span>
+                <div class="row items-center q-mt-xs">
+                  <q-icon name="person" size="xs" color="grey-5" class="q-mr-xs" />
+                  <span class="text-caption text-grey-5">By: {{ activity.user }}</span>
+                </div>
+              </div>
             </q-timeline-entry>
           </q-timeline>
         </q-card>

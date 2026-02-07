@@ -104,6 +104,12 @@ def get_production_batches(skip: int = 0, limit: int = 100, db: Session = Depend
     return crud.get_production_batches(db, skip=skip, limit=limit)
 
 
+@router.get("/pre-batches/", response_model=List[schemas.ProductionBatch])
+def get_pre_batches(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """Alias for /production-batches/ used by frontend dashboard."""
+    return get_production_batches(skip=skip, limit=limit, db=db)
+
+
 @router.put("/production-batches/{batch_id}", response_model=schemas.ProductionBatch)
 def update_production_batch(batch_id: int, batch: schemas.ProductionBatchUpdate, db: Session = Depends(get_db)):
     """Update production batch."""

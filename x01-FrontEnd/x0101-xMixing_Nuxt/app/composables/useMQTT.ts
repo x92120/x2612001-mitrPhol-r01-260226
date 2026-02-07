@@ -129,9 +129,9 @@ export function useMQTT() {
         connectionStatus.value = 'Reconnecting...'
       })
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('❌ MQTT: Bootstrap error', error)
-      connectionStatus.value = `Failed: ${error.message}`
+      connectionStatus.value = `Failed: ${error && (error as any).message}`
     }
   }
 
