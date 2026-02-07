@@ -2,8 +2,8 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useQuasar, type QTableColumn } from 'quasar'
 
-import { appConfig } from '~/appConfig/config'
-import { useAuth } from '~/composables/useAuth'
+import { appConfig } from '../appConfig/config'
+import { useAuth } from '../composables/useAuth'
 
 const $q = useQuasar()
 const { getAuthHeader } = useAuth()
@@ -64,25 +64,16 @@ const fetchIngredients = async () => {
 const fetchProductionPlans = async () => {
   try {
     isLoading.value = true
-    const authHeaders = getAuthHeader() as Record<string, string>
-    const response = await fetch(`${appConfig.apiBaseUrl}/production-plans/`, {
-      headers: authHeaders
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/production-plans/`, {
+      headers: getAuthHeader() as Record<string, string>
     })
     
-    if (response.ok) {
-      productionPlans.value = await response.json()
-      productionPlanOptions.value = productionPlans.value.map(plan => plan.plan_id)
-      
-      // Auto-select first plan if available
-      if (productionPlanOptions.value.length > 0 && !selectedProductionPlan.value) {
-        selectedProductionPlan.value = productionPlanOptions.value[0] || ''
-      }
-    } else {
-      $q.notify({
-        type: 'negative',
-        message: 'Failed to fetch production plans',
-        position: 'top'
-      })
+    productionPlans.value = data
+    productionPlanOptions.value = data.map(plan => plan.plan_id)
+    
+    // Auto-select first plan if available
+    if (productionPlanOptions.value.length > 0 && !selectedProductionPlan.value) {
+      selectedProductionPlan.value = productionPlanOptions.value[0] || ''
     }
   } catch (error) {
     console.error('Error fetching production plans:', error)
@@ -99,21 +90,11 @@ const fetchProductionPlans = async () => {
 // Fetch all batch IDs from backend
 const fetchBatchIds = async () => {
   try {
-    const authHeaders = getAuthHeader() as Record<string, string>
-    const response = await fetch(`${appConfig.apiBaseUrl}/production-batches/`, {
-      headers: authHeaders
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/production-batches/`, {
+      headers: getAuthHeader() as Record<string, string>
     })
-    
-    if (response.ok) {
-      allBatches.value = await response.json()
-      filterBatchesByPlan()
-    } else {
-      $q.notify({
-        type: 'negative',
-        message: 'Failed to fetch batch IDs',
-        position: 'top'
-      })
-    }
+    allBatches.value = data
+    filterBatchesByPlan()
   } catch (error) {
     console.error('Error fetching batch IDs:', error)
   }
@@ -164,51 +145,46 @@ const selectableIngredients = ref<any[]>([])
 // Fetch Steps for the selected Plan's SKU to filter ingredients
 const fetchSkuStepsForPlan = async (skuId: string, planBatchSize: number = 0) => {
     try {
-        const authHeaders = getAuthHeader() as Record<string, string>
-        const response = await fetch(`${appConfig.apiBaseUrl}/api/v_sku_step_detail?sku_id=${skuId}`, {
-            headers: authHeaders
+        const steps = await $fetch<any[]>(`${appConfig.apiBaseUrl}/api/v_sku_step_detail?sku_id=${skuId}`, {
+            headers: getAuthHeader() as Record<string, string>
         })
-        if (response.ok) {
-            const steps = await response.json()
-            skuSteps.value = steps
-            
-            // Filter unique ingredients for the list view
-            const uniqueMap = new Map()
-            let counter = 1
-            
-            steps.forEach((step: any) => {
-                if (step.re_code && step.ingredient_name) {
-                    if (!uniqueMap.has(step.re_code)) {
-                        uniqueMap.set(step.re_code, {
-                            index: counter++,
-                            re_code: step.re_code,
-                            ingredient_name: step.ingredient_name,
-                            std_package_size: step.std_package_size || 0,
-                            total_require: 0,
-                            // TODO: Real status check. For now, checking if we have any logs might be a proxy, 
-                            // or default to false.
-                            isDone: false 
-                        })
-                    }
-                    
-                    const entry = uniqueMap.get(step.re_code)
-                    
-                    // Calculate required weight based on Plan Batch Size vs SKU Std Batch Size
-                    let stepReq = parseFloat(step.require) || 0
-                    if (planBatchSize > 0 && step.std_batch_size > 0) {
-                        stepReq = (stepReq / step.std_batch_size) * planBatchSize
-                    }
-                    
-                    entry.total_require += stepReq
+        
+        skuSteps.value = steps
+        
+        // Filter unique ingredients for the list view
+        const uniqueMap = new Map()
+        let counter = 1
+        
+        steps.forEach((step: any) => {
+            if (step.re_code && step.ingredient_name) {
+                if (!uniqueMap.has(step.re_code)) {
+                    uniqueMap.set(step.re_code, {
+                        index: counter++,
+                        re_code: step.re_code,
+                        ingredient_name: step.ingredient_name,
+                        std_package_size: step.std_package_size || 0,
+                        total_require: 0,
+                        isDone: false 
+                    })
                 }
-            })
-            
-            selectableIngredients.value = Array.from(uniqueMap.values())
-            
-            // Clear current selection if it's not in the new list
-            if (selectedReCode.value && !uniqueMap.has(selectedReCode.value)) {
-                selectedReCode.value = ''
+                
+                const entry = uniqueMap.get(step.re_code)
+                
+                // Calculate required weight based on Plan Batch Size vs SKU Std Batch Size
+                let stepReq = parseFloat(step.require) || 0
+                if (planBatchSize > 0 && step.std_batch_size > 0) {
+                    stepReq = (stepReq / step.std_batch_size) * planBatchSize
+                }
+                
+                entry.total_require += stepReq
             }
+        })
+        
+        selectableIngredients.value = Array.from(uniqueMap.values())
+        
+        // Clear current selection if it's not in the new list
+        if (selectedReCode.value && !uniqueMap.has(selectedReCode.value)) {
+            selectedReCode.value = ''
         }
     } catch (e) {
         console.error('Error fetching SKU steps for ingredients', e)
@@ -432,13 +408,10 @@ const inventorySummary = computed(() => {
 const fetchInventory = async () => {
     try {
       inventoryLoading.value = true
-      const authHeaders = getAuthHeader() as Record<string, string>
-      const response = await fetch(`${appConfig.apiBaseUrl}/ingredient-intake-lists/`, {
-        headers: authHeaders
+      const data = await $fetch<InventoryItem[]>(`${appConfig.apiBaseUrl}/ingredient-intake-lists/`, {
+        headers: getAuthHeader() as Record<string, string>
       })
-      if (response.ok) {
-        inventoryRows.value = await response.json()
-      }
+      inventoryRows.value = data
     } catch (error) {
       console.error('Error fetching inventory:', error)
     } finally {
@@ -504,6 +477,10 @@ watch(requestBatch, (val) => {
     selectedScale.value = 3
   }
 })
+const filteredPreBatchLogs = computed(() => {
+    if (!selectedBatch.value) return []
+    return preBatchLogs.value.filter(log => log.batch_record_id.startsWith(selectedBatch.value.batch_id))
+})
 
 // Check if out of tolerance
 const isToleranceExceeded = computed(() => {
@@ -516,14 +493,12 @@ const isToleranceExceeded = computed(() => {
 const preBatchLogs = ref<any[]>([])
 
 const fetchPreBatchRecords = async () => {
+  if (!selectedProductionPlan.value) return
   try {
-    const authHeaders = getAuthHeader() as Record<string, string>
-    const response = await fetch(`${appConfig.apiBaseUrl}/prebatch-records/`, {
-      headers: authHeaders
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-records/by-plan/${selectedProductionPlan.value}`, {
+      headers: getAuthHeader() as Record<string, string>
     })
-    if (response.ok) {
-      preBatchLogs.value = await response.json()
-    }
+    preBatchLogs.value = data
   } catch (error) {
     console.error('Error fetching prebatch records:', error)
   }
@@ -606,6 +581,55 @@ const onIngredientDoubleClick = (ingredient: any) => {
     }
 }
 
+// Watch for preBatchLogs or selectedBatch to update isDone status of selectableIngredients
+watch([preBatchLogs, selectedBatch], ([logs, batch]) => {
+    if (!logs || !batch) {
+        selectableIngredients.value.forEach(ing => ing.isDone = false)
+        return
+    }
+    
+    let allDone = true
+    selectableIngredients.value.forEach(ing => {
+        // Filter logs that belong to this specific batch and ingredient
+        const ingLogs = logs.filter(l => l.re_code === ing.re_code && l.batch_record_id.startsWith(batch.batch_id))
+        
+        if (ingLogs.length > 0) {
+            // Find max package_no recorded for this specific batch
+            const maxPkg = Math.max(...ingLogs.map(l => l.package_no || 0))
+            const totalPkgs = ingLogs[0]?.total_packages || 0
+            if (maxPkg >= totalPkgs && totalPkgs > 0) {
+                ing.isDone = true
+            } else {
+                ing.isDone = false
+                allDone = false
+            }
+        } else {
+            ing.isDone = false
+            allDone = false
+        }
+    })
+
+    // If all ingredients for this batch are done, update the ProductionBatch status in backend
+    if (selectableIngredients.value.length > 0 && allDone && !batch.batch_prepare) {
+        finalizeBatchPreparation(batch.id)
+    }
+}, { deep: true })
+
+const finalizeBatchPreparation = async (batchId: number) => {
+    try {
+        await $fetch(`${appConfig.apiBaseUrl}/production-batches/${batchId}`, {
+            method: 'PUT',
+            body: { batch_prepare: true, status: 'Prepared' },
+            headers: getAuthHeader() as Record<string, string>
+        })
+        $q.notify({ type: 'positive', message: 'Batch preparation finalized', position: 'top' })
+        // Refresh all batch info to reflect status change
+        await fetchBatchIds()
+    } catch (e) {
+        console.error('Failed to finalize batch preparation', e)
+    }
+}
+
 // --- Helper for Scale Styling ---
 const getScaleClass = (scale: any) => {
   if (selectedScale.value !== scale.id) {
@@ -661,9 +685,65 @@ const onReprint = () => {
   $q.notify({ type: 'info', message: `Reprinting label: ${packageLabelId.value}` })
 }
 
-const onPrintLabel = () => {
-  $q.notify({ type: 'positive', message: 'Label Printed', position: 'top' })
-  showLabelDialog.value = false
+const onPrintLabel = async () => {
+  if (!selectedBatch.value || !selectedReCode.value) {
+    $q.notify({ type: 'warning', message: 'Missing Batch or Ingredient selection' })
+    return
+  }
+
+  try {
+    const parts = currentPackage.value.split('/')
+    if (parts.length < 2) {
+        throw new Error('Invalid package format')
+    }
+    const pkgNo = parseInt(parts[0]?.trim() || '0')
+    const totalPkgs = parseInt(parts[1]?.trim() || '0')
+    
+    if (isNaN(pkgNo) || isNaN(totalPkgs)) {
+        throw new Error('Invalid package numbers')
+    }
+
+    // Construct Prebatch Record data
+    const recordData = {
+      batch_record_id: `${selectedBatch.value.batch_id}-${selectedReCode.value}-${pkgNo}`,
+      plan_id: selectedProductionPlan.value,
+      re_code: selectedReCode.value,
+      package_no: pkgNo,
+      total_packages: totalPkgs,
+      net_volume: actualScaleValue.value,
+      total_volume: requireVolume.value, // This is the total required for this ingredient in this batch
+      total_request_volume: requestBatch.value
+    }
+
+    await $fetch(`${appConfig.apiBaseUrl}/prebatch-records/`, {
+      method: 'POST',
+      body: recordData,
+      headers: getAuthHeader() as Record<string, string>
+    })
+
+    $q.notify({ type: 'positive', message: 'Prebatch Record saved and Label Printed', position: 'top' })
+    
+    // Refresh prebatch logs
+    await fetchPreBatchRecords()
+    
+    // Move to next package if available
+    if (pkgNo < totalPkgs) {
+        currentPackage.value = `${pkgNo + 1} / ${totalPkgs}`
+        // Recalculate remain and request batch if needed
+        const nextReq = Math.min(requireVolume.value - (pkgNo * packageSize.value), packageSize.value)
+        requestBatch.value = Math.max(0, Number(nextReq.toFixed(3)))
+    } else {
+        $q.notify({ type: 'info', message: 'All packages for this ingredient completed' })
+        // Update ingredient status in list
+        const ing = selectableIngredients.value.find(i => i.re_code === selectedReCode.value)
+        if (ing) ing.isDone = true
+    }
+
+    showLabelDialog.value = false
+  } catch (error) {
+    console.error('Error saving prebatch record:', error)
+    $q.notify({ type: 'negative', message: 'Failed to save record' })
+  }
 }
 
 const onDone = () => {
@@ -1040,11 +1120,13 @@ const onSelectBatch = (index: number) => {
             </q-card-section>
         </q-card>
 
-        <!-- PreBatch List -->
+        <!-- PreBatch List (Filtered by selected batch) -->
         <div>
-          <div class="text-subtitle2 q-mb-xs">PreBatch-List</div>
+          <div class="text-subtitle2 q-mb-xs">PreBatch-List (Current Batch)</div>
           <div class="prebatch-list-container q-pa-sm">
-            <div v-for="(record, idx) in preBatchLogs" :key="idx" class="text-blue-8 q-mb-xs">
+            <div v-if="!selectedBatch" class="text-grey-6 text-center q-pa-md">Select a batch to see records</div>
+            <div v-else-if="filteredPreBatchLogs.length === 0" class="text-grey-6 text-center q-pa-md">No records for this batch</div>
+            <div v-for="(record, idx) in filteredPreBatchLogs" :key="idx" class="text-blue-8 q-mb-xs">
               {{ record.batch_record_id }} - {{ record.package_no }}/{{ record.total_packages }} - {{ record.net_volume }}/{{ record.total_volume }}/{{ record.total_request_volume }}
             </div>
           </div>
