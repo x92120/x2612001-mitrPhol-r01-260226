@@ -104,6 +104,13 @@ def get_production_batches(skip: int = 0, limit: int = 100, db: Session = Depend
     return crud.get_production_batches(db, skip=skip, limit=limit)
 
 
+@router.get("/production-batches/ids", response_model=List[str])
+def get_production_batch_ids(db: Session = Depends(get_db)):
+    """Get unique list of all production batch IDs."""
+    batches = db.query(models.ProductionBatch.batch_id).distinct().all()
+    return [b[0] for b in batches]
+
+
 @router.get("/pre-batches/", response_model=List[schemas.ProductionBatch])
 def get_pre_batches(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """Alias for /production-batches/ used by frontend dashboard."""
@@ -132,6 +139,12 @@ def update_production_batch(batch_id: int, batch: schemas.ProductionBatchUpdate,
 def get_prebatch_records(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """Get all prebatch records."""
     return crud.get_prebatch_records(db, skip=skip, limit=limit)
+
+
+@router.get("/prebatch-records/by-plan/{plan_id}", response_model=List[schemas.PrebatchRecord])
+def get_prebatch_records_by_plan(plan_id: str, db: Session = Depends(get_db)):
+    """Get prebatch records filtered by plan ID."""
+    return db.query(models.PrebatchRecord).filter(models.PrebatchRecord.plan_id == plan_id).all()
 
 
 @router.post("/prebatch-records/", response_model=schemas.PrebatchRecord)

@@ -1,62 +1,115 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { appConfig } from '../appConfig/config'
 
-const version = '0.1'
+const version = '0.2'
 
-// --- Left Panel Data ---
-const selectedBatchId = ref('2025-11-12-01001')
-const productionList = ref([
-  '2025-11-12-01001-1/3-50.0/50.0/120.0',
-  '2025-11-12-01001-2/3-50.0/100.0/120.0',
-  '2025-11-12-01001-1/3-50.0/50.0/120.0',
-  '2025-11-12-01001-2/3-50.0/100.0/120.0',
-])
+// --- State ---
+const selectedBatchId = ref<string>('')
+const batchOptions = ref<string[]>([])
+const prebatchRecords = ref<any[]>([])
+const loading = ref(false)
 const selectedProductionIndices = ref<number[]>([])
 
-// --- Right Panel Data ---
+// --- Computed ---
+const productionList = computed(() => {
+  return prebatchRecords.value.map(r => {
+    // Format: plan_id-package_no/total_packages-net_volume/total_volume/total_request_volume
+    return `${r.batch_record_id}-${r.package_no}/${r.total_packages}-${r.net_volume}/${r.total_volume}/${r.total_request_volume}`
+  })
+})
+
 const plantId = computed(() => {
   if (!selectedBatchId.value) return ''
-  // Format: YYYY-MM-DD-SSNNN (e.g. 2025-11-12-01001)
   const parts = selectedBatchId.value.split('-')
-  // We expect at least year, month, day, and the suffix code
-  // parts: ['2025', '11', '12', '01001']
-  if (parts.length < 4) return ''
-  const suffix = parts[3] || ''
-  if (suffix.length < 2) return ''
-  const plantCode = suffix.substring(0, 2)
-  return `Mixing-${plantCode}`
+  // Example: plan-Line-1-2026-02-04-001-001
+  // We can try to extract something meaningful or just use a default
+  if (parts.length > 2) return parts[2]
+  return 'Mixing-01'
 })
+
 const packagingSetId = computed(() => {
   if (!selectedBatchId.value) return ''
   return `PKG-${selectedBatchId.value}`
 })
 
+const packingItems = ref<PackingItem[]>([])
+
 interface PackingItem {
   id: string
   weight: string // Display string like '50/50.0'
   isVerified: boolean
+  originalRecord?: any
 }
 
-const packingItems = ref<PackingItem[]>([
-  { id: '2025-11-12-01001-1/3-50.0/50.0/120.0', weight: '50/50.0', isVerified: true },
-  { id: '2025-11-12-01001-2/3-50.0/100.0/120.0', weight: '0/50.0', isVerified: false },
-  { id: '2025-11-12-01001-1/3-50.0/50.0/120.0', weight: '50/50.0', isVerified: true },
-  { id: '2025-11-12-01001-2/3-50.0/100.0/120.0', weight: '0/50.0', isVerified: false },
-  { id: '2025-11-12-01001-1/3-50.0/50.0/120.0', weight: '0/50.0', isVerified: false },
-  { id: '2025-11-12-01001-2/3-50.0/100.0/120.0', weight: '0/50.0', isVerified: false },
-])
+// --- Data Fetching ---
+const fetchBatches = async () => {
+  try {
+    const response = await $fetch<string[]>(`${appConfig.apiBaseUrl}/production-batches/ids`)
+    batchOptions.value = response
+    if (response && response.length > 0 && !selectedBatchId.value) {
+      selectedBatchId.value = response[0] || ''
+    }
+  } catch (error) {
+    console.error('Failed to fetch batches:', error)
+  }
+}
+
+const fetchPrebatchRecords = async (batchId: string) => {
+  if (!batchId) return
+  loading.value = true
+  try {
+    // Extract plan_id from batchId
+    // If batchId is plan-Line-1-2026-02-04-001-001
+    // plan_id is plan-Line-1-2026-02-04-001
+    const parts = batchId.split('-')
+    const planId = parts.slice(0, parts.length - 1).join('-')
+    
+    const response = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-records/by-plan/${planId}`)
+    prebatchRecords.value = response
+  } catch (error) {
+    console.error('Failed to fetch prebatch records:', error)
+    prebatchRecords.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+// --- Watchers ---
+watch(selectedBatchId, (newId) => {
+  selectedProductionIndices.value = []
+  fetchPrebatchRecords(newId)
+})
+
+onMounted(() => {
+  fetchBatches()
+})
 
 // --- Actions ---
 const onTransfer = () => {
-  // Logic to transfer selected item from left to right would go here
-  console.log('Transfer clicked', selectedProductionIndices.value)
+  const selectedItems = selectedProductionIndices.value.map(idx => {
+    const record = prebatchRecords.value[idx]
+    return {
+      id: `${record.batch_record_id}-${record.package_no}/${record.total_packages}`,
+      weight: `${record.net_volume}/${record.total_volume}`,
+      isVerified: false,
+      originalRecord: record
+    }
+  })
+  
+  packingItems.value.push(...selectedItems)
+  
+  // Remove from left list (optional, based on requirement)
+  // For now, just clear selection
+  selectedProductionIndices.value = []
 }
 
 const onCreatePackingList = () => {
-  console.log('Create Packing List clicked')
+  console.log('Create Packing List clicked', packingItems.value)
 }
 
 const onClosePackingList = () => {
+  packingItems.value = []
   console.log('Close Packing List clicked')
 }
 
@@ -72,6 +125,20 @@ const onSelectProductionItem = (index: number) => {
     selectedProductionIndices.value.push(index)
   }
 }
+
+// Stats for footer
+const totalBoxPackages = computed(() => packingItems.value.length)
+const totalRequiredPackages = computed(() => {
+    if (prebatchRecords.value.length > 0) return prebatchRecords.value[0].total_packages
+    return 0
+})
+const currentWeight = computed(() => {
+    return packingItems.value.reduce((sum, item) => sum + (item.originalRecord?.net_volume || 0), 0)
+})
+const totalWeight = computed(() => {
+    return packingItems.value.reduce((sum, item) => sum + (item.originalRecord?.total_volume || 0), 0)
+})
+
 </script>
 
 <template>
@@ -90,15 +157,8 @@ const onSelectProductionItem = (index: number) => {
         <q-select
           outlined
           v-model="selectedBatchId"
-          :options="[
-            '2025-11-12-01001',
-            '2025-11-12-01002',
-            '2025-11-12-01003',
-            '2025-11-12-01004',
-            '2025-11-12-02001',
-            '2025-11-12-02002',
-            '2025-11-12-02012',
-          ]"
+          :options="batchOptions"
+          :loading="loading"
           dense
           class="q-mb-md"
           dropdown-icon="arrow_drop_down"
@@ -113,6 +173,12 @@ const onSelectProductionItem = (index: number) => {
 
           <!-- List Items -->
           <div class="col scroll">
+            <div
+              v-if="productionList.length === 0"
+              class="q-pa-md text-grey-6 text-center"
+            >
+              No items available for this batch.
+            </div>
             <div
               v-for="(item, index) in productionList"
               :key="index"
@@ -215,9 +281,9 @@ const onSelectProductionItem = (index: number) => {
           <!-- Footer (Totals) -->
           <div class="row items-center q-pa-md border-top bg-white q-mt-auto">
             <div class="col-5 text-blue-8">Total Package in this Box</div>
-            <div class="col-3 text-blue-8 text-center">2/6 pcs</div>
+            <div class="col-3 text-blue-8 text-center">{{ totalBoxPackages }}/{{ totalRequiredPackages }} pcs</div>
             <div class="col-2 text-blue-8 text-right">Weight</div>
-            <div class="col-2 text-blue-8 text-right">100/300 kg</div>
+            <div class="col-2 text-blue-8 text-right">{{ currentWeight.toFixed(1) }}/{{ totalWeight.toFixed(1) }} kg</div>
           </div>
         </div>
 
