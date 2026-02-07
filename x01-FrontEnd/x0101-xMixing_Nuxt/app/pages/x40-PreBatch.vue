@@ -151,13 +151,13 @@ const isBatchSelected = ref(false)
 const selectableIngredients = computed(() => {
     if (!skuSteps.value || skuSteps.value.length === 0) return []
 
-    // Determine target size for calculation
-    // Prefer Selected Batch Size ONLY if explicitly selected, otherwise Plan Total Size
-    const targetSize = (isBatchSelected.value && selectedBatch.value) 
+    // Determine target sizes for calculation
+    const planTotalSize = selectedPlanDetails.value?.total_volume || 0
+    const batchSize = (isBatchSelected.value && selectedBatch.value) 
         ? (selectedBatch.value.batch_size || 0) 
         : (selectedPlanDetails.value?.batch_size || 0)
 
-    console.log(`Calculating Ingredients. Target Size: ${targetSize} (BatchSelected: ${isBatchSelected.value}, PlanBatch: ${selectedPlanDetails.value?.batch_size})`)
+    console.log(`Calculating Ingredients. Batch: ${batchSize}, Plan: ${planTotalSize}`)
 
     const uniqueMap = new Map()
     let counter = 1
@@ -175,6 +175,7 @@ const selectableIngredients = computed(() => {
                     re_code: step.re_code,
                     ingredient_name: step.ingredient_name || step.re_code,
                     std_package_size: step.std_package_size || 0,
+                    batch_require: 0,
                     total_require: 0,
                     from_warehouse: stock ? stock.warehouse_location : '-',
                     isDisabled: !(warehouse === 'SPP' || warehouse === 'FH'),
@@ -184,13 +185,20 @@ const selectableIngredients = computed(() => {
             
             const entry = uniqueMap.get(step.re_code)
             
-            // Calculate required weight
-            let stepReq = parseFloat(step.require) || 0
-            if (targetSize > 0 && step.std_batch_size > 0) {
-                stepReq = (stepReq / step.std_batch_size) * targetSize
+            // Calculate step requirement for one batch
+            let batchStepReq = parseFloat(step.require) || 0
+            if (batchSize > 0 && step.std_batch_size > 0) {
+                batchStepReq = (batchStepReq / step.std_batch_size) * batchSize
             }
             
-            entry.total_require += stepReq
+            // Calculate step requirement for total plan
+            let totalStepReq = parseFloat(step.require) || 0
+            if (planTotalSize > 0 && step.std_batch_size > 0) {
+                totalStepReq = (totalStepReq / step.std_batch_size) * planTotalSize
+            }
+            
+            entry.batch_require += batchStepReq
+            entry.total_require += totalStepReq
         }
     })
     
@@ -1114,10 +1122,10 @@ const onSelectBatch = (index: number) => {
                 <q-markup-table dense flat square separator="cell" sticky-header>
                     <thead class="bg-orange-1 text-orange-10">
                         <tr>
-                            <th class="text-left">Ingredient</th>
-                            <th class="text-left">Name</th>
-                            <th class="text-center">From</th>
-                            <th class="text-right">Total Req (kg)</th>
+                            <th class="text-left" style="font-size: 0.7rem;">Ingredient</th>
+                            <th class="text-center" style="font-size: 0.7rem;">WH</th>
+                            <th class="text-right" style="font-size: 0.7rem;">Batch Req (kg)</th>
+                            <th class="text-right" style="font-size: 0.7rem;">Total Plan Req (kg)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1128,10 +1136,10 @@ const onSelectBatch = (index: number) => {
                             :class="getIngredientRowClass(ing)"
                             @click="onSelectIngredient(ing)"
                         >
-                            <td class="text-weight-bold">{{ ing.re_code }}</td>
-                            <td class="text-caption ellipsis" style="max-width: 120px;" :title="ing.ingredient_name">{{ ing.ingredient_name }}</td>
-                            <td class="text-center text-caption">{{ ing.from_warehouse }}</td>
-                            <td class="text-right text-weight-bold">{{ ing.total_require ? ing.total_require.toFixed(3) : '0' }}</td>
+                            <td class="text-weight-bold" style="font-size: 0.75rem;">{{ ing.re_code }}</td>
+                            <td class="text-center text-caption" style="font-size: 0.7rem;">{{ ing.from_warehouse }}</td>
+                            <td class="text-right text-weight-bold" style="font-size: 0.75rem;">{{ ing.batch_require ? ing.batch_require.toFixed(3) : '0' }}</td>
+                            <td class="text-right text-weight-bold" style="font-size: 0.75rem;">{{ ing.total_require ? ing.total_require.toFixed(3) : '0' }}</td>
                         </tr>
                         <tr v-if="selectableIngredients.length === 0">
                             <td colspan="4" class="text-center text-grey q-pa-md">

@@ -1400,28 +1400,15 @@ const onFileSelected = async (event: Event) => {
                   <q-tooltip>Print Label</q-tooltip>
                 </q-btn>
                 <q-btn
-                  icon="history"
+                  icon="settings"
                   color="primary"
                   unelevated
                   no-caps
                   dense
                   size="sm"
-                  class="q-mr-xs"
                   @click="openDetailDialog(props.row)"
                 >
-                  <q-tooltip>View Detail & History</q-tooltip>
-                </q-btn>
-                <q-btn
-                  icon="block"
-                  color="negative"
-                  unelevated
-                  no-caps
-                  dense
-                  size="sm"
-                  @click="onRejectIntake(props.row)"
-                  :disable="props.row.status === 'Reject' || props.row.status === 'Cancelled'"
-                >
-                  <q-tooltip>Reject Record</q-tooltip>
+                  <q-tooltip>Information & History Modify</q-tooltip>
                 </q-btn>
               </q-td>
             </template>
