@@ -80,47 +80,18 @@ class Ingredient(IngredientBase):
     class Config:
         from_attributes = True
 
-# Ingredient Receipt Schemas
-class IngredientReceiptBase(BaseModel):
-    """Base ingredient receipt model"""
-    mat_sap_code: str = Field(..., min_length=1, max_length=50)
-    re_code: Optional[str] = Field(None, max_length=50)
-    receive_lot_id: str = Field(..., min_length=1, max_length=50)
-    lot_number: str = Field(..., min_length=1, max_length=50)
-    receive_vol: float = Field(..., gt=0)
-    remain_vol: float = Field(..., ge=0)
-    std_package_size: Optional[float] = Field(25.0, ge=0)
-    package_vol: Optional[float] = Field(None, ge=0)
-    number_of_packages: Optional[int] = Field(None, ge=0)
-    warehouse_location: Optional[str] = Field(None, max_length=50)
-    expire_date: Optional[datetime] = None
-    status: str = Field("Active", max_length=20)
-    creat_by: str = Field(..., min_length=1, max_length=50)
-    update_by: Optional[str] = Field(None, max_length=50)
-
-class IngredientReceiptCreate(IngredientReceiptBase):
-    """Ingredient receipt creation model"""
-    pass
-
-class IngredientReceipt(IngredientReceiptBase):
-    """Ingredient receipt response model"""
-    id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
 # Ingredient Intake List Schemas
 class IngredientIntakeListBase(BaseModel):
-    """Base ingredient intake list model"""
+    """Base ingredient intake list model (merged with Receipt)"""
     intake_lot_id: str = Field(..., min_length=1, max_length=50)
     lot_id: str = Field(..., min_length=1, max_length=50)
     warehouse_location: Optional[str] = Field(None, max_length=50)
     blind_code: Optional[str] = Field(None, max_length=50)
     mat_sap_code: str = Field(..., min_length=1, max_length=50)
     re_code: Optional[str] = Field(None, max_length=50)
-    intake_vol: float = Field(..., gt=0)
+    material_description: Optional[str] = Field(None, max_length=200) # Merged
+    uom: Optional[str] = Field(None, max_length=20) # Merged
+    intake_vol: float = Field(..., ge=0)
     remain_vol: float = Field(..., ge=0)
     intake_package_vol: Optional[float] = Field(None, ge=0)
     package_intake: Optional[int] = Field(None, ge=0)
@@ -130,6 +101,8 @@ class IngredientIntakeListBase(BaseModel):
     edit_by: Optional[str] = Field(None, max_length=50)
     po_number: Optional[str] = Field(None, max_length=50)
     manufacturing_date: Optional[datetime] = None
+    batch_prepare_vol: Optional[float] = None # Merged
+    std_package_size: Optional[float] = Field(25.0, ge=0) # Merged
 
 class IngredientIntakeListCreate(IngredientIntakeListBase):
     """Ingredient intake list creation model"""

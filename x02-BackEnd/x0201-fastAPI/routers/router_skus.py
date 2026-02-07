@@ -146,8 +146,15 @@ def update_sku_step(step_id: int, step: schemas.SkuStepCreate, db: Session = Dep
     if db_step is None:
         raise HTTPException(status_code=404, detail="Step not found")
     
-    for key, value in step.dict().items():
+    # Store original sku_id to prevent accidental changes
+    original_sku_id = db_step.sku_id
+    
+    # Update all fields from the request
+    for key, value in step.model_dump().items():
         setattr(db_step, key, value)
+    
+    # Ensure sku_id remains unchanged (safety check)
+    db_step.sku_id = original_sku_id
     
     db.commit()
     db.refresh(db_step)

@@ -699,31 +699,34 @@ onMounted(() => {
             <div class="row items-center q-gutter-sm">
               <q-btn
                 icon="refresh"
-                label="Refresh"
                 color="primary"
-                unelevated
-                no-caps
+                round
+                flat
                 dense
                 @click="fetchSkus"
-              />
+              >
+                <q-tooltip>Refresh</q-tooltip>
+              </q-btn>
               <q-btn
                 icon="filter_alt_off"
-                label="Reset Filters"
                 color="primary"
-                unelevated
-                no-caps
+                round
+                flat
                 dense
                 @click="resetSkuFilters"
-              />
+              >
+                <q-tooltip>Reset Filters</q-tooltip>
+              </q-btn>
               <q-btn
-                icon="filter_list"
-                :label="showSkuFilters ? 'Hide Filters' : 'Show Filters'"
-                color="primary"
-                unelevated
-                no-caps
+                icon="filter_alt"
+                color="accent"
+                round
+                flat
                 dense
                 @click="showSkuFilters = !showSkuFilters"
-              />
+              >
+                <q-tooltip>{{ showSkuFilters ? 'Hide Filters' : 'Show Filters' }}</q-tooltip>
+              </q-btn>
               <q-checkbox
                 v-model="showAllSkus"
                 label="Show All (including Inactive)"
@@ -934,22 +937,24 @@ onMounted(() => {
         <div class="row items-center q-gutter-sm">
           <q-btn
             icon="refresh"
-            label="Refresh"
             color="primary"
-            unelevated
-            no-caps
+            round
+            flat
             dense
             @click="fetchPlans"
-          />
+          >
+            <q-tooltip>Refresh</q-tooltip>
+          </q-btn>
           <q-btn
             icon="print"
-            label="Print All"
             color="primary"
-            unelevated
-            no-caps
+            round
+            flat
             dense
             @click="printAllPlans"
-          />
+          >
+            <q-tooltip>Print All</q-tooltip>
+          </q-btn>
           <q-checkbox
             v-model="showAll"
             label="Show All (including Cancelled)"

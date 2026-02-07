@@ -18,10 +18,28 @@ const handleLogout = async () => {
     <q-header elevated class="bg-primary text-white" height-hint="98">
       <q-toolbar>
         <q-toolbar-title>
-          <q-avatar>
-            <img src="/logo.svg" />
-          </q-avatar>
-          xBatch
+          <div class="row items-center q-gutter-sm">
+            <svg width="120" height="36" viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg" style="display: block;">
+              <!-- Rounded Rectangle: Yellow Fill (#FFB800), Red Border (#8B1A1A) -->
+              <rect x="5" y="5" width="190" height="50" rx="10" ry="10" 
+                    fill="#FFB800" 
+                    stroke="#8B1A1A" 
+                    stroke-width="4" />
+              <!-- "xMixing" Text: Courier New, Bold, Red (#8B1A1A) -->
+              <text x="100" y="38" 
+                    font-family="'Courier New', Courier, monospace" 
+                    font-size="34" 
+                    font-weight="bold" 
+                    fill="#8B1A1A" 
+                    text-anchor="middle" 
+                    letter-spacing="1">xMixing</text>
+              <!-- Underline: Red (#8B1A1A) -->
+              <line x1="40" y1="46" x2="160" y2="46" 
+                    stroke="#8B1A1A" 
+                    stroke-width="3" 
+                    stroke-linecap="round" />
+            </svg>
+          </div>
         </q-toolbar-title>
 
         <q-btn to="/x80-UserLogin" label="Login" flat icon="login" v-if="!user" />

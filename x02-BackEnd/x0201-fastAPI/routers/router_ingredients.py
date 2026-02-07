@@ -1,7 +1,7 @@
 """
 Ingredients Router
 ==================
-Ingredient management, receipts, and intake list endpoints.
+Ingredient management and intake list endpoints.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -94,39 +94,6 @@ def delete_ingredient(ingredient_db_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Database error")
 
 
-# =============================================================================
-# INGREDIENT RECEIPT ENDPOINTS
-# =============================================================================
-
-@router.get("/ingredient-receipts/", response_model=List[schemas.IngredientReceipt])
-def read_ingredient_receipts(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get all ingredient receipts with pagination."""
-    skip = max(0, skip)
-    limit = min(max(1, limit), 1000)
-    return crud.get_ingredient_receipts(db, skip=skip, limit=limit)
-
-
-@router.post("/ingredient-receipts/", response_model=schemas.IngredientReceipt)
-def create_ingredient_receipt(receipt: schemas.IngredientReceiptCreate, db: Session = Depends(get_db)):
-    """Create new ingredient receipt."""
-    try:
-        return crud.create_ingredient_receipt(db=db, receipt=receipt)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError:
-        raise HTTPException(status_code=500, detail="Database error")
-
-
-@router.delete("/ingredient-receipts/{receipt_id}")
-def delete_ingredient_receipt(receipt_id: int, db: Session = Depends(get_db)):
-    """Delete ingredient receipt."""
-    try:
-        db_receipt = crud.delete_ingredient_receipt(db, receipt_id=receipt_id)
-        if db_receipt is None:
-            raise HTTPException(status_code=404, detail="Receipt not found")
-        return {"status": "success"}
-    except RuntimeError:
-        raise HTTPException(status_code=500, detail="Database error")
 
 
 # =============================================================================
@@ -240,10 +207,12 @@ async def bulk_import_ingredient_intake(file: UploadFile = File(...), db: Sessio
 
                 item = schemas.IngredientIntakeListCreate(
                     intake_lot_id=crud.get_next_intake_id(db),
-                    lot_id=row_clean.get('Lot_ID', 'Unknown'),
-                    warehouse_location=row_clean.get('Storage Loca'),
+                    lot_id=row_clean.get('Lot_ID') or row_clean.get('Material') or 'Unknown',
+                    warehouse_location=row_clean.get('Storage Location') or row_clean.get('Storage Loca'),
                     mat_sap_code=mat_code,
                     re_code=row_clean.get('Re-Code'),
+                    material_description=row_clean.get('Material Description'),
+                    uom=row_clean.get('Base Unit of Measure') or row_clean.get('UoM'),
                     intake_vol=intake_vol,
                     remain_vol=remain_vol,
                     intake_package_vol=pkg_vol,

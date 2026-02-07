@@ -118,7 +118,7 @@ const goToLogin = () => router.push('/x80-UserLogin')
       <q-card class="shadow-1">
         <!-- Header -->
         <q-card-section class="text-center bg-primary text-white">
-          <div class="text-h4 text-weight-bold">xMixingControl</div>
+          <img src="/images/logo-final.svg" style="height: 80px; margin-bottom: 20px;" />
           <div class="text-subtitle2 q-mt-sm">Create New Account</div>
         </q-card-section>
 

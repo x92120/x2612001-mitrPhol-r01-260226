@@ -83,38 +83,6 @@ def delete_ingredient(db: Session, ingredient_id: int) -> Optional[models.Ingred
         db.rollback()
         raise RuntimeError(f"Database error: {str(e)}")
 
-# Ingredient Receipt CRUD
-def get_ingredient_receipts(db: Session, skip: int = 0, limit: int = 100) -> List[models.IngredientReceipt]:
-    """Get list of ingredient receipts with pagination"""
-    return db.query(models.IngredientReceipt).order_by(models.IngredientReceipt.created_at.desc()).offset(skip).limit(limit).all()
-
-def create_ingredient_receipt(db: Session, receipt: schemas.IngredientReceiptCreate) -> models.IngredientReceipt:
-    """Create new ingredient receipt with error handling"""
-    try:
-        db_receipt = models.IngredientReceipt(**receipt.dict())
-        db.add(db_receipt)
-        db.commit()
-        db.refresh(db_receipt)
-        return db_receipt
-    except IntegrityError as e:
-        db.rollback()
-        raise ValueError(f"Database integrity error: {str(e)}")
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise RuntimeError(f"Database error: {str(e)}")
-
-def delete_ingredient_receipt(db: Session, receipt_id: int) -> Optional[models.IngredientReceipt]:
-    """Delete ingredient receipt with error handling"""
-    try:
-        db_receipt = db.query(models.IngredientReceipt).filter(models.IngredientReceipt.id == receipt_id).first()
-        if db_receipt:
-            db.delete(db_receipt)
-            db.commit()
-        return db_receipt
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise RuntimeError(f"Database error: {str(e)}")
-
 # Ingredient Intake List CRUD
 def get_ingredient_intake_lists(db: Session, skip: int = 0, limit: int = 100) -> List[models.IngredientIntakeList]:
     """Get list of ingredient intake list with pagination"""

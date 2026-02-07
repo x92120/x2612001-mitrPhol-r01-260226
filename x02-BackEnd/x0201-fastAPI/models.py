@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Enum, TIMESTAMP, text, DateTime, JSON, Float, ForeignKey, Date, Boolean
+from sqlalchemy import Column, Integer, String, Enum, TIMESTAMP, text, DateTime, JSON, Float, ForeignKey, Date, Boolean, func
 from sqlalchemy.orm import relationship
 from database import Base
 import enum
@@ -30,7 +30,7 @@ class User(Base):
     permissions = Column(JSON)
     last_login = Column(DateTime)
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
+    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
 # Ingredient Model
 class Ingredient(Base):
@@ -50,31 +50,9 @@ class Ingredient(Base):
     creat_by = Column(String(50), nullable=False)  # Username who created
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     update_by = Column(String(50))  # Username who last updated
-    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
+    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
-# Ingredient Receipt Model
-class IngredientReceipt(Base):
-    __tablename__ = "ingredient_receipts"
-
-    id = Column(Integer, primary_key=True, index=True)
-    mat_sap_code = Column(String(50), nullable=False, index=True) # Barcode reference
-    re_code = Column(String(50))
-    receive_lot_id = Column(String(50), unique=True, nullable=False, index=True) # e.g. Rev-260110-044
-    lot_number = Column(String(50), nullable=False)
-    receive_vol = Column(Float, nullable=False)
-    remain_vol = Column(Float, nullable=False)
-    std_package_size = Column(Float, default=25.0) # Added standard package size
-    package_vol = Column(Float) # Volume per package
-    number_of_packages = Column(Integer) # Number of packages received
-    warehouse_location = Column(String(50))
-    expire_date = Column(DateTime)
-    status = Column(String(20), default="Active") # Active, Inactive, Consumed
-    creat_by = Column(String(50), nullable=False) # Username who created
-    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-    update_by = Column(String(50)) # Username who updated
-    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
-
-# Ingredient Intake List Model (formerly Ingredient Receive History)
+# Ingredient Intake List Model (formerly Ingredient Receive History / Ingredient Receipt)
 class IngredientIntakeList(Base):
     __tablename__ = "ingredient_intake_lists"
 
@@ -85,6 +63,8 @@ class IngredientIntakeList(Base):
     blind_code = Column(String(50), index=True)
     mat_sap_code = Column(String(50), nullable=False, index=True)
     re_code = Column(String(50))
+    material_description = Column(String(200)) # Merged from Receipt
+    uom = Column(String(20)) # Merged from Receipt
     intake_vol = Column(Float, nullable=False)
     remain_vol = Column(Float, nullable=False)
     intake_package_vol = Column(Float)
@@ -94,11 +74,13 @@ class IngredientIntakeList(Base):
     intake_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     intake_by = Column(String(50), nullable=False)
     edit_by = Column(String(50))
-    edit_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
+    edit_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
     
     # New fields
     po_number = Column(String(50))
     manufacturing_date = Column(DateTime)
+    batch_prepare_vol = Column(Float) # Merged from Receipt
+    std_package_size = Column(Float, default=25.0) # Merged from Receipt
 
     # Relationship to history
     history = relationship("IngredientIntakeHistory", back_populates="intake_record", cascade="all, delete-orphan")
@@ -132,7 +114,7 @@ class Sku(Base):
     creat_by = Column(String(50), nullable=False)
     update_by = Column(String(50))
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
+    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
     # Relationship to steps
     steps = relationship("SkuStep", back_populates="sku", foreign_keys="[SkuStep.sku_id]", primaryjoin="Sku.sku_id == SkuStep.sku_id")
@@ -178,7 +160,7 @@ class SkuStep(Base):
     action_description = Column(String(200)) # Added specific action description
     
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
+    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
     sku = relationship("Sku", back_populates="steps", foreign_keys=[sku_id], primaryjoin="Sku.sku_id == SkuStep.sku_id")
 
@@ -223,7 +205,7 @@ class ProductionPlan(Base):
     created_by = Column(String(50))
     updated_by = Column(String(50))
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
+    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
     batches = relationship("ProductionBatch", back_populates="plan", cascade="all, delete-orphan")
 
@@ -245,7 +227,7 @@ class ProductionBatch(Base):
     production = Column(Boolean, default=False)
     done = Column(Boolean, default=False)
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
+    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
     plan = relationship("ProductionPlan", back_populates="batches")
 
@@ -256,7 +238,7 @@ class SkuAction(Base):
     action_description = Column(String(200), nullable=False)
     component_filter = Column(String(255), nullable=True)
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
+    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
 class SkuPhase(Base):
     __tablename__ = "sku_phases"
@@ -265,7 +247,7 @@ class SkuPhase(Base):
     phase_code = Column(String(50), nullable=True) # e.g., "B001"
     phase_description = Column(String(200), nullable=False)  # e.g., "Mixing", "Heating", "Cooling"
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
+    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
 class SkuDestination(Base):
     __tablename__ = "sku_destinations"
@@ -285,7 +267,7 @@ class Plant(Base):
     plant_description = Column(String(255))
     status = Column(String(20), default="Active")
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
+    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
 # ============================================================================
 # DATABASE VIEWS (Read-Only Models)

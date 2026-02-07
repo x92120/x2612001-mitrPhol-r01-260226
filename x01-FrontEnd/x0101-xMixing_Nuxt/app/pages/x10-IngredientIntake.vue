@@ -23,6 +23,8 @@ interface IngredientIntake {
   warehouse_location?: string
   mat_sap_code: string
   re_code?: string
+  material_description?: string
+  uom?: string
   intake_vol: number
   remain_vol: number
   intake_package_vol?: number
@@ -60,6 +62,8 @@ const xReCode = ref('')
 const intakeVol = ref('')
 const packageVol = ref('')
 const numberOfPackages = ref('')
+const manufacturingDate = ref('')
+const poNumber = ref('')
 const intakeLotId = ref('') // Manual or Auto-generated ID
 const showIngredientDialog = ref(false)
 const tempIngredientId = ref('')
@@ -129,6 +133,20 @@ const columns: QTableColumn[] = [
     align: 'center',
     label: 'Re-Code',
     field: 're_code',
+    sortable: true,
+  },
+  {
+    name: 'material_description',
+    align: 'left',
+    label: 'Description',
+    field: 'material_description',
+    sortable: true,
+  },
+  {
+    name: 'uom',
+    align: 'center',
+    label: 'UOM',
+    field: 'uom',
     sortable: true,
   },
   {
@@ -388,6 +406,8 @@ const onSave = async () => {
       warehouse_location: warehouseLocation.value,
       mat_sap_code: xMatSapCode.value,
       re_code: xReCode.value,
+      material_description: xIngredientName.value,
+      uom: 'kg', // Default or from lookup
       intake_vol: parseFloat(intakeVol.value),
       remain_vol:
         isEditing.value && originalRemainVol.value !== null
@@ -399,6 +419,8 @@ const onSave = async () => {
       status: isEditing.value ? originalStatus.value : 'Active',
       intake_by: user.value?.username || 'cj',
       edit_by: user.value?.username || 'cj',
+      manufacturing_date: manufacturingDate.value ? new Date(manufacturingDate.value).toISOString() : null,
+      po_number: poNumber.value || null,
     }
 
     try {
@@ -475,6 +497,8 @@ const onEdit = (row: IngredientIntake) => {
   packageVol.value = row.intake_package_vol ? row.intake_package_vol.toString() : ''
   numberOfPackages.value = row.package_intake ? row.package_intake.toString() : ''
   expireDate.value = row.expire_date ? row.expire_date.split('T')[0] || '' : ''
+  manufacturingDate.value = row.manufacturing_date ? row.manufacturing_date.split('T')[0] || '' : ''
+  poNumber.value = row.po_number || ''
 
   // We need to fetch ingredient details to show name and fill ingredientId
   // We can just call lookup
@@ -580,6 +604,8 @@ const onClear = () => {
   ingredientId.value = ''
   lotNumber.value = ''
   expireDate.value = ''
+  manufacturingDate.value = ''
+  poNumber.value = ''
   xIngredientName.value = ''
   xMatSapCode.value = ''
   xReCode.value = ''
@@ -587,7 +613,6 @@ const onClear = () => {
   // remainVol removed
   packageVol.value = ''
   numberOfPackages.value = ''
-  warehouseLocation.value = ''
   warehouseLocation.value = ''
   originalRemainVol.value = null
   originalStatus.value = 'Active'
@@ -1054,7 +1079,7 @@ const onFileSelected = async (event: Event) => {
         const err = await response.json()
         throw new Error(err.detail || 'Import failed')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Import error:', error)
       $q.notify({
         type: 'negative',
@@ -1169,7 +1194,17 @@ const onFileSelected = async (event: Event) => {
                 <q-input outlined v-model="lotNumber" label="Lot Number *" />
               </div>
               <div class="col-12 col-md-4">
-                <q-input outlined v-model="expireDate" label="Expire Date *" type="date" />
+                <q-input outlined v-model="poNumber" label="PO Number" />
+              </div>
+            </div>
+
+            <!-- New Row: Mfg Date, Expire Date -->
+            <div class="row q-col-gutter-md q-mt-sm">
+              <div class="col-12 col-md-4">
+                <q-input outlined v-model="manufacturingDate" label="Manufacturing Date" type="date" stack-label />
+              </div>
+              <div class="col-12 col-md-4">
+                <q-input outlined v-model="expireDate" label="Expire Date *" type="date" stack-label />
               </div>
             </div>
 
@@ -1227,49 +1262,54 @@ const onFileSelected = async (event: Event) => {
       <div class="row items-center q-gutter-sm">
         <q-btn
           icon="refresh"
-          label="Refresh"
           color="primary"
-          unelevated
-          no-caps
+          round
+          flat
           dense
           @click="() => fetchReceipts()"
-        />
+        >
+          <q-tooltip>Refresh</q-tooltip>
+        </q-btn>
         <q-btn
           icon="filter_alt_off"
-          label="Reset Filters"
           color="primary"
-          unelevated
-          no-caps
+          round
+          flat
           dense
           @click="resetFilters"
-        />
+        >
+          <q-tooltip>Reset Filters</q-tooltip>
+        </q-btn>
         <q-btn
-          icon="filter_list"
-          :label="showFilters ? 'Hide Filters' : 'Show Filters'"
-          color="primary"
-          unelevated
-          no-caps
+          icon="filter_alt"
+          color="accent"
+          round
+          flat
           dense
           @click="showFilters = !showFilters"
-        />
+        >
+          <q-tooltip>{{ showFilters ? 'Hide Filters' : 'Show Filters' }}</q-tooltip>
+        </q-btn>
         <q-btn
           icon="file_download"
-          label="Export Excel"
           color="secondary"
-          unelevated
-          no-caps
+          round
+          flat
           dense
           @click="exportTable"
-        />
+        >
+          <q-tooltip>Export Excel</q-tooltip>
+        </q-btn>
         <q-btn
           icon="file_upload"
-          label="Import CSV"
           color="accent"
-          unelevated
-          no-caps
+          round
+          flat
           dense
           @click="importTable"
-        />
+        >
+          <q-tooltip>Import CSV</q-tooltip>
+        </q-btn>
         <!-- Hidden File Input -->
         <input
           type="file"

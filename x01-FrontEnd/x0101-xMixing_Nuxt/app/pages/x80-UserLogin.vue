@@ -88,14 +88,14 @@ const closeLogin = () => router.replace('/')
         <!-- Title Bar with Close Button -->
         <q-card-section class="bg-primary text-white q-pa-sm">
           <div class="row items-center no-wrap">
-            <div class="col text-h6 text-weight-bold">xBatch</div>
+            <div class="col text-h6 text-weight-bold">xMixing</div>
             <q-btn icon="close" flat round dense @click="closeLogin" size="sm" />
           </div>
         </q-card-section>
 
         <!-- Login Header -->
         <q-card-section class="text-center bg-primary text-white q-pt-md q-pb-lg">
-          <img src="/logo_wide.svg" style="height: 60px; margin-bottom: 15px; filter: brightness(1.2)" />
+          <img src="/images/logo-final.svg" style="height: 80px; margin-bottom: 20px;" />
           <div class="text-h4 text-weight-bold">User Login</div>
         </q-card-section>
 
@@ -174,7 +174,7 @@ const closeLogin = () => router.replace('/')
 
         <!-- Footer -->
         <q-card-section class="text-center text-caption bg-primary text-white">
-          © 2026 xBatch. All rights reserved.
+          © 2026 xMixing. All rights reserved.
         </q-card-section>
       </q-card>
     </div>

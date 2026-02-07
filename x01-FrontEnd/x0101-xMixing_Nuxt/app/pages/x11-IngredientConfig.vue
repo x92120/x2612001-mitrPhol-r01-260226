@@ -341,7 +341,7 @@ const onSave = async () => {
             @click="resetFilters"
           />
           <q-btn
-            icon="filter_list"
+            icon="filter_alt"
             :label="showFilters ? 'Hide' : 'Show'"
             flat
             dense

@@ -116,6 +116,8 @@ const isSaving = ref(false)
 const searchFilter = ref('')
 const selectedSkus = ref<SkuMaster[]>([])
 const showAllIncludingInactive = ref(false)
+const showFilters = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const groupedSteps = computed<{ phaseNum: string, steps: SkuStep[], firstStep: SkuStep | undefined }[]>(() => {
   if (!selectedSkuId.value) return []
@@ -343,6 +345,48 @@ const filteredSkuPhases = computed(() => {
 })
 
 // ============================================================================
+// FILTER & IMPORT/EXPORT UTILITIES
+// ============================================================================
+
+const resetFilters = () => {
+  searchFilter.value = ''
+  showAllIncludingInactive.value = false
+  $q.notify({ type: 'info', message: 'Filters reset' })
+}
+
+const importCSV = () => {
+  fileInput.value?.click()
+}
+
+const onFileSelected = async (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const response = await fetch(`${appConfig.apiBaseUrl}/skus/import`, {
+      method: 'POST',
+      body: formData
+    })
+    
+    if (response.ok) {
+      $q.notify({ type: 'positive', message: 'SKUs imported successfully' })
+      await fetchSkuMasters()
+    } else {
+      const error = await response.json()
+      $q.notify({ type: 'negative', message: error.detail || 'Import failed' })
+    }
+  } catch (e) {
+    $q.notify({ type: 'negative', message: 'Import failed' })
+  } finally {
+    if (target) target.value = ''
+  }
+}
+
+// ============================================================================
 // API SERVICES & UTILITIES
 // ============================================================================
 
@@ -465,8 +509,40 @@ const addStep = (skuId: string) => {
   const pn = 'p' + nextVal.toString().padStart(4, '0')
   const phaseLink = skuPhases.value.find(p => (p.phase_id as any) === nextVal)?.phase_code || ''
   
-  stepForm.value = { ...stepForm.value, sku_id: skuId, phase_number: pn, phase_id: phaseLink, sub_step: 10, action: '', re_code: '', action_code: '', destination: '', require: 0, step_id: undefined, master_step: true }
-  editingStep.value = null; showStepDialog.value = true
+  // Create a completely new object to avoid carrying over old sku_id
+  stepForm.value = {
+    sku_id: skuId,
+    phase_number: pn,
+    phase_id: phaseLink,
+    sub_step: 10,
+    action: '',
+    re_code: '',
+    action_code: '',
+    action_description: '',
+    destination: '',
+    require: 0,
+    uom: 'kg',
+    low_tol: 0.001,
+    high_tol: 0.001,
+    step_condition: '',
+    agitator_rpm: 0,
+    high_shear_rpm: 0,
+    temperature: 0,
+    temp_low: 0,
+    temp_high: 0,
+    step_time: 0,
+    brix_sp: '',
+    ph_sp: '',
+    qc_temp: false,
+    record_steam_pressure: false,
+    record_ctw: false,
+    operation_brix_record: false,
+    operation_ph_record: false,
+    master_step: true,
+    step_id: undefined
+  }
+  editingStep.value = null
+  showStepDialog.value = true
 }
 
 const addStepToPhase = (skuId: string, phaseNumber: string) => {
@@ -474,8 +550,40 @@ const addStepToPhase = (skuId: string, phaseNumber: string) => {
   const stepsInPhase = steps.filter(s => s.phase_number === phaseNumber)
   const nextSub = stepsInPhase.length > 0 ? Math.max(...stepsInPhase.map(s => s.sub_step)) + 10 : 10
   
-  stepForm.value = { ...stepForm.value, sku_id: skuId, phase_number: phaseNumber, phase_id: stepsInPhase[0]?.phase_id || '', sub_step: nextSub, action: '', re_code: '', action_code: '', destination: '', require: 0, step_id: undefined, master_step: stepsInPhase.length === 0 }
-  editingStep.value = null; showStepDialog.value = true
+  // Create a completely new object to avoid carrying over old sku_id
+  stepForm.value = {
+    sku_id: skuId,
+    phase_number: phaseNumber,
+    phase_id: stepsInPhase[0]?.phase_id || '',
+    sub_step: nextSub,
+    action: '',
+    re_code: '',
+    action_code: '',
+    action_description: '',
+    destination: '',
+    require: 0,
+    uom: 'kg',
+    low_tol: 0.001,
+    high_tol: 0.001,
+    step_condition: '',
+    agitator_rpm: 0,
+    high_shear_rpm: 0,
+    temperature: 0,
+    temp_low: 0,
+    temp_high: 0,
+    step_time: 0,
+    brix_sp: '',
+    ph_sp: '',
+    qc_temp: false,
+    record_steam_pressure: false,
+    record_ctw: false,
+    operation_brix_record: false,
+    operation_ph_record: false,
+    master_step: stepsInPhase.length === 0,
+    step_id: undefined
+  }
+  editingStep.value = null
+  showStepDialog.value = true
   if (!expandedPhases.value[skuId]) expandedPhases.value[skuId] = []
   if (!expandedPhases.value[skuId].includes(phaseNumber)) expandedPhases.value[skuId].push(phaseNumber)
 }
@@ -510,6 +618,35 @@ const deleteStep = (step: SkuStep) => {
       $q.notify({ type: 'positive', message: 'Step deleted' })
       delete skuStepsMap.value[step.sku_id]; await fetchSkuSteps(step.sku_id)
     } catch (e) { $q.notify({ type: 'negative', message: 'Delete failed' }) }
+  })
+}
+
+const deletePhaseSteps = (skuId: string, phaseNumber: string) => {
+  const steps = skuStepsMap.value[skuId] || []
+  const stepsInPhase = steps.filter(s => s.phase_number === phaseNumber)
+  
+  if (stepsInPhase.length === 0) {
+    $q.notify({ type: 'warning', message: 'No steps to delete in this phase' })
+    return
+  }
+  
+  $q.dialog({
+    title: 'Confirm Delete Phase',
+    message: `Delete all ${stepsInPhase.length} step(s) in phase ${phaseNumber}?`,
+    cancel: true,
+    persistent: true
+  }).onOk(async () => {
+    try {
+      // Delete all steps in the phase
+      for (const step of stepsInPhase) {
+        await fetch(`${appConfig.apiBaseUrl}/sku-steps/${step.step_id}`, { method: 'DELETE' })
+      }
+      $q.notify({ type: 'positive', message: `Phase ${phaseNumber} deleted (${stepsInPhase.length} steps)` })
+      delete skuStepsMap.value[skuId]
+      await fetchSkuSteps(skuId)
+    } catch (e) {
+      $q.notify({ type: 'negative', message: 'Delete failed' })
+    }
   })
 }
 
@@ -678,9 +815,9 @@ onMounted(refreshAll)
 
 <template>
   <q-page padding class="sku-master-view">
-    <!-- Header -->
+    <!-- Header with Action Bar -->
     <div class="row q-mb-md items-center">
-      <div class="col">
+      <div>
         <div class="text-h5">
           <q-icon name="inventory_2" size="sm" class="q-mr-sm" />
           SKU Masters
@@ -689,50 +826,100 @@ onMounted(refreshAll)
           Manage SKU masters and process steps
         </div>
       </div>
-    </div>
-
-    <!-- Action Bar -->
-    <div class="row q-mb-md q-gutter-sm items-center">
-      <q-btn 
-        color="positive" 
-        icon="add" 
-        label="New SKU" 
-        @click="createNewSku" 
-        unelevated 
-      />
-      <q-btn color="primary" icon="refresh" label="Refresh" @click="refreshAll" unelevated />
-      <q-btn 
-        color="primary" 
-        icon="print" 
-        label="Print All" 
-        @click="exportToExcel" 
-        unelevated
-      />
-      <q-btn 
-        color="accent" 
-        icon="settings" 
-        label="Actions" 
-        @click="openActionDialog" 
-        unelevated
-      />
-      <q-checkbox 
-        v-model="showAllIncludingInactive" 
-        label="Show All (including Inactive)" 
-        dense
-      />
+      
       <q-space />
-      <q-input 
-        v-model="searchFilter" 
-        placeholder="Search SKU..." 
-        dense 
-        outlined
-        style="min-width: 300px"
-        clearable
-      >
-        <template v-slot:prepend>
-          <q-icon name="search" />
-        </template>
-      </q-input>
+      
+      <!-- Action Buttons -->
+      <div class="row q-gutter-sm items-center">
+        <q-btn 
+          color="positive" 
+          icon="add" 
+          @click="createNewSku" 
+          round
+          flat
+        >
+          <q-tooltip>New SKU</q-tooltip>
+        </q-btn>
+        <q-btn 
+          color="primary" 
+          icon="refresh" 
+          @click="refreshAll" 
+          round
+          flat
+        >
+          <q-tooltip>Refresh</q-tooltip>
+        </q-btn>
+        <q-btn 
+          color="primary" 
+          icon="filter_alt_off" 
+          @click="resetFilters" 
+          round
+          flat
+        >
+          <q-tooltip>Reset Filters</q-tooltip>
+        </q-btn>
+        <q-btn 
+          color="accent" 
+          icon="filter_alt" 
+          @click="showFilters = !showFilters" 
+          round
+          flat
+        >
+          <q-tooltip>{{ showFilters ? 'Hide Filters' : 'Show Filters' }}</q-tooltip>
+        </q-btn>
+        <q-btn 
+          color="secondary" 
+          icon="file_download" 
+          @click="exportToExcel" 
+          round
+          flat
+        >
+          <q-tooltip>Export Excel</q-tooltip>
+        </q-btn>
+        <q-btn 
+          color="accent" 
+          icon="file_upload" 
+          @click="importCSV" 
+          round
+          flat
+        >
+          <q-tooltip>Import CSV</q-tooltip>
+        </q-btn>
+        <!-- Hidden File Input -->
+        <input
+          type="file"
+          ref="fileInput"
+          accept=".csv"
+          style="display: none"
+          @change="onFileSelected"
+        />
+        <q-btn 
+          color="accent" 
+          icon="settings" 
+          @click="openActionDialog" 
+          round
+          flat
+        >
+          <q-tooltip>Actions</q-tooltip>
+        </q-btn>
+        <q-checkbox 
+          v-model="showAllIncludingInactive" 
+          label="Show All (including Inactive)" 
+          dense
+        />
+        <q-input 
+          v-model="searchFilter" 
+          placeholder="Search SKU..." 
+          dense 
+          outlined
+          style="min-width: 300px"
+          clearable
+        >
+          <template v-slot:prepend>
+            <q-icon name="search" />
+          </template>
+        </q-input>
+      </div>
     </div>
 
     <!-- Master Table -->
@@ -923,6 +1110,17 @@ onMounted(refreshAll)
                   @click.stop="addStepToPhase(selectedSkuId!, group.phaseNum)"
                 >
                   <q-tooltip>Add Step to Phase</q-tooltip>
+                </q-btn>
+                <q-btn 
+                  flat
+                  round
+                  dense
+                  icon="delete" 
+                  size="sm" 
+                  color="negative" 
+                  @click.stop="deletePhaseSteps(selectedSkuId!, group.phaseNum)"
+                >
+                  <q-tooltip>Delete Entire Phase</q-tooltip>
                 </q-btn>
               </div>
             </div>

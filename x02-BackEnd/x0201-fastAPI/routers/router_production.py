@@ -169,21 +169,26 @@ def get_ingredient_intake_summary(start_date: str, end_date: str, db: Session = 
         start = datetime.strptime(start_date, "%Y-%m-%d").date()
         end = datetime.strptime(end_date, "%Y-%m-%d").date()
         
+        # Join with ingredients to get the name, but fallback to material_description or mat_sap_code
         results = db.query(
             models.IngredientIntakeList.mat_sap_code.label('ingredient_id'),
+            func.coalesce(models.Ingredient.name, models.IngredientIntakeList.material_description, models.IngredientIntakeList.mat_sap_code).label('ingredient_name'),
             func.sum(models.IngredientIntakeList.intake_vol).label('total_intake_vol'),
             func.sum(models.IngredientIntakeList.package_intake).label('total_package_intake'),
             func.count(models.IngredientIntakeList.id).label('intake_count')
+        ).outerjoin(
+            models.Ingredient, models.IngredientIntakeList.mat_sap_code == models.Ingredient.mat_sap_code
         ).filter(
             func.date(models.IngredientIntakeList.intake_at) >= start,
             func.date(models.IngredientIntakeList.intake_at) <= end
         ).group_by(
-            models.IngredientIntakeList.mat_sap_code
+            models.IngredientIntakeList.mat_sap_code,
+            'ingredient_name'
         ).all()
         
         return [{
             "ingredient_id": r.ingredient_id,
-            "ingredient_name": r.ingredient_id,
+            "ingredient_name": r.ingredient_name,
             "total_intake_vol": float(r.total_intake_vol or 0),
             "total_package_intake": int(r.total_package_intake or 0),
             "intake_count": r.intake_count
