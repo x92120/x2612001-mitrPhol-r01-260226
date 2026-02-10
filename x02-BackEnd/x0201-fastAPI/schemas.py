@@ -367,6 +367,29 @@ class Plant(PlantBase):
     class Config:
         from_attributes = True
 
+# Warehouse Schemas
+class WarehouseBase(BaseModel):
+    warehouse_id: str = Field(..., max_length=50)
+    name: str = Field(..., max_length=100)
+    description: Optional[str] = Field(None, max_length=255)
+    status: str = Field("Active", max_length=20)
+
+class WarehouseCreate(WarehouseBase):
+    pass
+
+class WarehouseUpdate(BaseModel):
+    name: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = Field(None, max_length=255)
+    status: Optional[str] = Field(None, max_length=20)
+
+class Warehouse(WarehouseBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 # Server Status Schemas
 class MemoryStatus(BaseModel):
     total: int
@@ -552,8 +575,9 @@ class VSkuComplete(BaseModel):
         from_attributes = True
 
 
-# Prebatch Record Schemas
-class PrebatchRecordBase(BaseModel):
+# PreBatch Record Schemas
+class PreBatchRecBase(BaseModel):
+    req_id: Optional[int] = None
     batch_record_id: str = Field(..., max_length=100)
     plan_id: Optional[str] = Field(None, max_length=50)
     re_code: Optional[str] = Field(None, max_length=50)
@@ -562,13 +586,37 @@ class PrebatchRecordBase(BaseModel):
     net_volume: Optional[float] = None
     total_volume: Optional[float] = None
     total_request_volume: Optional[float] = None
+    intake_lot_id: Optional[str] = Field(None, max_length=50)
 
-class PrebatchRecordCreate(PrebatchRecordBase):
+class PreBatchRecCreate(PreBatchRecBase):
     pass
 
-class PrebatchRecord(PrebatchRecordBase):
+class PreBatchRec(PreBatchRecBase):
     id: int
     created_at: datetime
+    wh: Optional[str] = None
     
+    class Config:
+        from_attributes = True
+
+# PreBatch Req Schemas
+class PreBatchReqBase(BaseModel):
+    batch_db_id: int
+    plan_id: str
+    batch_id: str
+    re_code: str
+    ingredient_name: Optional[str] = None
+    required_volume: float
+    wh: Optional[str] = None
+    status: int = 0
+
+class PreBatchReqCreate(PreBatchReqBase):
+    pass
+
+class PreBatchReq(PreBatchReqBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True

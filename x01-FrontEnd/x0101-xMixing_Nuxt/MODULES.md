@@ -153,7 +153,7 @@ x01-FrontEnd/x0101-xMixing_Nuxt/
 ├── app/
 │   ├── pages/           # Route pages
 │   ├── components/      # Reusable components
-│   ├── composables/     # Vue composables (useAuth, useMQTT)
+│   ├── composables/     # Vue composables (useAuth, useMqttLocalDevice)
 │   ├── appConfig/       # App configuration
 │   └── assets/          # Styles and static assets
 ├── public/              # Static files

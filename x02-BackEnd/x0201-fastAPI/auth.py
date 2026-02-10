@@ -10,9 +10,9 @@ Environment Variables:
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 import os
 import warnings
+import bcrypt
 
 # =============================================================================
 # JWT CONFIGURATION
@@ -25,20 +25,29 @@ if SECRET_KEY == "your-secret-key-change-this-in-production-xMixing2025":
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
 
-# Password hashing context using bcrypt
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
 # =============================================================================
 # PASSWORD FUNCTIONS
 # =============================================================================
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verify a plain password against its hash using direct bcrypt."""
+    try:
+        # Bcrypt requires bytes for both password and hash
+        password_bytes = plain_password.encode('utf-8')
+        hash_bytes = hashed_password.encode('utf-8')
+        return bcrypt.checkpw(password_bytes, hash_bytes)
+    except Exception as e:
+        print(f"Error verifying password: {e}")
+        return False
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    """Hash a password using direct bcrypt."""
+    # Bcrypt produces bytes; we decode back to string for db storage
+    password_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode('utf-8')
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()

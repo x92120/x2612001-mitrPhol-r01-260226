@@ -69,8 +69,13 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
         db.add(history)
         db.commit()
 
-        # Automatically Create Batches
+        # Automatically Create Batches and Requirements
         if num_batches and num_batches > 0:
+            # 1. Fetch SKU and its steps for the recipe
+            sku = db.query(models.Sku).filter(models.Sku.sku_id == plan_data.sku_id).first()
+            recipe_steps = sku.steps if sku else []
+            std_batch_size = sku.std_batch_size if sku else 0
+
             for i in range(1, num_batches + 1):
                 # Use format: plan_id-001
                 batch_id_str = f"{plan_id_str}-{i:03d}"
@@ -84,6 +89,48 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
                     status="Created"
                 )
                 db.add(db_batch)
+                db.flush() # Ensure db_batch.id is available
+
+                # 2. Create requirements for each ingredient in the recipe
+                # We group by re_code because a recipe might have the same ingredient in multiple steps
+                ingredient_info = {} # {re_code: {'qty': total, 'name': name}}
+                for step in recipe_steps:
+                    if not step.re_code:
+                        continue
+                        
+                    # Calculate volume for this step's contribution to the batch
+                    step_req = step.require or 0
+                    if std_batch_size and std_batch_size > 0:
+                        step_req = (step_req / std_batch_size) * plan_data.batch_size
+                    
+                    if step.re_code not in ingredient_info:
+                        ingredient_info[step.re_code] = {'qty': 0, 'name': step.ingredient_name or step.re_code}
+                    
+                    ingredient_info[step.re_code]['qty'] += step_req
+
+                for re_code, info in ingredient_info.items():
+                    req_vol = info['qty']
+                    ing_name = info['name']
+
+                    # Try to find a default warehouse from inventory
+                    wh_loc = "-"
+                    first_stock = db.query(models.IngredientIntakeList.warehouse_location).filter(
+                        models.IngredientIntakeList.re_code == re_code
+                    ).first()
+                    if first_stock:
+                        wh_loc = first_stock[0]
+
+                    db_req = models.PreBatchReq(
+                        batch_db_id=db_batch.id,
+                        plan_id=db_plan.plan_id,
+                        batch_id=batch_id_str,
+                        re_code=re_code,
+                        ingredient_name=ing_name,
+                        required_volume=round(req_vol, 4),
+                        wh=wh_loc,
+                        status=0 # 0=Pending
+                    )
+                    db.add(db_req)
             
             db.commit()
             db.refresh(db_plan) # Refresh to get batches

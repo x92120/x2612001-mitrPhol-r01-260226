@@ -6,13 +6,21 @@ import { appConfig } from '../appConfig/config'
 import { useAuth } from '../composables/useAuth'
 
 const $q = useQuasar()
-const { getAuthHeader } = useAuth()
+const { getAuthHeader, user } = useAuth()
 
 // --- State ---
 const selectedProductionPlan = ref('')
 const selectedReCode = ref('')
+const selectedRequirementId = ref<number | null>(null)
 const selectedScale = ref(0) // Default to 0 (none selected)
 const selectedBatchIndex = ref(0) // Default first one selected
+const warehouses = ref<any[]>([])
+const selectedWarehouse = ref('')
+const showDeleteDialog = ref(false)
+const deleteInput = ref('')
+const isPackageSizeLocked = ref(true)
+const showAuthDialog = ref(false)
+const authPassword = ref('')
 
 interface InventoryItem {
   id: number
@@ -40,7 +48,8 @@ const productionPlans = ref<any[]>([])
 const productionPlanOptions = ref<string[]>([])
 const allBatches = ref<any[]>([])
 const filteredBatches = ref<any[]>([])
-const skuSteps = ref<any[]>([])
+// const skuSteps = ref<any[]>([]) // Removed
+const prebatchRequires = ref<any[]>([])
 const ingredientOptions = ref<{label: string, value: string}[]>([])
 
 
@@ -57,8 +66,14 @@ const selectedBatch = computed(() => {
 
 // Fetch ingredients from backend
 const fetchIngredients = async () => {
-    // Keeping this generic fetch if needed, but main logic will shift to filtered ingredients by Plan
-    // ...
+    try {
+        const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/ingredients/`, {
+            headers: getAuthHeader() as Record<string, string>
+        })
+        ingredients.value = data
+    } catch (e) {
+        console.error('Error fetching ingredients', e)
+    }
 }
 
 
@@ -74,10 +89,7 @@ const fetchProductionPlans = async () => {
     productionPlans.value = data
     productionPlanOptions.value = data.map(plan => plan.plan_id)
     
-    // Auto-select first plan if available
-    if (productionPlanOptions.value.length > 0 && !selectedProductionPlan.value) {
-      selectedProductionPlan.value = productionPlanOptions.value[0] || ''
-    }
+    /* removed auto-select to minimize initial queries */
   } catch (error) {
     console.error('Error fetching production plans:', error)
     $q.notify({
@@ -127,12 +139,12 @@ const filterBatchesByPlan = async () => {
         return a.batch_id.localeCompare(b.batch_id)
       })
     
-    // 2. Fetch SKU Steps to get relevant Ingredients
+    // 2. Fetch SKU Steps - Logic moved to onBatchSelect per user request
+    /*
     if (plan.sku_id) {
-       // Pass plan.batch_size (or default to 0) to calculate required weights
-       // Updated: No longer passing plan.batch_size, as it is handled by computed property
        await fetchSkuStepsForPlan(plan.sku_id)
     }
+    */
 
     // Reset selection if current index is out of bounds
     if (selectedBatchIndex.value >= filteredBatches.value.length) {
@@ -144,85 +156,104 @@ const filterBatchesByPlan = async () => {
   }
 }
 
+const onPlanShow = (plan: any) => {
+  selectedProductionPlan.value = plan.plan_id
+  isBatchSelected.value = false
+  // skuSteps.value = [] // Removed
+  selectedReCode.value = ''
+  selectedRequirementId.value = null
+  fetchPreBatchRecords()
+}
+
+const onBatchSelect = async (plan: any, batch: any, index: number) => {
+  selectedProductionPlan.value = plan.plan_id
+  selectedBatchIndex.value = Number(index)
+  isBatchSelected.value = true
+  
+  // Re-filter batches to ensure selectedBatch computed works correctly
+  filterBatchesByPlan()
+
+  // Fetch prebatch requirements from db table (triggers auto-creation if missing)
+  await fetchPrebatchRequires(batch.batch_id)
+  
+  // Fetch records for this plan
+  await fetchPreBatchRecords()
+}
+
+const fetchPrebatchRequires = async (batchId: string) => {
+  try {
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-reqs/${batchId}`, {
+      headers: getAuthHeader() as Record<string, string>
+    })
+    prebatchRequires.value = data
+  } catch (error) {
+    console.error('Error fetching prebatch requirements:', error)
+    prebatchRequires.value = []
+  }
+}
+
+const updatePrebatchRequireStatus = async (batchId: string, reCode: string, status: number) => {
+  try {
+    await $fetch(`${appConfig.apiBaseUrl}/prebatch-reqs/${batchId}/${reCode}/status?status=${status}`, {
+      method: 'PUT',
+      headers: getAuthHeader() as Record<string, string>
+    })
+    // Refresh local list
+    await fetchPrebatchRequires(batchId)
+  } catch (error) {
+    console.error('Error updating prebatch requirement status:', error)
+  }
+}
+
 // State for tracking if a specific batch is selected versus just the plan
 const isBatchSelected = ref(false)
 
 // Computed ingredients list based on selected Batch (or Plan)
 const selectableIngredients = computed(() => {
-    if (!skuSteps.value || skuSteps.value.length === 0) return []
+    if (!prebatchRequires.value || prebatchRequires.value.length === 0) return []
 
-    // Determine target sizes for calculation
-    const planTotalSize = selectedPlanDetails.value?.total_volume || 0
-    const batchSize = (isBatchSelected.value && selectedBatch.value) 
-        ? (selectedBatch.value.batch_size || 0) 
-        : (selectedPlanDetails.value?.batch_size || 0)
-
-    console.log(`Calculating Ingredients. Batch: ${batchSize}, Plan: ${planTotalSize}`)
-
-    const uniqueMap = new Map()
-    let counter = 1
     const invList = inventoryRows.value || []
-
-    skuSteps.value.forEach((step: any) => {
-        if (step.re_code) {
-             if (!uniqueMap.has(step.re_code)) {
-                // Try to find inventory source default location
-                const stock = invList.find((r: any) => r.re_code === step.re_code)
-                const warehouse = stock ? (stock.warehouse_location || '').toUpperCase() : '-'
-                
-                uniqueMap.set(step.re_code, {
-                    index: counter++,
-                    re_code: step.re_code,
-                    ingredient_name: step.ingredient_name || step.re_code,
-                    std_package_size: step.std_package_size || 0,
-                    batch_require: 0,
-                    total_require: 0,
-                    from_warehouse: stock ? stock.warehouse_location : '-',
-                    isDisabled: !(warehouse === 'SPP' || warehouse === 'FH'),
-                    isDone: false 
-                })
-            }
-            
-            const entry = uniqueMap.get(step.re_code)
-            
-            // Calculate step requirement for one batch
-            let batchStepReq = parseFloat(step.require) || 0
-            if (batchSize > 0 && step.std_batch_size > 0) {
-                batchStepReq = (batchStepReq / step.std_batch_size) * batchSize
-            }
-            
-            // Calculate step requirement for total plan
-            let totalStepReq = parseFloat(step.require) || 0
-            if (planTotalSize > 0 && step.std_batch_size > 0) {
-                totalStepReq = (totalStepReq / step.std_batch_size) * planTotalSize
-            }
-            
-            entry.batch_require += batchStepReq
-            entry.total_require += totalStepReq
+    
+    // Map PBTasks to UI rows
+    return prebatchRequires.value.map((task: any, index: number) => {
+        // Find Ingredient info for package size
+        const ingInfo = ingredients.value.find(i => i.re_code === task.re_code)
+        
+        // Try to find inventory source default location
+        const stock = invList.find((r: any) => r.re_code === task.re_code)
+        
+        // Use task WH if set, else stock default, else '-'
+        const warehouse = (task.wh && task.wh !== '-' ? task.wh : (stock?.warehouse_location || '-')).toUpperCase()
+        
+        return {
+            index: index + 1,
+            re_code: task.re_code,
+            ingredient_name: task.ingredient_name || ingInfo?.name || task.re_code,
+            std_package_size: ingInfo?.std_package_size || 0,
+            batch_require: task.required_volume,
+            total_require: task.required_volume, 
+            from_warehouse: warehouse,
+             isDisabled: warehouse !== selectedWarehouse.value.toUpperCase(),
+             isDone: task.status === 2,
+             status: task.status,
+             req_id: task.id
         }
     })
-    
-    return Array.from(uniqueMap.values())
 })
 
 const getIngredientRowClass = (ing: any) => {
     if (ing.isDisabled) return 'bg-grey-3 text-grey-5 cursor-not-allowed'
     if (selectedReCode.value === ing.re_code) return 'bg-orange-2 text-deep-orange-9 text-weight-bold cursor-pointer'
+    
+    // Status colors
+    if (ing.status === 2) return 'bg-green-1 text-green-9 cursor-pointer'
+    if (ing.status === 1) return 'bg-amber-1 text-amber-9 cursor-pointer'
+    
     return 'hover-bg-grey-1 cursor-pointer'
 }
 
 // Fetch Steps for the selected Plan's SKU
-const fetchSkuStepsForPlan = async (skuId: string) => {
-    try {
-        const steps = await $fetch<any[]>(`${appConfig.apiBaseUrl}/api/v_sku_step_detail?sku_id=${skuId}`, {
-            headers: getAuthHeader() as Record<string, string>
-        })
-        skuSteps.value = steps
-    } catch (e) {
-        console.error('Error fetching SKU steps for ingredients', e)
-        skuSteps.value = []
-    }
-}
+// fetchSkuStepsForPlan removed as we now rely on server-side PBTasks
 
 // Watcher to handle selection reset if ingredient disappears
 watch(selectableIngredients, (newList) => {
@@ -235,10 +266,16 @@ watch(selectableIngredients, (newList) => {
 // Update require volume when batch is selected
 // NOTE: User requested Request Volume to stay 0 until ingredient is selected/double-clicked.
 // So we no longer auto-populate from batch size here.
-const onSelectIngredient = (ing: any) => {
+const onSelectIngredient = async (ing: any) => {
     if (ing.isDisabled) return
     selectedReCode.value = ing.re_code
+    selectedRequirementId.value = ing.req_id
     updateRequireVolume()
+
+    // Update status to onBatch (1) if it's currently Created (0)
+    if (ing.status === 0 && selectedBatch.value) {
+        await updatePrebatchRequireStatus(selectedBatch.value.batch_id, ing.re_code, 1)
+    }
 }
 
 const updateRequireVolume = () => {
@@ -259,15 +296,17 @@ const updateRequireVolume = () => {
 }
 
 // --- MQTT Configuration ---
-import { useMQTT } from '~/composables/useMQTT'
+import { useMqttLocalDevice } from '~/composables/useMqttLocalDevice'
 
 // Use shared MQTT composable
 const { 
   connect: connectMQTT, 
   disconnect: disconnectMQTT, 
   mqttClient, 
-  isConnected: isBrokerConnected 
-} = useMQTT()
+  isConnected: isBrokerConnected,
+  lastScan,
+  publish: publishMQTT 
+} = useMqttLocalDevice()
 
 
 // Init scales with connection state and topic
@@ -276,10 +315,11 @@ const scales = ref([
     id: 1,
     label: 'Scale 1 (10 Kg +/- 0.01)',
     value: 0.0,
-    displayValue: '0.000',
+    displayValue: '0.0000',
     targetScaleId: 'scale-01',
     connected: false,
     tolerance: 0.01,
+    precision: 4
   },
   {
     id: 2,
@@ -289,15 +329,17 @@ const scales = ref([
     targetScaleId: 'scale-02',
     connected: false,
     tolerance: 0.02,
+    precision: 3
   },
   {
     id: 3,
     label: 'Scale 3 (150 Kg +/- 0.5)',
     value: 0.0,
-    displayValue: '0.000',
+    displayValue: '0.00',
     targetScaleId: 'scale-03',
     connected: false,
     tolerance: 0.5,
+    precision: 2
   },
 ])
 
@@ -322,7 +364,7 @@ const handleMqttMessage = (topic: string, message: any) => {
         const val = parseFloat(data.weight)
         if (!isNaN(val)) {
           scale.value = val
-          scale.displayValue = val.toFixed(3)
+          scale.displayValue = val.toFixed((scale as any).precision || 3)
         }
       }
     }
@@ -437,7 +479,24 @@ onMounted(() => {
   fetchBatchIds()
   fetchInventory()
   fetchPreBatchRecords()
+  fetchWarehouses()
 })
+
+const fetchWarehouses = async () => {
+    try {
+        const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/warehouses/`, {
+            headers: getAuthHeader() as Record<string, string>
+        })
+        warehouses.value = data
+        if (data.length > 0) {
+            // Auto-select FH if it exists
+            const fh = data.find(w => w.warehouse_id === 'FH')
+            selectedWarehouse.value = fh ? fh.warehouse_id : data[0].warehouse_id
+        }
+    } catch (e) {
+        console.error('Error fetching warehouses', e)
+    }
+}
 
 // --- Inventory Logic ---
 const inventoryRows = ref<InventoryItem[]>([])
@@ -507,6 +566,8 @@ const filteredInventory = computed(() => {
         .filter(item => {
             // Simple case-insensitive match just in case
             return (item.re_code || '').trim().toUpperCase() === selectedReCode.value.trim().toUpperCase() &&
+                   // Match selected warehouse
+                   (item.warehouse_location === selectedWarehouse.value) &&
                    // Only on-hand (>0) and Active items
                    item.remain_vol > 0 && 
                    (showAllInventory.value || item.status === 'Active')
@@ -672,6 +733,7 @@ const onInventoryRowClick = (evt: any, row: InventoryItem) => {
 // Watch for production plan changes
 watch(selectedProductionPlan, () => {
   filterBatchesByPlan()
+  fetchPreBatchRecords()
 })
 
 // Watch for batch selection changes
@@ -686,9 +748,53 @@ onUnmounted(() => {
 // Control Fields
 const requireVolume = ref(0)
 const packageSize = ref(0)
-// const batchVolume = ref(0) // Removed per user request
-const currentPackage = ref('0/0')
-const targetWeight = ref(0) // The target weight for the current package
+
+const totalCompletedWeight = computed(() => {
+    if (!selectedBatch.value || !selectedReCode.value) return 0
+    const batchId = selectedBatch.value.batch_id
+    const ingLogs = preBatchLogs.value.filter(log => 
+        log.re_code === selectedReCode.value && 
+        log.batch_record_id.startsWith(batchId)
+    )
+    return ingLogs.reduce((sum, log) => sum + (Number(log.net_volume) || 0), 0)
+})
+
+const completedCount = computed(() => {
+    if (!selectedBatch.value || !selectedReCode.value) return 0
+    const batchId = selectedBatch.value.batch_id
+    return preBatchLogs.value.filter(log => 
+        log.re_code === selectedReCode.value && 
+        log.batch_record_id.startsWith(batchId)
+    ).length
+})
+
+const nextPackageNo = computed(() => {
+    if (!selectedBatch.value || !selectedReCode.value) return 1
+    const batchId = selectedBatch.value.batch_id
+    
+    // Get all existing package numbers for this ingredient in this batch
+    const existingNos = preBatchLogs.value
+        .filter(log => log.re_code === selectedReCode.value && log.batch_record_id.startsWith(batchId))
+        .map(log => Number(log.package_no))
+        .sort((a, b) => a - b)
+    
+    // Find the first hole or the next number
+    let next = 1
+    while (existingNos.includes(next)) {
+        next++
+    }
+    return next
+})
+
+const remainToBatch = computed(() => {
+    return Math.max(0, requireVolume.value - totalCompletedWeight.value - actualScaleValue.value)
+})
+
+const targetWeight = computed(() => {
+    if (requireVolume.value <= 0 || packageSize.value <= 0) return 0
+    return Math.min(remainToBatch.value, packageSize.value)
+})
+
 const requestBatch = computed(() => {
     if (packageSize.value <= 0) return 0
     return Math.ceil(requireVolume.value / packageSize.value)
@@ -698,9 +804,8 @@ const labelData = computed(() => {
   if (!selectedBatch.value || !selectedReCode.value) return null
   
   const ing = selectableIngredients.value.find(i => i.re_code === selectedReCode.value)
-  const parts = currentPackage.value.split('/')
-  const pkgNo = parts[0]?.trim() || '0'
-  const totalPkgs = parts[1]?.trim() || '0'
+  const pkgNo = completedCount.value + 1
+  const totalPkgs = requestBatch.value
   
   return {
     sku_id: selectedBatch.value.sku_id || '-',
@@ -711,8 +816,8 @@ const labelData = computed(() => {
     ingredient_name: ing?.ingredient_name || '-',
     order_code: selectedBatch.value.plan_id || '-',
     batch_id: selectedBatch.value.batch_id || '-',
-    net_volume: capturedScaleValue.value.toFixed(3),
-    total_volume: requireVolume.value.toFixed(3),
+    net_volume: capturedScaleValue.value.toFixed(4),
+    total_volume: requireVolume.value.toFixed(4),
     package_no: pkgNo,
     total_packages: totalPkgs
   }
@@ -742,8 +847,29 @@ watch(packageSize, (val) => {
   }
 })
 const filteredPreBatchLogs = computed(() => {
-    if (!selectedBatch.value) return []
-    return preBatchLogs.value.filter(log => log.batch_record_id.startsWith(selectedBatch.value.batch_id))
+    if (!selectedBatch.value || !selectedReCode.value) return []
+    return preBatchLogs.value.filter(log => {
+        const matchBatch = log.batch_record_id.startsWith(selectedBatch.value.batch_id)
+        const matchReCode = log.re_code === selectedReCode.value
+        return matchBatch && matchReCode
+    })
+})
+
+const preBatchSummary = computed(() => {
+    const logs = filteredPreBatchLogs.value
+    const totalNetWeight = logs.reduce((sum, log) => sum + (log.net_volume || 0), 0)
+    const count = logs.length
+    const targetW = requireVolume.value || 0
+    const errorVol = totalNetWeight - targetW
+    
+    return {
+        count,
+        totalNetWeight: totalNetWeight.toFixed(4),
+        targetCount: requestBatch.value || 0,
+        targetWeight: targetW.toFixed(4),
+        errorVolume: errorVol.toFixed(4),
+        errorColor: errorVol > 0 ? 'text-red' : (errorVol < 0 ? 'text-orange' : 'text-green')
+    }
 })
 
 // Check if out of tolerance
@@ -753,19 +879,164 @@ const isToleranceExceeded = computed(() => {
   return diff > activeScale.value.tolerance
 })
 
+const isPackagedVolumeInTol = computed(() => {
+  if (!activeScale.value || targetWeight.value <= 0) return false
+  const diff = Math.abs(targetWeight.value - batchedVolume.value)
+  return diff <= activeScale.value.tolerance
+})
+
+const packagedVolumeBgColor = computed(() => {
+  if (batchedVolume.value <= 0) return 'grey-2' // Neutral if empty
+  return isPackagedVolumeInTol.value ? 'green-13' : 'yellow-13'
+})
+
+// Sync Packaged Volume with Active Scale live when ingredient is selected
+watch(actualScaleValue, (newVal) => {
+  if (selectedReCode.value) {
+    batchedVolume.value = newVal
+  } else {
+    batchedVolume.value = 0
+  }
+}, { immediate: true })
+
+// Also sync if ingredient just got selected to catch current scale value immediately
+watch(selectedReCode, (newReCode) => {
+  if (newReCode) {
+    batchedVolume.value = actualScaleValue.value
+  } else {
+    batchedVolume.value = 0
+  }
+})
+
 // PreBatch Records from database
 const preBatchLogs = ref<any[]>([])
+
+const prebatchColumns: QTableColumn[] = [
+    { name: 'batch_id', align: 'left', label: 'Batch ID', field: 'batch_record_id', format: (val: string) => val.split('-').slice(0, 6).join('-'), classes: 'text-caption' },
+    { name: 're_code', align: 'left', label: 'Ingredient', field: 're_code', sortable: true },
+    { name: 'package_no', align: 'center', label: 'Pkg', field: 'package_no' },
+    { name: 'net_volume', align: 'right', label: 'Net (kg)', field: 'net_volume', format: (val: any) => Number(val).toFixed(4) },
+    { name: 'intake_lot_id', align: 'left', label: 'Intake Lot', field: 'intake_lot_id', sortable: true },
+    { name: 'actions', align: 'center', label: '', field: 'id' }
+]
 
 const fetchPreBatchRecords = async () => {
   if (!selectedProductionPlan.value) return
   try {
-    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-records/by-plan/${selectedProductionPlan.value}`, {
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-recs/by-plan/${selectedProductionPlan.value}`, {
       headers: getAuthHeader() as Record<string, string>
     })
     preBatchLogs.value = data
   } catch (error) {
     console.error('Error fetching prebatch records:', error)
   }
+}
+
+const recordToDelete = ref<any>(null)
+
+const executeDeletion = async (record: any) => {
+    try {
+      await $fetch(`${appConfig.apiBaseUrl}/prebatch-recs/${record.id}`, {
+        method: 'DELETE',
+        headers: getAuthHeader() as Record<string, string>
+      })
+      
+      $q.notify({ 
+        type: 'positive', 
+        message: `Package #${record.package_no} cancelled. Inventory restored.`,
+        icon: 'restore'
+      })
+      
+      showDeleteDialog.value = false
+      recordToDelete.value = null
+      deleteInput.value = ''
+      
+      await fetchPreBatchRecords()
+      if (selectedBatch.value) {
+        await fetchPrebatchRequires(selectedBatch.value.batch_id)
+      }
+    } catch (err) {
+      console.error('Error deleting record:', err)
+      $q.notify({ type: 'negative', message: 'Failed to cancel record' })
+    }
+}
+
+const onDeleteRecord = (record: any) => {
+  recordToDelete.value = record
+  deleteInput.value = ''
+  showDeleteDialog.value = true
+}
+
+const onConfirmDeleteManual = async () => {
+    if (!recordToDelete.value) return
+    
+    const val = deleteInput.value.trim()
+    if (val === String(recordToDelete.value.package_no) || val === recordToDelete.value.batch_record_id) {
+        await executeDeletion(recordToDelete.value)
+    } else {
+        $q.notify({ 
+          type: 'negative', 
+          message: 'Invalid input. Please scan the label or type the exact package number.',
+          position: 'top'
+        })
+    }
+}
+
+// Watch for scans during deletion mode
+watch(lastScan, async (newScan) => {
+  if (!showDeleteDialog.value || !recordToDelete.value || !newScan) return
+
+  if (newScan.barcode === recordToDelete.value.batch_record_id) {
+    await executeDeletion(recordToDelete.value)
+  } else {
+    $q.notify({ 
+      type: 'negative', 
+      message: `Invalid Barcode! Expected: ${recordToDelete.value.batch_record_id}`,
+      position: 'top',
+      timeout: 3000
+    })
+  }
+})
+
+const simulateScannerConfirm = () => {
+    if (!recordToDelete.value) return
+    publishMQTT('scanner/sim/scan', {
+        node_id: 'simulator',
+        barcode: recordToDelete.value.batch_record_id,
+        timestamp: new Date().toISOString()
+    })
+}
+
+const unlockPackageSize = () => {
+    if (!isPackageSizeLocked.value) {
+        isPackageSizeLocked.value = true
+        return
+    }
+    authPassword.value = ''
+    showAuthDialog.value = true
+}
+
+const verifyAuth = async () => {
+    if (!user.value || !authPassword.value) return
+    
+    try {
+        const payload = {
+            username_or_email: user.value.username,
+            password: authPassword.value
+        }
+        
+        await $fetch(`${appConfig.apiBaseUrl}/auth/verify`, {
+            method: 'POST',
+            body: payload
+        })
+        
+        isPackageSizeLocked.value = false
+        showAuthDialog.value = false
+        authPassword.value = ''
+        $q.notify({ type: 'positive', message: 'Authorization successful' })
+    } catch (err) {
+        $q.notify({ type: 'negative', message: 'Invalid password. Authorization failed.' })
+    }
 }
 
 
@@ -814,26 +1085,6 @@ const onIngredientDoubleClick = (ingredient: any) => {
         // Auto-fill Package Size from ingredient standard
         if (ingredient.std_package_size) {
             packageSize.value = Number(ingredient.std_package_size)
-        }
-        
-        // Reset and recalculate batching fields
-        if (requireVolume.value > 0 && packageSize.value > 0) {
-             const numPackages = Math.ceil(requireVolume.value / packageSize.value)
-             
-             // batchVolume.value = packageSize.value 
-             
-             // Reset Current Package to 1 / Total
-             currentPackage.value = `1 / ${numPackages}`
-             
-             // Set Request Batch to the first package amount
-             // If Total < PackageSize, then Request = Total
-             // Else Request = PackageSize
-             targetWeight.value = Math.min(requireVolume.value, packageSize.value)
-        } else {
-            // Fallback reset
-            // batchVolume.value = 0
-            currentPackage.value = ''
-            targetWeight.value = 0
         }
         
         $q.notify({
@@ -939,7 +1190,11 @@ const packageLabelId = ref('')
 const capturedScaleValue = ref(0)
 const openLabelDialog = () => {
   capturedScaleValue.value = actualScaleValue.value
-  packageLabelId.value = ''
+  if (selectedBatch.value && selectedReCode.value) {
+    packageLabelId.value = `${selectedBatch.value.batch_id}-${selectedReCode.value}-${nextPackageNo.value}`
+  } else {
+    packageLabelId.value = ''
+  }
   showLabelDialog.value = true
 }
 
@@ -958,12 +1213,8 @@ const onPrintLabel = async () => {
   }
 
   try {
-    const parts = currentPackage.value.split('/')
-    if (parts.length < 2) {
-        throw new Error('Invalid package format')
-    }
-    const pkgNo = parseInt(parts[0]?.trim() || '0')
-    const totalPkgs = parseInt(parts[1]?.trim() || '0')
+    const pkgNo = nextPackageNo.value
+    const totalPkgs = requestBatch.value
     
     if (isNaN(pkgNo) || isNaN(totalPkgs)) {
         throw new Error('Invalid package numbers')
@@ -971,6 +1222,7 @@ const onPrintLabel = async () => {
 
     // Construct Prebatch Record data
     const recordData = {
+      req_id: selectedRequirementId.value,
       batch_record_id: `${selectedBatch.value.batch_id}-${selectedReCode.value}-${pkgNo}`,
       plan_id: selectedProductionPlan.value,
       re_code: selectedReCode.value,
@@ -978,10 +1230,11 @@ const onPrintLabel = async () => {
       total_packages: totalPkgs,
       net_volume: capturedScaleValue.value,
       total_volume: requireVolume.value, // This is the total required for this ingredient in this batch
-      total_request_volume: targetWeight.value
+      total_request_volume: targetWeight.value,
+      intake_lot_id: selectedIntakeLotId.value
     }
 
-    await $fetch(`${appConfig.apiBaseUrl}/prebatch-records/`, {
+    await $fetch(`${appConfig.apiBaseUrl}/prebatch-recs/`, {
       method: 'POST',
       body: recordData,
       headers: getAuthHeader() as Record<string, string>
@@ -992,17 +1245,19 @@ const onPrintLabel = async () => {
     // Refresh prebatch logs
     await fetchPreBatchRecords()
     
-    // Move to next package if available
-    if (pkgNo < totalPkgs) {
-        currentPackage.value = `${pkgNo + 1} / ${totalPkgs}`
-        // Recalculate remain and request batch if needed
-        const nextReq = Math.min(requireVolume.value - (pkgNo * packageSize.value), packageSize.value)
-        targetWeight.value = Math.max(0, Number(nextReq.toFixed(3)))
-    } else {
+    // Check if finished
+    if (pkgNo >= totalPkgs) {
         $q.notify({ type: 'info', message: 'All packages for this ingredient completed' })
-        // Update ingredient status in list
+        // Update ingredient status in database
+        if (selectedBatch.value) {
+            await updatePrebatchRequireStatus(selectedBatch.value.batch_id, selectedReCode.value, 2)
+        }
+        // Update ingredient status in local list (fallback/immediate UI)
         const ing = selectableIngredients.value.find(i => i.re_code === selectedReCode.value)
-        if (ing) ing.isDone = true
+        if (ing) {
+            ing.isDone = true
+            ing.status = 2
+        }
     }
 
     showLabelDialog.value = false
@@ -1013,6 +1268,21 @@ const onPrintLabel = async () => {
 }
 
 const onDone = () => {
+  if (!selectedReCode.value) {
+    $q.notify({ type: 'warning', message: 'Please select an ingredient first' })
+    return
+  }
+  
+  if (completedCount.value >= requestBatch.value && requestBatch.value > 0) {
+    $q.notify({ type: 'warning', message: 'All packages for this ingredient are already completed' })
+    return
+  }
+  
+  if (!selectedIntakeLotId.value) {
+    $q.notify({ type: 'negative', message: 'Please scan or select an Intake Lot ID first', position: 'top' })
+    return
+  }
+
   // Open the dialog instead of just notifying
   openLabelDialog()
 }
@@ -1059,7 +1329,7 @@ const onSelectBatch = (index: number) => {
                           header-class="text-weight-bold"
                           dense
                           dense-toggle
-                          @show="selectedProductionPlan = plan.plan_id; isBatchSelected = false"
+                          @show="onPlanShow(plan)"
                         >
                           <!-- Batch List -->
                            <q-list dense separator padding class="text-caption">
@@ -1070,7 +1340,7 @@ const onSelectBatch = (index: number) => {
                                  v-ripple
                                  :active="selectedProductionPlan === plan.plan_id && selectedBatchIndex === idx && isBatchSelected"
                                  active-class="bg-blue-1 text-primary text-weight-bold"
-                                 @click.stop="selectedProductionPlan = plan.plan_id; selectedBatchIndex = Number(idx); isBatchSelected = true"
+                                 @click.stop="onBatchSelect(plan, batch, Number(idx))"
                                  style="padding-left: 32px; min-height: 32px;"
                               >
                                  <q-item-section>
@@ -1096,17 +1366,43 @@ const onSelectBatch = (index: number) => {
             </div>
         </q-card>
 
+        <!-- NEW CARD: Warehouse Selection -->
+        <q-card class="col-auto bg-white shadow-2">
+            <q-card-section class="q-py-sm">
+                <div class="text-subtitle2 text-weight-bold q-mb-xs">Warehouse Location</div>
+                <q-select
+                    v-model="selectedWarehouse"
+                    :options="warehouses"
+                    option-label="name"
+                    option-value="warehouse_id"
+                    emit-value
+                    map-options
+                    outlined
+                    dense
+                    bg-color="blue-grey-1"
+                    class="text-weight-bold"
+                >
+                    <template v-slot:prepend>
+                        <q-icon name="warehouse" color="primary" />
+                    </template>
+                </q-select>
+            </q-card-section>
+        </q-card>
+
         <!-- CARD 2: Ingredients for Selected Plan -->
         <q-card class="col-auto bg-white shadow-2 column" style="max-height: 400px;">
             <template v-if="selectedProductionPlan">
               <q-card-section class="bg-orange-8 text-white q-py-xs shadow-1">
                   <div class="row items-center justify-between no-wrap">
-                      <div class="text-subtitle2 text-weight-bold ellipsis" style="max-width: 60%;">
-                          {{ selectedPlanDetails?.sku_id || 'Unknown SKU' }}
+                      <div class="text-subtitle2 text-weight-bold">
+                          Require Ingredient
                       </div>
                       <q-badge color="white" text-color="orange-9" class="text-weight-bold">
-                          {{ selectableIngredients.length }} Item{{ selectableIngredients.length !== 1 ? 's' : '' }}
+                          {{ selectableIngredients.length }} Items
                       </q-badge>
+                  </div>
+                  <div class="text-caption text-orange-1 text-weight-bold ellipsis" style="font-size: 0.9rem;">
+                      {{ selectedPlanDetails?.sku_id || 'Unknown SKU' }}
                   </div>
                   <div class="text-caption text-orange-2" style="font-size: 0.7rem;">
                       Plan: {{ selectedProductionPlan }} <span v-if="isBatchSelected">(Batch: {{ selectedBatch?.batch_id.slice(-3) }})</span>
@@ -1124,8 +1420,8 @@ const onSelectBatch = (index: number) => {
                         <tr>
                             <th class="text-left" style="font-size: 0.7rem;">Ingredient</th>
                             <th class="text-center" style="font-size: 0.7rem;">WH</th>
-                            <th class="text-right" style="font-size: 0.7rem;">Batch Req (kg)</th>
-                            <th class="text-right" style="font-size: 0.7rem;">Total Plan Req (kg)</th>
+                            <th class="text-right" style="font-size: 0.7rem;">Req (kg)</th>
+                            <th class="text-center" style="font-size: 0.7rem;">Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1136,14 +1432,22 @@ const onSelectBatch = (index: number) => {
                             :class="getIngredientRowClass(ing)"
                             @click="onSelectIngredient(ing)"
                         >
-                            <td class="text-weight-bold" style="font-size: 0.75rem;">{{ ing.re_code }}</td>
+                            <td class="text-weight-bold" style="font-size: 0.75rem;">
+                                {{ ing.re_code }}
+                                <q-tooltip>{{ ing.ingredient_name }}</q-tooltip>
+                            </td>
                             <td class="text-center text-caption" style="font-size: 0.7rem;">{{ ing.from_warehouse }}</td>
                             <td class="text-right text-weight-bold" style="font-size: 0.75rem;">{{ ing.batch_require ? ing.batch_require.toFixed(3) : '0' }}</td>
-                            <td class="text-right text-weight-bold" style="font-size: 0.75rem;">{{ ing.total_require ? ing.total_require.toFixed(3) : '0' }}</td>
+                            <td class="text-center">
+                                <q-badge v-if="ing.status === 2" color="green" label="Complete" size="sm" />
+                                <q-badge v-else-if="ing.status === 1" color="orange" label="onBatch" size="sm" />
+                                <q-badge v-else color="grey-6" label="Created" size="sm" />
+                            </td>
                         </tr>
                         <tr v-if="selectableIngredients.length === 0">
                             <td colspan="4" class="text-center text-grey q-pa-md">
-                                <div v-if="selectedProductionPlan">No Ingredients Found</div>
+                                <div v-if="selectedProductionPlan && isBatchSelected">No Ingredients Found</div>
+                                <div v-else-if="selectedProductionPlan">Select a Batch to view ingredients</div>
                                 <div v-else>Select a Plan to view ingredients</div>
                             </td>
                         </tr>
@@ -1335,12 +1639,12 @@ const onSelectBatch = (index: number) => {
                 <!-- CONTROLS ROW 1 -->
                 <div class="row q-col-gutter-md q-mb-md">
 
-                <!-- Request Volume (col-2) -->
-                <div class="col-12 col-md-2">
-                    <div class="text-subtitle2 q-mb-xs">Request Volume</div>
+                <!-- Request Volume (col-md) -->
+                <div class="col-12 col-md">
+                    <div class="text-subtitle2 q-mb-xs text-no-wrap">Request Volume (kg)</div>
                     <q-input
                     outlined
-                    :model-value="requireVolume.toFixed(3)"
+                    :model-value="requireVolume.toFixed(4)"
                     dense
                     bg-color="grey-2"
                     readonly
@@ -1348,25 +1652,38 @@ const onSelectBatch = (index: number) => {
                     />
                 </div>
 
-                <!-- Packaged Volume (col-2) -->
-                <div class="col-12 col-md-2">
-                    <div class="text-subtitle2 q-mb-xs">Packaged Volume</div>
+                <!-- Req for this Package (col-md) -->
+                <div class="col-12 col-md">
+                    <div class="text-subtitle2 q-mb-xs text-no-wrap text-blue-9 text-weight-bold">Req for this Package (kg)</div>
                     <q-input
                     outlined
-                    :model-value="batchedVolume.toFixed(3)"
+                    :model-value="targetWeight.toFixed(4)"
                     dense
-                    bg-color="grey-2"
+                    bg-color="blue-1"
                     readonly
-                    input-class="text-right"
+                    input-class="text-right text-weight-bold"
                     />
                 </div>
 
-                <!-- Remain Volume (col-2) -->
-                <div class="col-12 col-md-2">
-                    <div class="text-subtitle2 q-mb-xs">Remain Volume</div>
+                <!-- Packaged Volume (col-md) -->
+                <div class="col-12 col-md">
+                    <div class="text-subtitle2 q-mb-xs text-no-wrap">Packaged Volume (kg)</div>
                     <q-input
                     outlined
-                    :model-value="remainVolume.toFixed(3)"
+                    :model-value="batchedVolume.toFixed(4)"
+                    dense
+                    :bg-color="packagedVolumeBgColor"
+                    readonly
+                    input-class="text-right text-weight-bold"
+                    />
+                </div>
+
+                <!-- Remain Volume (col-md) -->
+                <div class="col-12 col-md">
+                    <div class="text-subtitle2 q-mb-xs text-no-wrap">Remain Volume (kg)</div>
+                    <q-input
+                    outlined
+                    :model-value="remainToBatch.toFixed(4)"
                     dense
                     bg-color="grey-2"
                     readonly
@@ -1374,36 +1691,45 @@ const onSelectBatch = (index: number) => {
                     />
                 </div>
                 
-                <!-- Package Size (col-2) -->
-                <div class="col-12 col-md-2">
-                    <div class="text-subtitle2 q-mb-xs">Package Size (kg)</div>
+                <!-- Package Size (col-md) -->
+                <div class="col-12 col-md">
+                    <div class="text-subtitle2 q-mb-xs text-no-wrap">Package Size (kg)</div>
                     <q-input
                     outlined
                     v-model.number="packageSize"
                     dense
-                    bg-color="white"
+                    :bg-color="isPackageSizeLocked ? 'grey-1' : 'white'"
                     input-class="text-right"
                     type="number"
-                    />
+                    step="0.0001"
+                    :readonly="isPackageSizeLocked"
+                    >
+                        <template v-slot:append>
+                            <q-btn 
+                                :icon="isPackageSizeLocked ? 'lock' : 'lock_open'" 
+                                flat 
+                                round 
+                                dense 
+                                :color="isPackageSizeLocked ? 'grey-7' : 'primary'"
+                                size="sm" 
+                                @click="unlockPackageSize"
+                            >
+                                <q-tooltip>{{ isPackageSizeLocked ? 'Unlock to edit' : 'Lock field' }}</q-tooltip>
+                            </q-btn>
+                        </template>
+                    </q-input>
                 </div>
 
-                <!-- Request Batch (Count) -->
-                <div class="col-12 col-md-2">
-                    <div class="text-subtitle2 q-mb-xs">Request Batch</div>
-                    <q-input :model-value="requestBatch" outlined readonly dense bg-color="yellow-1" input-class="text-center text-weight-bold" />
-                </div>
-
-
-
-                <!-- Package (col-2) -->
-                <div class="col-12 col-md-2">
-                    <div class="text-subtitle2 q-mb-xs">Package</div>
+                <!-- Package (col-md) -->
+                <div class="col-12 col-md">
+                    <div class="text-subtitle2 q-mb-xs text-no-wrap">Next Package No.</div>
                     <q-input
                     outlined
-                    v-model="currentPackage"
+                    :model-value="nextPackageNo"
                     dense
-                    bg-color="white"
-                    class="focused-border-blue"
+                    bg-color="yellow-1"
+                    readonly
+                    input-class="text-center text-weight-bold"
                     />
                 </div>
                 </div>
@@ -1452,6 +1778,7 @@ const onSelectBatch = (index: number) => {
                     size="md"
                     unelevated
                     @click="onDone"
+                    :disable="!selectedIntakeLotId"
                     />
                 </div>
                 </div>
@@ -1459,18 +1786,163 @@ const onSelectBatch = (index: number) => {
         </q-card>
 
         <!-- PreBatch List (Filtered by selected batch) -->
-        <div>
-          <div class="text-subtitle2 q-mb-xs">PreBatch-List (Current Batch)</div>
-          <div class="prebatch-list-container q-pa-sm">
-            <div v-if="!selectedBatch" class="text-grey-6 text-center q-pa-md">Select a batch to see records</div>
-            <div v-else-if="filteredPreBatchLogs.length === 0" class="text-grey-6 text-center q-pa-md">No records for this batch</div>
-            <div v-for="(record, idx) in filteredPreBatchLogs" :key="idx" class="text-blue-8 q-mb-xs">
-              {{ record.batch_record_id }} - {{ record.package_no }}/{{ record.total_packages }} - {{ record.net_volume }}/{{ record.total_volume }}/{{ record.total_request_volume }}
-            </div>
-          </div>
-        </div>
+        <q-card bordered flat class="bg-white">
+            <q-card-section class="q-py-xs bg-blue-grey-1 text-blue-grey-9 row items-center no-wrap">
+                <q-icon name="list_alt" size="xs" class="q-mr-xs" />
+                <div class="text-subtitle2 text-weight-bold">PreBatch List (Current Batch)</div>
+                <q-space />
+                
+                <!-- Scanner Simulator (Only shows when waiting for confirmation) -->
+                <q-btn 
+                    v-if="recordToDelete"
+                    label="Simulator: Scan Label" 
+                    icon="qr_code_scanner" 
+                    color="orange-9" 
+                    unelevated 
+                    dense 
+                    no-caps 
+                    class="q-px-sm anim-pulse"
+                    size="sm"
+                    @click="simulateScannerConfirm"
+                >
+                    <q-tooltip>Simulate scanning the barcode to confirm deletion</q-tooltip>
+                </q-btn>
+            </q-card-section>
+            
+            <q-card-section class="q-pa-none">
+                <q-table
+                    :rows="filteredPreBatchLogs"
+                    :columns="prebatchColumns"
+                    row-key="id"
+                    dense
+                    flat
+                    square
+                    separator="cell"
+                    :pagination="{ rowsPerPage: 10 }"
+                    style="max-height: 250px"
+                    class="sticky-header-table"
+                >
+                    <template v-slot:body-cell-actions="props">
+                        <q-td :props="props" class="text-center">
+                            <q-btn 
+                                icon="delete" 
+                                color="negative" 
+                                flat 
+                                round 
+                                dense 
+                                size="sm" 
+                                @click.stop="onDeleteRecord(props.row)"
+                            >
+                                <q-tooltip>Cancel this pack & return to inventory</q-tooltip>
+                            </q-btn>
+                        </q-td>
+                    </template>
+                    <template v-slot:bottom-row>
+                        <q-tr class="bg-blue-grey-1 text-weight-bold">
+                            <q-td colspan="2" class="text-right text-uppercase text-caption">Summary:</q-td>
+                            <q-td class="text-center">{{ preBatchSummary.count }} / {{ preBatchSummary.targetCount }}</q-td>
+                            <q-td class="text-right">
+                                {{ preBatchSummary.totalNetWeight }} / {{ preBatchSummary.targetWeight }}
+                                <div class="text-caption" :class="preBatchSummary.errorColor">
+                                    Error: {{ preBatchSummary.errorVolume }}
+                                </div>
+                            </q-td>
+                            <q-td></q-td>
+                        </q-tr>
+                    </template>
+                    <template v-slot:no-data>
+                        <div class="full-width row flex-center q-pa-md text-grey" style="font-size: 0.8rem;">
+                            <span v-if="!selectedBatch">Select a batch to see records</span>
+                            <span v-else>No records found for this batch</span>
+                        </div>
+                    </template>
+                </q-table>
+            </q-card-section>
+        </q-card>
       </div>
     </div>
+
+    <!-- Authorization Required Dialog -->
+    <q-dialog v-model="showAuthDialog" persistent>
+        <q-card style="min-width: 350px">
+            <q-card-section class="bg-primary text-white row items-center">
+                <div class="text-h6">Authorization Required</div>
+                <q-space />
+                <q-btn icon="close" flat round dense v-close-popup />
+            </q-card-section>
+
+            <q-card-section class="q-pa-md">
+                <p>Please enter your password to unlock <b>Package Size</b> editing:</p>
+                <q-input 
+                    v-model="authPassword" 
+                    type="password" 
+                    outlined 
+                    dense 
+                    label="User Password" 
+                    autofocus
+                    @keyup.enter="verifyAuth"
+                />
+            </q-card-section>
+
+            <q-card-actions align="right" class="q-pa-md">
+                <q-btn label="Cancel" flat color="grey-7" v-close-popup />
+                <q-btn 
+                    label="Verify & Unlock" 
+                    color="primary" 
+                    unelevated 
+                    @click="verifyAuth" 
+                />
+            </q-card-actions>
+        </q-card>
+    </q-dialog>
+
+    <!-- Cancel & Repack Confirmation Dialog -->
+    <q-dialog v-model="showDeleteDialog" persistent>
+        <q-card style="min-width: 400px; max-width: 500px">
+            <q-card-section class="bg-negative text-white row items-center">
+                <div class="text-h6">Confirm Repack & Cancel</div>
+                <q-space />
+                <q-btn icon="close" flat round dense v-close-popup />
+            </q-card-section>
+
+            <q-card-section class="q-pa-md">
+                <div v-if="recordToDelete">
+                    <p class="text-subtitle1 q-mb-md">
+                        To cancel Package #{{ recordToDelete.package_no }}, scan the label or type the package number (<b>{{ recordToDelete.package_no }}</b>) below:
+                    </p>
+                    <q-input 
+                        v-model="deleteInput" 
+                        outlined 
+                        dense 
+                        label="Package Number" 
+                        autofocus
+                        @keyup.enter="onConfirmDeleteManual"
+                    />
+                </div>
+            </q-card-section>
+
+            <q-card-actions align="right" class="q-pa-md bg-grey-1">
+                <!-- Simulator Button Inside Dialog -->
+                <q-btn 
+                    v-if="recordToDelete"
+                    label="Simulator: Scan Label" 
+                    icon="qr_code_scanner" 
+                    color="orange-9" 
+                    outline
+                    no-caps 
+                    class="q-mr-sm"
+                    @click="simulateScannerConfirm"
+                />
+                <q-btn label="Go Back" flat color="grey-7" v-close-popup />
+                <q-btn 
+                    label="Confirm Deletion" 
+                    color="negative" 
+                    unelevated 
+                    @click="onConfirmDeleteManual" 
+                />
+            </q-card-actions>
+        </q-card>
+    </q-dialog>
 
     <!-- Package Label Dialog -->
     <q-dialog v-model="showLabelDialog" persistent>
@@ -1907,5 +2379,27 @@ const onSelectBatch = (index: number) => {
     size: 6cm 6cm;
     margin: 0;
   }
+}
+
+/* Sticky Header Table */
+.sticky-header-table {
+  height: 250px;
+}
+.sticky-header-table thead tr th {
+  position: sticky;
+  z-index: 1;
+}
+.sticky-header-table thead tr:first-child th {
+  top: 0;
+  background-color: #f5f5f5;
+}
+
+@keyframes pulse-orange {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(230, 81, 0, 0.4); }
+  70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(230, 81, 0, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(230, 81, 0, 0); }
+}
+.anim-pulse {
+  animation: pulse-orange 1.5s infinite;
 }
 </style>

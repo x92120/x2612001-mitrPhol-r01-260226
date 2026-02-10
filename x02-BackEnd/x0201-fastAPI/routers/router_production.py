@@ -135,27 +135,63 @@ def update_production_batch(batch_id: int, batch: schemas.ProductionBatchUpdate,
 # PREBATCH RECORD ENDPOINTS
 # =============================================================================
 
-@router.get("/prebatch-records/", response_model=List[schemas.PrebatchRecord])
-def get_prebatch_records(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+@router.get("/prebatch-recs/", response_model=List[schemas.PreBatchRec])
+def get_prebatch_recs(skip: int = 0, limit: int = 100, wh: Optional[str] = None, db: Session = Depends(get_db)):
     """Get all prebatch records."""
-    return crud.get_prebatch_records(db, skip=skip, limit=limit)
+    return crud.get_prebatch_recs(db, skip=skip, limit=limit, wh=wh)
+@router.get("/prebatch-reqs/by-batch/{batch_id}", response_model=List[schemas.PreBatchReq])
+def get_prebatch_reqs_by_batch(batch_id: str, db: Session = Depends(get_db)):
+    """Get prebatch requirements filtered by batch ID."""
+    return db.query(models.PreBatchReq).filter(models.PreBatchReq.batch_id == batch_id).all()
 
 
-@router.get("/prebatch-records/by-plan/{plan_id}", response_model=List[schemas.PrebatchRecord])
-def get_prebatch_records_by_plan(plan_id: str, db: Session = Depends(get_db)):
+@router.get("/prebatch-recs/by-plan/{plan_id}", response_model=List[schemas.PreBatchRec])
+def get_prebatch_recs_by_plan(plan_id: str, db: Session = Depends(get_db)):
     """Get prebatch records filtered by plan ID."""
-    return db.query(models.PrebatchRecord).filter(models.PrebatchRecord.plan_id == plan_id).all()
+    return db.query(models.PreBatchRec).filter(models.PreBatchRec.plan_id == plan_id).all()
 
 
-@router.post("/prebatch-records/", response_model=schemas.PrebatchRecord)
-def create_prebatch_record(record: schemas.PrebatchRecordCreate, db: Session = Depends(get_db)):
-    """Create new prebatch record."""
+@router.get("/prebatch-recs/by-batch/{batch_id}", response_model=List[schemas.PreBatchRec])
+def get_prebatch_recs_by_batch(batch_id: str, db: Session = Depends(get_db)):
+    """Get prebatch records filtered by batch ID."""
+    # Since batch_record_id is "BATCH_ID-RE_CODE-PKG", we filter by prefix
+    return db.query(models.PreBatchRec).filter(models.PreBatchRec.batch_record_id.like(f"{batch_id}-%")).all()
+
+
+@router.post("/prebatch-recs/", response_model=schemas.PreBatchRec)
+def create_prebatch_rec(record: schemas.PreBatchRecCreate, db: Session = Depends(get_db)):
+    """Create new PreBatch record (transaction)."""
     try:
-        return crud.create_prebatch_record(db, record=record)
+        return crud.create_prebatch_rec(db, record=record)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError:
         raise HTTPException(status_code=500, detail="Database error")
+
+
+@router.delete("/prebatch-recs/{record_id}")
+def delete_prebatch_rec(record_id: int, db: Session = Depends(get_db)):
+    """Delete a prebatch record and revert inventory."""
+    success = crud.delete_prebatch_rec(db, record_id=record_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Record not found or error during deletion")
+    return {"status": "success"}
+
+
+@router.get("/prebatch-reqs/{batch_id}", response_model=List[schemas.PreBatchReq])
+def get_prebatch_reqs(batch_id: str, db: Session = Depends(get_db)):
+    """Get ingredient requirements for a specific batch. Creates them if missing."""
+    crud.ensure_prebatch_reqs_for_batch(db, batch_id)
+    return crud.get_prebatch_reqs_by_batch(db, batch_id=batch_id)
+
+
+@router.put("/prebatch-reqs/{batch_id}/{re_code}/status")
+def update_prebatch_req_status(batch_id: str, re_code: str, status: int, db: Session = Depends(get_db)):
+    """Update requirement status (0=Pending, 1=In-Progress, 2=Completed)."""
+    success = crud.update_prebatch_req_status(db, batch_id=batch_id, re_code=re_code, status=status)
+    if not success:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    return {"status": "success"}
 
 
 # =============================================================================

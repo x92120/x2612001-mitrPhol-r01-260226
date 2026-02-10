@@ -24,7 +24,10 @@ const handleLogin = async () => {
   isLoading.value = true
 
   try {
-    const response = await fetch(`${appConfig.apiBaseUrl}/auth/login`, {
+    const apiUrl = `${appConfig.apiBaseUrl}/auth/login`
+    console.log('Attempting login to:', apiUrl)
+    
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -55,12 +58,13 @@ const handleLogin = async () => {
         position: 'top',
       })
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Login error:', error)
     $q.notify({
       type: 'negative',
-      message: `Cannot connect to server. Please check your connection.`,
+      message: `Cannot connect to server (${appConfig.apiBaseUrl}). Error: ${error.message}`,
       position: 'top',
+      timeout: 5000 
     })
   } finally {
     isLoading.value = false

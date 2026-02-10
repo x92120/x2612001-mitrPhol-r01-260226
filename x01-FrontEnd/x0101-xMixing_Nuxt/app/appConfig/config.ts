@@ -6,8 +6,8 @@
 export const appConfig = {
   // Base URL for API calls - defaults to port 8001 on the same host
   get apiBaseUrl(): string {
-    if (import.meta.server) return 'http://localhost:8001'
-    return `http://${window.location.hostname}:8001`
+    const hostname = (typeof window !== 'undefined' && window.location) ? window.location.hostname : 'localhost'
+    return `http://${hostname}:8000`
   }
 }
 

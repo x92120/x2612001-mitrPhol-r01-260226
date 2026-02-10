@@ -65,6 +65,19 @@ def login(request: schemas.LoginRequest, db: Session = Depends(get_db)):
     }
 
 
+@router.post("/verify")
+def verify_user_password(request: schemas.LoginRequest, db: Session = Depends(get_db)):
+    """Verify user password without returning a token."""
+    db_user = crud.get_user_by_email(db, email=request.username_or_email)
+    if not db_user:
+        db_user = crud.get_user_by_username(db, username=request.username_or_email)
+    
+    if not db_user or not verify_password(request.password, db_user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid password")
+    
+    return {"status": "success"}
+
+
 @router.post("/register", response_model=schemas.User, status_code=201)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     """Register a new user account."""

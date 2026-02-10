@@ -4,7 +4,7 @@ import type { QTableColumn } from 'quasar'
 import { useQuasar, exportFile } from 'quasar'
 import { appConfig } from '~/appConfig/config'
 import { useAuth } from '~/composables/useAuth'
-import { useMQTT } from '~/composables/useMQTT'
+import { useMqttLocalDevice } from '~/composables/useMqttLocalDevice'
 
 interface IngredientIntakeHistory {
   id: number
@@ -50,7 +50,7 @@ const {
   isConnected: mqttConnected,
   connectionStatus,
   lastScan,
-} = useMQTT()
+} = useMqttLocalDevice()
 
 const lotNumber = ref('')
 const warehouseLocation = ref('')
@@ -548,7 +548,7 @@ const onRejectIntake = async (row: IngredientIntake) => {
   })
 }
 
-// Disconnect is handled by useMQTT composable
+// Disconnect is handled by useMqttLocalDevice composable
 
 // Initialize
 // Filtering state

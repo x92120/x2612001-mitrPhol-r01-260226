@@ -38,7 +38,8 @@ from routers import (
     production_router,
     plants_router,
     monitoring_router,
-    views_router
+    views_router,
+    warehouses_router
 )
 
 # =============================================================================
@@ -96,6 +97,7 @@ app.include_router(production_router)
 app.include_router(plants_router)
 app.include_router(monitoring_router)
 app.include_router(views_router)
+app.include_router(warehouses_router)
 
 
 # =============================================================================

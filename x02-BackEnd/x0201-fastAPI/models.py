@@ -231,6 +231,43 @@ class ProductionBatch(Base):
 
     plan = relationship("ProductionPlan", back_populates="batches")
 
+class PreBatchReq(Base):
+    __tablename__ = "prebatch_reqs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    batch_db_id = Column(Integer, ForeignKey("production_batches.id"), nullable=False)
+    plan_id = Column(String(50), index=True)
+    batch_id = Column(String(100), index=True)
+    re_code = Column(String(50), index=True)
+    ingredient_name = Column(String(200))
+    required_volume = Column(Float)
+    wh = Column(String(50)) # warehouse location
+    status = Column(Integer, default=0) # 0=Pending, 1=In-Progress, 2=Completed
+    
+    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
+
+    batch = relationship("ProductionBatch", backref="reqs")
+
+class PreBatchRec(Base):
+    __tablename__ = "prebatch_recs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    req_id = Column(Integer, ForeignKey("prebatch_reqs.id"), nullable=True)
+    batch_record_id = Column(String(100), unique=True, nullable=False, index=True)
+    plan_id = Column(String(50), index=True)
+    re_code = Column(String(50), index=True)
+    package_no = Column(Integer)
+    total_packages = Column(Integer)
+    net_volume = Column(Float)
+    total_volume = Column(Float)
+    total_request_volume = Column(Float)
+    intake_lot_id = Column(String(50), index=True)
+    
+    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    req = relationship("PreBatchReq", backref="recs")
+
 class SkuAction(Base):
     __tablename__ = "sku_actions"
 
@@ -265,6 +302,18 @@ class Plant(Base):
     plant_name = Column(String(100), nullable=False)
     plant_capacity = Column(Float, default=0)
     plant_description = Column(String(255))
+    status = Column(String(20), default="Active")
+    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
+
+# Warehouse Model
+class Warehouse(Base):
+    __tablename__ = "warehouses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    warehouse_id = Column(String(50), unique=True, nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(String(255))
     status = Column(String(20), default="Active")
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
@@ -404,17 +453,4 @@ class VSkuComplete(Base):
     updated_at = Column(TIMESTAMP)
 
 
-class PrebatchRecord(Base):
-    __tablename__ = "prebatch_records"
 
-    id = Column(Integer, primary_key=True, index=True)
-    batch_record_id = Column(String(100), unique=True, nullable=False, index=True) # e.g. plan-Line-1-2026-01-21-005-004-2-3
-    plan_id = Column(String(50), index=True)
-    re_code = Column(String(50), index=True)
-    package_no = Column(Integer)
-    total_packages = Column(Integer)
-    net_volume = Column(Float)
-    total_volume = Column(Float)
-    total_request_volume = Column(Float)
-    
-    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
