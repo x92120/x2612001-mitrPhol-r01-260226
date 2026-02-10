@@ -253,6 +253,7 @@ class ProductionBatch(ProductionBatchBase):
     plan_id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
+    reqs: List[PreBatchReq] = []
 
     class Config:
         from_attributes = True

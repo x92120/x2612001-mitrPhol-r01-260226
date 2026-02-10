@@ -15,7 +15,35 @@ const selectedBatchId = ref<string>('')
 const selectedWarehouse = ref<string>('All Warehouse')
 const warehouses = ref<string[]>(['All Warehouse'])
 const loading = ref(false)
+const plansLoading = ref(false)
 const allRecords = ref<PreBatchRec[]>([])
+const plans = ref<any[]>([])
+const pendingRecord = ref<PreBatchRec | null>(null)
+const expandedRows = ref<any[]>([])
+const expandedBatches = ref<any[]>([])
+
+// For Scan Feedback Dialog
+const scanFeedback = ref({
+    show: false,
+    success: false,
+    message: '',
+    title: ''
+})
+
+const planColumns: any[] = [
+    { name: 'plan_id', label: 'Plan ID', field: 'plan_id', align: 'left', sortable: true },
+    { name: 'sku_id', label: 'SKU-ID', field: 'sku_id', align: 'left', sortable: true },
+    { name: 'plant', label: 'Plant', field: 'plant', align: 'center', sortable: true },
+    { name: 'total_volume', label: 'Total Vol', field: 'total_volume', align: 'right', sortable: true },
+    { 
+        name: 'package_info', 
+        label: 'Package', 
+        field: 'package_info',
+        align: 'center', 
+        sortable: false 
+    },
+    { name: 'status', label: 'Status', field: 'status', align: 'center', sortable: true }
+]
 
 interface PreBatchReq {
     id: number
@@ -40,6 +68,8 @@ interface PreBatchRec {
 
 // IDs of records that have been verified (packed) in this session
 const verifiedRecordIds = ref<Set<string>>(new Set())
+// IDs of records that have been confirmed & saved
+const confirmedRecordIds = ref<Set<string>>(new Set())
 
 // --- Computed ---
 
@@ -133,52 +163,150 @@ const fetchAllData = async () => {
     }
 }
 
+const fetchPlans = async () => {
+    plansLoading.value = true
+    try {
+        const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/production-plans/?skip=0&limit=100`, {
+            headers: getAuthHeader() as Record<string, string>
+        })
+        plans.value = data
+    } catch (error) {
+        console.error('Error fetching plans:', error)
+    } finally {
+        plansLoading.value = false
+    }
+}
+
+const getRecordsForBatch = (batchId: string) => {
+    return allRecords.value.filter(r => r.batch_record_id.startsWith(batchId))
+}
+
+const getRecordsForBatchRequirement = (batchId: string, reCode: string) => {
+    return allRecords.value.filter(r => r.plan_id.includes(batchId) && r.re_code === reCode)
+}
+
+const getReqStatus = (req: any) => {
+    const records = getRecordsForBatchRequirement(req.batch_id, req.re_code)
+    if (records.length === 0) return { code: 0, label: 'Awaiting', count: 0, total: 0 }
+
+    const confirmedCount = records.filter(r => confirmedRecordIds.value.has(r.batch_record_id)).length
+    const totalCount = records.length
+    
+    if (confirmedCount === totalCount && totalCount > 0) return { code: 2, label: 'Done', count: confirmedCount, total: totalCount }
+    if (confirmedCount > 0 || verifiedRecordIds.value.size > 0) return { code: 1, label: 'Packing', count: confirmedCount, total: totalCount }
+    return { code: 0, label: 'Awaiting', count: 0, total: 0 }
+}
+
+const isBatchDone = (batch: any) => {
+    if (batch.status === 'Done') return true
+    if (!batch.reqs || batch.reqs.length === 0) return false
+    return batch.reqs.every((req: any) => getReqStatus(req).code === 2)
+}
+
+const getRecordsForPlan = (planId: string) => {
+    return allRecords.value.filter(r => r.plan_id === planId)
+}
+
 // --- Watchers ---
 
 watch(selectedWarehouse, () => {
     fetchAllData()
 })
 
-// HANDLE SCANS
+// HANDLE SCANS: 2-Step Verification (Ingredient -> Box)
 watch(lastScan, (newScan) => {
     if (!newScan) return
     
     const barcode = newScan.barcode.trim()
     
-    // Check if this barcode exists in ANY record we have
+    // STEP 2: Confirming with Box (Put into Box)
+    if (pendingRecord.value) {
+        if (barcode === pendingRecord.value.plan_id || barcode === `PKG-${pendingRecord.value.plan_id}`) {
+            // Success: MOVE from Verified (Yellow) to Confirmed (Green)
+            const recId = pendingRecord.value.batch_record_id
+            confirmedRecordIds.value.add(recId)
+            verifiedRecordIds.value.delete(recId) 
+            
+            // Success Dialog
+            scanFeedback.value = {
+                show: true,
+                success: true,
+                title: 'PACKED CORRECTLY!',
+                message: `Ingredient [${pendingRecord.value.re_code}] is now confirmed inside Box [${barcode}].`
+            }
+            
+            // Auto-select plan if not already set
+            selectedBatchId.value = pendingRecord.value.plan_id
+            pendingRecord.value = null
+            return
+        } else {
+            // Check if user is trying to scan a NEW ingredient bag instead of the box
+            const newIngredient = allRecords.value.find(r => r.batch_record_id === barcode)
+            if (newIngredient) {
+                // If it's a new bag, just switch the yellow blink to the new one
+                // (Optionally keep the old one yellow, but usually only one is "active" in hands)
+                pendingRecord.value = newIngredient
+                verifiedRecordIds.value.add(barcode) 
+                
+                $q.notify({
+                    type: 'info',
+                    message: `Switched: Now scan Box for ${newIngredient.re_code}`,
+                    position: 'top'
+                })
+                return
+            } else {
+                // Error Dialog
+                scanFeedback.value = {
+                    show: true,
+                    success: false,
+                    title: 'WRONG BOX!',
+                    message: `CRITICAL: You scanned Box [${barcode}], but this ingredient belongs to Box [${pendingRecord.value.plan_id}]!`
+                }
+                return
+            }
+        }
+    }
+
+    // STEP 1: Scanning Ingredient Bag (Pick from Shelf)
     const record = allRecords.value.find(r => r.batch_record_id === barcode)
     
     if (record) {
-        if (verifiedRecordIds.value.has(barcode)) {
-            $q.notify({
-                type: 'warning',
-                message: `Already Verified: ${barcode}`,
-                position: 'top'
-            })
+        if (confirmedRecordIds.value.has(barcode)) {
+            $q.notify({ type: 'warning', message: `Already Packed & Confirmed: ${barcode}`, position: 'top' })
         } else {
+            // Mark as Yellow Blink
             verifiedRecordIds.value.add(barcode)
-            // Auto-set the batch ID from the first scan or update it
-            const parts = barcode.split('-')
-            if (parts.length >= 6) {
-                // Assuming format: plan-Line-X-YYYY-MM-DD-BATCH-RECODE-PKG
-                // We want: plan-Line-X-YYYY-MM-DD-BATCH
-                selectedBatchId.value = parts.slice(0, 6).join('-')
+            pendingRecord.value = record
+            
+            // Auto-Expand the row
+            if (!expandedRows.value.includes(record.plan_id)) {
+                expandedRows.value = [...expandedRows.value, record.plan_id]
             }
             
             $q.notify({
-                type: 'positive',
-                message: `Verified: ${record.re_code} from ${selectedBatchId.value}`,
-                icon: 'check_circle',
-                position: 'top'
+                type: 'info',
+                message: `Bag Verified: ${record.re_code}. STATUS: YELLOW BLINK. Now scan the BOX.`,
+                icon: 'inventory',
+                position: 'top',
+                timeout: 5000
             })
         }
     } else {
-        $q.notify({
-            type: 'negative',
-            message: `Unknown Package! ${barcode} not found in system.`,
-            position: 'top',
-            timeout: 5000
-        })
+        // Check if it's a Box scan without an ingredient
+        const isPlanId = plans.value.some(p => p.plan_id === barcode || `PKG-${p.plan_id}` === barcode)
+        if (isPlanId) {
+            $q.notify({
+                type: 'warning',
+                message: `Box ${barcode} scanned, but no ingredient bag pending. Scan bag first!`,
+                position: 'top'
+            })
+        } else {
+            $q.notify({
+                type: 'negative',
+                message: `Unknown Barcode: ${barcode}`,
+                position: 'top'
+            })
+        }
     }
 })
 
@@ -186,6 +314,7 @@ onMounted(() => {
   connect()
   fetchWarehouses()
   fetchAllData()
+  fetchPlans()
 })
 
 // --- Actions ---
@@ -194,7 +323,75 @@ const onCreatePackingList = () => {
         $q.notify({ type: 'warning', message: 'No items verified yet' })
         return
     }
-    $q.notify({ type: 'positive', message: 'Packing List Created Successfully' })
+    
+    // Move verified items to confirmed status
+    verifiedRecordIds.value.forEach(id => {
+        confirmedRecordIds.value.add(id)
+    })
+    verifiedRecordIds.value.clear()
+    
+    $q.notify({ 
+        type: 'positive', 
+        message: 'Packing List Confirmed & Saved',
+        icon: 'cloud_done'
+    })
+}
+
+const simulateScanForBatch = (batchId: string) => {
+    const records = getRecordsForBatch(batchId)
+    // Find the first item that is not yet fully green
+    const nextItem = records.find(r => !confirmedRecordIds.value.has(r.batch_record_id))
+    
+    if (!nextItem) {
+        $q.notify({ type: 'info', message: 'All items for this batch are confirmed green.' })
+        return
+    }
+    
+    if (verifiedRecordIds.value.has(nextItem.batch_record_id)) {
+        confirmedRecordIds.value.add(nextItem.batch_record_id)
+        verifiedRecordIds.value.delete(nextItem.batch_record_id)
+        $q.notify({ type: 'positive', message: `Box Scan: ${nextItem.re_code} confirmed!`, icon: 'check_circle' })
+    } else {
+        verifiedRecordIds.value.add(nextItem.batch_record_id)
+        $q.notify({ type: 'info', message: `Bag Scan: ${nextItem.re_code} (Yellow Blink)`, icon: 'inventory' })
+    }
+}
+
+const simulateScanForPlan = (planId: string) => {
+    const records = getRecordsForPlan(planId)
+    // Find the first item that is not yet fully green
+    const nextItem = records.find(r => !confirmedRecordIds.value.has(r.batch_record_id))
+    
+    if (!nextItem) {
+        $q.notify({ type: 'info', message: 'All items for this plan are already confirmed green.' })
+        return
+    }
+    
+    // If the item is already yellow (scanned bag), simulate the box scan to turn it green
+    if (verifiedRecordIds.value.has(nextItem.batch_record_id)) {
+        confirmedRecordIds.value.add(nextItem.batch_record_id)
+        verifiedRecordIds.value.delete(nextItem.batch_record_id)
+        
+        $q.notify({
+            type: 'positive',
+            message: `Simulated Box Scan: ${nextItem.re_code} confirmed Green!`,
+            icon: 'check_circle'
+        })
+    } else {
+        // Otherwise, simulate the bag scan to turn it yellow blinking
+        verifiedRecordIds.value.add(nextItem.batch_record_id)
+        
+        // Simulation Expand
+        if (!expandedRows.value.includes(planId)) {
+            expandedRows.value = [...expandedRows.value, planId]
+        }
+        
+        $q.notify({
+            type: 'info',
+            message: `Simulated Bag Scan: ${nextItem.re_code} is now Yellow Blink (Pending Box)`,
+            icon: 'inventory'
+        })
+    }
 }
 
 const onClosePackingList = () => {
@@ -229,9 +426,9 @@ const onManualAdd = (item: any) => {
       <div class="text-caption text-weight-bold">Version {{ version }}</div>
     </div>
 
-    <div class="row q-col-gutter-md">
+    <div class="row q-col-gutter-md justify-center">
       <!-- LEFT COLUMN: SIDEBAR -->
-      <div class="col-12 col-md-4 column q-gutter-y-sm">
+      <div class="col-12 col-md-5 column q-gutter-y-sm">
         <!-- CUSTOM WAREHOUSE FILTER -->
         <q-select
             outlined
@@ -327,97 +524,288 @@ const onManualAdd = (item: any) => {
         </div>
       </div>
 
-      <!-- MIDDLE COLUMN: Status Icon -->
-      <div class="col-12 col-md-3 flex flex-center column q-gutter-md">
-        <q-icon name="qr_code_scanner" size="100px" :color="verifiedRecordIds.size > 0 ? 'primary' : 'grey-4'" />
-        <div class="text-caption text-grey-6 text-center">Scan label at {{ selectedWarehouse }}</div>
-        <div v-if="selectedBatchId" class="q-mt-md text-center">
-            <q-badge color="blue-10" class="q-pa-sm">
-                Current Batch: {{ selectedBatchId }}
-            </q-badge>
+      <!-- MIDDLE GAP: Scan Status Flow -->
+      <div class="col-12 col-md-1 flex flex-center column q-gutter-y-lg">
+        <div class="column items-center">
+            <q-icon 
+                name="inventory_2" 
+                :color="pendingRecord ? 'primary' : 'grey-4'" 
+                size="44px" 
+                class="transition-all"
+                :class="pendingRecord ? 'q-animate-bounce' : ''"
+            />
+            <div class="text-caption text-weight-bold" :class="pendingRecord ? 'text-primary' : 'text-grey-4'">BAG</div>
+        </div>
+        
+        <q-icon name="arrow_downward" color="grey-3" size="sm" />
+
+        <div class="column items-center">
+            <q-icon 
+                name="qr_code_scanner" 
+                :color="pendingRecord ? 'orange-8' : 'grey-4'" 
+                size="44px" 
+                :class="pendingRecord ? 'q-animate-pulse' : ''"
+            />
+            <div class="text-caption text-weight-bold" :class="pendingRecord ? 'text-orange-8' : 'text-grey-4'">BOX</div>
+        </div>
+
+        <div v-if="pendingRecord" class="q-mt-xl">
+             <q-btn flat round color="negative" icon="close" size="sm" @click="pendingRecord = null">
+                 <q-tooltip>Cancel Packing</q-tooltip>
+             </q-btn>
         </div>
       </div>
 
-      <!-- RIGHT COLUMN: Packing Results -->
-      <div class="col-12 col-md-5">
-        <div class="row q-col-gutter-sm q-mb-md">
-          <div class="col-4">
-            <div class="text-subtitle2 q-mb-xs">PlantID</div>
-            <q-input outlined :model-value="plantId" dense readonly bg-color="grey-1" />
-          </div>
-          <div class="col-8">
-            <div class="text-subtitle2 q-mb-xs">Current Packing Set</div>
-            <q-input outlined :model-value="packagingSetId" dense readonly bg-color="grey-1" />
-          </div>
-        </div>
-
-        <!-- Packing List Table -->
-        <div class="packing-list-container column">
-          <!-- Header -->
-          <div class="row items-center q-pa-sm bg-positive text-white border-bottom">
-            <div class="col-7 text-weight-bold">Verified Packing ID</div>
-            <div class="col-3 text-weight-bold text-center">Net Weight</div>
-            <div class="col-2 text-weight-bold text-right q-pr-sm">
-              Status
+      <!-- RIGHT COLUMN: Production Plan List -->
+      <div class="col-12 col-md-5 column q-gutter-y-sm">
+        <q-card class="col column bg-white shadow-2" style="height: 800px;">
+            <div class="q-pa-sm bg-primary text-white text-weight-bold text-subtitle2 flex justify-between items-center">
+                <span>Product Plan List</span>
+                <q-btn icon="refresh" flat round dense color="white" @click="fetchPlans" :loading="plansLoading" />
             </div>
-          </div>
 
-          <!-- Rows -->
-          <div class="col scroll q-pa-none">
-            <div
-              v-if="packedItems.length === 0"
-              class="q-pa-md text-grey-6 text-center"
-            >
-              No items scanned in this session
+            <div class="col relative-position">
+                <q-table
+                  v-model:expanded="expandedRows"
+                  :rows="plans"
+                  :columns="planColumns"
+                  row-key="plan_id"
+                  flat
+                  dense
+                  class="text-caption"
+                  :loading="plansLoading"
+                  binary-state-sort
+                >
+                  <template v-slot:header="props">
+                    <q-tr :props="props" class="bg-blue-grey-2">
+                      <q-th auto-width />
+                      <q-th v-for="col in props.cols" :key="col.name" :props="props">
+                        {{ col.label }}
+                      </q-th>
+                    </q-tr>
+                  </template>
+
+                  <template v-slot:body="props">
+                    <q-tr :props="props" class="hover-bg cursor-pointer" @click="props.expand = !props.expand">
+                      <q-td auto-width>
+                        <q-btn size="sm" color="primary" round flat :icon="props.expand ? 'expand_less' : 'expand_more'" @click.stop="props.expand = !props.expand" />
+                      </q-td>
+                      <q-td key="plan_id" :props="props" class="text-weight-bold text-primary">
+                        {{ props.row.plan_id }}
+                      </q-td>
+                      <q-td key="sku_id" :props="props">
+                        {{ props.row.sku_id }}
+                      </q-td>
+                      <q-td key="plant" :props="props" class="text-center">
+                        {{ props.row.plant }}
+                      </q-td>
+                      <q-td key="total_volume" :props="props" class="text-right">
+                        {{ props.row.total_volume }}
+                      </q-td>
+                      <q-td key="package_info" :props="props" class="text-center">
+                        <q-badge color="grey-2" text-color="primary" class="text-weight-bold" outline>
+                            {{ (props.row.batches?.filter((b: any) => b.status === 'Done').length || 0) }}/{{ (props.row.batches?.length || 0) }}
+                        </q-badge>
+                      </q-td>
+                      <q-td key="status" :props="props" class="text-center">
+                        <q-badge :color="props.row.status === 'Cancelled' ? 'negative' : 'positive'">
+                          {{ props.row.status }}
+                        </q-badge>
+                      </q-td>
+                    </q-tr>
+                    <q-tr v-show="props.expand" :props="props" class="bg-blue-grey-1">
+                      <q-td colspan="100%">
+                        <div class="q-pa-sm">
+                          <div class="text-weight-bold q-mb-md">Batches for Plan: {{ props.row.plan_id }}</div>
+                          
+                          <q-list class="bg-white rounded-borders shadow-1">
+                            <q-expansion-item
+                              v-for="batch in props.row.batches"
+                              :key="batch.id"
+                              group="batches"
+                              header-class="bg-blue-grey-2 text-primary text-weight-bold"
+                              expand-icon-class="text-primary"
+                            >
+                              <template v-slot:header>
+                                <q-item-section avatar>
+                                  <q-icon name="layers" color="primary" />
+                                </q-item-section>
+                                <q-item-section>
+                                  <q-item-label>{{ batch.batch_id }}</q-item-label>
+                                  <q-item-label caption>Batch Size: {{ batch.batch_size }} kg</q-item-label>
+                                </q-item-section>
+                                  <q-item-section side>
+                                  <q-badge :color="isBatchDone(batch) ? 'positive' : 'orange'">
+                                    {{ isBatchDone(batch) ? 'Done' : batch.status }}
+                                  </q-badge>
+                                </q-item-section>
+                              </template>
+
+                              <q-card class="bg-grey-1">
+                                <q-card-section class="q-pa-sm">
+                                  <div class="row items-center justify-between q-mb-xs">
+                                      <div class="text-caption text-weight-bold">Scanned Packs for Batch</div>
+                                      <q-btn flat round dense color="primary" icon="qr_code_scanner" size="sm" @click="simulateScanForBatch(batch.batch_id)">
+                                          <q-tooltip>Simulate Scan Batch</q-tooltip>
+                                      </q-btn>
+                                  </div>
+
+                                  <q-markup-table dense flat bordered separator="cell" style="background: white">
+                                    <thead>
+                                      <tr class="bg-grey-2">
+                                        <th style="width: 40px"></th>
+                                        <th class="text-left">Ingredient</th>
+                                        <th class="text-left">Description</th>
+                                        <th class="text-right">Required Wt</th>
+                                        <th class="text-center">Status</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      <template v-for="req in batch.reqs" :key="req.id">
+                                        <tr>
+                                          <td class="text-center">
+                                            <q-btn 
+                                              v-if="getRecordsForBatchRequirement(batch.batch_id, req.re_code).length > 0"
+                                              size="xs" 
+                                              flat 
+                                              round 
+                                              color="primary" 
+                                              :icon="expandedBatches.includes(req.id) ? 'keyboard_arrow_up' : 'keyboard_arrow_down'"
+                                              @click="expandedBatches.includes(req.id) ? expandedBatches = expandedBatches.filter(id => id !== req.id) : expandedBatches = [...expandedBatches, req.id]"
+                                            />
+                                          </td>
+                                          <td class="text-left text-weight-bold text-primary">
+                                            {{ req.re_code }}
+                                            <div v-if="getRecordsForBatchRequirement(batch.batch_id, req.re_code).length > 1" class="text-caption text-grey-6 text-weight-regular">
+                                                {{ getRecordsForBatchRequirement(batch.batch_id, req.re_code).length }} Bags
+                                            </div>
+                                          </td>
+                                          <td class="text-left">{{ req.ingredient_name }}</td>
+                                          <td class="text-right">{{ req.required_volume }} kg</td>
+                                          <td class="text-center">
+                                            <div class="column items-center">
+                                                <q-badge :color="getReqStatus(req).code === 2 ? 'positive' : (getReqStatus(req).code === 1 ? 'warning' : 'grey-5')">
+                                                    {{ getReqStatus(req).label }}
+                                                    <span v-if="getReqStatus(req).total > 0" class="q-ml-xs">
+                                                        ({{ getReqStatus(req).count }}/{{ getReqStatus(req).total }})
+                                                    </span>
+                                                </q-badge>
+                                                <q-linear-progress 
+                                                    v-if="getReqStatus(req).total > 0" 
+                                                    :value="getReqStatus(req).count / getReqStatus(req).total" 
+                                                    :color="getReqStatus(req).code === 2 ? 'positive' : 'warning'"
+                                                    size="xs"
+                                                    class="q-mt-xs"
+                                                    style="width: 60px"
+                                                />
+                                            </div>
+                                          </td>
+                                        </tr>
+                                        <!-- Sub-rows for Scanned Bags -->
+                                        <tr v-if="expandedBatches.includes(req.id)" class="bg-blue-grey-1">
+                                          <td colspan="5" class="q-pa-none">
+                                            <q-markup-table dense flat bordered square class="q-ml-md q-mr-sm q-mb-sm">
+                                              <thead class="bg-white">
+                                                <tr class="text-grey-7" style="font-size: 0.8em">
+                                                  <th>Record ID</th>
+                                                  <th>Pkg #</th>
+                                                  <th>Net Wt</th>
+                                                  <th>Status</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody class="bg-white">
+                                                <tr v-for="rec in getRecordsForBatchRequirement(batch.batch_id, req.re_code)" :key="rec.id" style="font-size: 0.85em">
+                                                  <td class="text-blue-8">{{ rec.batch_record_id }}</td>
+                                                  <td class="text-center">{{ rec.package_no }}</td>
+                                                  <td class="text-right">{{ rec.net_volume }} kg</td>
+                                                  <td class="text-center">
+                                                    <q-icon 
+                                                      :name="confirmedRecordIds.has(rec.batch_record_id) ? 'check_circle' : 'pending'" 
+                                                      :color="confirmedRecordIds.has(rec.batch_record_id) ? 'positive' : 'warning'" 
+                                                      size="xs"
+                                                      :class="{ 'blink-yellow': !confirmedRecordIds.has(rec.batch_record_id) }"
+                                                    />
+                                                  </td>
+                                                </tr>
+                                              </tbody>
+                                            </q-markup-table>
+                                          </td>
+                                        </tr>
+                                      </template>
+                                      <tr v-if="!batch.reqs || batch.reqs.length === 0">
+                                        <td colspan="5" class="text-center text-grey italic q-pa-sm">No requirements found for this batch</td>
+                                      </tr>
+                                    </tbody>
+                                  </q-markup-table>
+                                </q-card-section>
+                              </q-card>
+                            </q-expansion-item>
+                            
+                            <q-item v-if="!props.row.batches || props.row.batches.length === 0" class="text-center text-grey italic q-pa-md justify-center">
+                                No batches found for this plan
+                            </q-item>
+                          </q-list>
+                        </div>
+                      </q-td>
+                    </q-tr>
+                  </template>
+                </q-table>
             </div>
-            <div
-              v-for="(item, index) in packedItems"
-              :key="item.id"
-              class="row items-center q-pa-sm border-bottom"
-              :class="index % 2 === 0 ? 'bg-green-1' : 'bg-white'"
-            >
-              <div class="col-7">
-                <div class="text-weight-bold text-primary">{{ item.re_code }}</div>
-                <div class="text-caption text-grey-8">{{ item.batch_record_id }}</div>
-              </div>
-              <div class="col-3 text-center text-weight-bold">
-                {{ item.net_volume }} kg
-              </div>
-              <div class="col-2 text-right q-pr-sm">
-                <q-icon name="check_circle" color="positive" size="sm" />
-              </div>
-            </div>
-          </div>
 
-          <!-- Footer (Totals) -->
-          <div class="row items-center q-pa-md border-top bg-blue-1 q-mt-auto">
-            <div class="col-5 text-weight-bold">Session Summary</div>
-            <div class="col-3 text-center text-weight-bold">{{ totalBoxPackages }} pcs</div>
-            <div class="col-2 text-right">Total Weight</div>
-            <div class="col-2 text-right text-weight-bold text-primary">{{ currentWeight.toFixed(2) }} kg</div>
-          </div>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="row justify-end q-gutter-md q-mt-md">
-          <q-btn
-            label="Save Packing List"
-            color="primary"
-            no-caps
-            unelevated
-            @click="onCreatePackingList"
-          />
-          <q-btn
-            label="Clear Session"
-            color="grey-7"
-            outline
-            no-caps
-            @click="onClosePackingList"
-          />
-          <q-btn icon="print" label="Print" color="blue-grey-8" no-caps unelevated @click="onPrintPackingList" />
-        </div>
+            <!-- ACTIONS FOOTER -->
+            <q-separator />
+            <q-card-actions align="right" class="q-pa-md bg-blue-grey-1">
+                <q-btn 
+                    unelevated 
+                    color="primary" 
+                    icon="check_circle" 
+                    label="Confirm Packing Table" 
+                    size="lg" 
+                    class="full-width text-weight-bold"
+                    no-caps
+                    @click="onCreatePackingList"
+                />
+                <div class="row full-width q-gutter-x-sm q-mt-sm">
+                    <q-btn outline color="grey-7" label="Clear List" class="col" no-caps @click="onClosePackingList" />
+                    <q-btn outline color="blue-grey-8" icon="print" label="Print" class="col" no-caps @click="onPrintPackingList" />
+                </div>
+            </q-card-actions>
+        </q-card>
       </div>
     </div>
+
+    <!-- SCAN FEEDBACK DIALOG -->
+    <q-dialog v-model="scanFeedback.show" position="top">
+        <q-card style="width: 450px; border-radius: 12px;" :class="scanFeedback.success ? 'bg-positive text-white' : 'bg-negative text-white'">
+            <q-card-section class="row items-center q-pb-none">
+                <div class="text-h5 text-weight-bolder">{{ scanFeedback.title }}</div>
+                <q-space />
+                <q-btn icon="close" flat round dense v-close-popup />
+            </q-card-section>
+
+            <q-card-section class="column items-center q-pa-xl">
+                <q-icon 
+                    :name="scanFeedback.success ? 'check_circle' : 'error'" 
+                    size="120px" 
+                    class="q-mb-md"
+                />
+                <div class="text-subtitle1 text-center text-weight-medium">
+                    {{ scanFeedback.message }}
+                </div>
+            </q-card-section>
+
+            <q-card-section class="q-pt-none text-center">
+                <q-btn 
+                    unelevated 
+                    :color="scanFeedback.success ? 'white' : 'white'" 
+                    :text-color="scanFeedback.success ? 'positive' : 'negative'"
+                    label="CONTINUE" 
+                    class="q-px-xl text-weight-bold"
+                    v-close-popup 
+                />
+            </q-card-section>
+        </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -451,5 +839,24 @@ const onManualAdd = (item: any) => {
 .hover-bg:hover {
     background-color: #e3f2fd !important;
     transition: background-color 0.2s ease;
+}
+
+.blink-yellow {
+  color: #f1c40f !important;
+  animation: blink-animation 0.8s ease-in-out infinite;
+}
+
+@keyframes blink-animation {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.q-animate-blink {
+  animation: blink-simple 1s infinite;
+}
+
+@keyframes blink-simple {
+  50% { opacity: 0; }
 }
 </style>
