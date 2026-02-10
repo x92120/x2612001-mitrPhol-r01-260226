@@ -216,6 +216,52 @@ class SkuDuplicate(BaseModel):
     new_sku_name: str
     creat_by: str = "system"
 
+# PreBatch Req Schemas
+class PreBatchReqBase(BaseModel):
+    batch_db_id: int
+    plan_id: str
+    batch_id: str
+    re_code: str
+    ingredient_name: Optional[str] = None
+    required_volume: float
+    wh: Optional[str] = None
+    status: int = 0
+
+class PreBatchReqCreate(PreBatchReqBase):
+    pass
+
+class PreBatchReq(PreBatchReqBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+# PreBatch Record Schemas
+class PreBatchRecBase(BaseModel):
+    req_id: Optional[int] = None
+    batch_record_id: str = Field(..., max_length=100)
+    plan_id: Optional[str] = Field(None, max_length=50)
+    re_code: Optional[str] = Field(None, max_length=50)
+    package_no: Optional[int] = None
+    total_packages: Optional[int] = None
+    net_volume: Optional[float] = None
+    total_volume: Optional[float] = None
+    total_request_volume: Optional[float] = None
+    intake_lot_id: Optional[str] = Field(None, max_length=50)
+
+class PreBatchRecCreate(PreBatchRecBase):
+    pass
+
+class PreBatchRec(PreBatchRecBase):
+    id: int
+    created_at: datetime
+    wh: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
 # Production Batch Schema
 class ProductionBatchBase(BaseModel):
     batch_id: str
@@ -576,48 +622,3 @@ class VSkuComplete(BaseModel):
         from_attributes = True
 
 
-# PreBatch Record Schemas
-class PreBatchRecBase(BaseModel):
-    req_id: Optional[int] = None
-    batch_record_id: str = Field(..., max_length=100)
-    plan_id: Optional[str] = Field(None, max_length=50)
-    re_code: Optional[str] = Field(None, max_length=50)
-    package_no: Optional[int] = None
-    total_packages: Optional[int] = None
-    net_volume: Optional[float] = None
-    total_volume: Optional[float] = None
-    total_request_volume: Optional[float] = None
-    intake_lot_id: Optional[str] = Field(None, max_length=50)
-
-class PreBatchRecCreate(PreBatchRecBase):
-    pass
-
-class PreBatchRec(PreBatchRecBase):
-    id: int
-    created_at: datetime
-    wh: Optional[str] = None
-    
-    class Config:
-        from_attributes = True
-
-# PreBatch Req Schemas
-class PreBatchReqBase(BaseModel):
-    batch_db_id: int
-    plan_id: str
-    batch_id: str
-    re_code: str
-    ingredient_name: Optional[str] = None
-    required_volume: float
-    wh: Optional[str] = None
-    status: int = 0
-
-class PreBatchReqCreate(PreBatchReqBase):
-    pass
-
-class PreBatchReq(PreBatchReqBase):
-    id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True

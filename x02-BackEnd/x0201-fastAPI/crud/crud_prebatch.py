@@ -52,6 +52,15 @@ def create_prebatch_rec(db: Session, record: schemas.PreBatchRecCreate) -> model
                     req.status = 2  # Completed
                 elif req.status == 0:
                     req.status = 1  # In-Progress
+                
+                # Check if ALL requirements for this batch are now completed
+                batch = req.batch
+                if batch:
+                    all_reqs = db.query(models.PreBatchReq).filter(models.PreBatchReq.batch_db_id == batch.id).all()
+                    if all(r.status == 2 for r in all_reqs):
+                        batch.batch_prepare = True
+                        if batch.status == "Created" or batch.status == "In-Progress":
+                            batch.status = "Prepared"
         
         db.commit()
         db.refresh(db_record)
