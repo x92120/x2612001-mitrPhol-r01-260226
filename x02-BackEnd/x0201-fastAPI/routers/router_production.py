@@ -7,7 +7,7 @@ Production plans, batches, and related endpoints.
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 import logging
 
@@ -24,72 +24,44 @@ router = APIRouter(tags=["Production"])
 # PRODUCTION PLAN ENDPOINTS
 # =============================================================================
 
-@router.post("/production-plans/", response_model=schemas.ProductionPlan)
-def create_production_plan(plan: schemas.ProductionPlanCreate, db: Session = Depends(get_db)):
-    """Create new production plan."""
-    try:
-        return crud.create_production_plan(db, plan_data=plan)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError:
-        raise HTTPException(status_code=500, detail="Database error")
-
-
 @router.get("/production-plans/", response_model=List[schemas.ProductionPlan])
 def get_production_plans(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get all production plans with pagination."""
-    skip = max(0, skip)
-    limit = min(max(1, limit), 1000)
+    """Get all production plans with their batches."""
     return crud.get_production_plans(db, skip=skip, limit=limit)
 
+@router.get("/production-plans/{plan_id}", response_model=schemas.ProductionPlan)
+def get_production_plan(plan_id: int, db: Session = Depends(get_db)):
+    """Get a specific production plan by database ID."""
+    db_plan = crud.get_production_plan(db, plan_id=plan_id)
+    if not db_plan:
+        raise HTTPException(status_code=404, detail="Production plan not found")
+    return db_plan
+
+@router.post("/production-plans/", response_model=schemas.ProductionPlan)
+def create_production_plan(plan: schemas.ProductionPlanCreate, db: Session = Depends(get_db)):
+    """Create a new production plan and its batches."""
+    return crud.create_production_plan(db=db, plan_data=plan)
 
 @router.put("/production-plans/{plan_id}", response_model=schemas.ProductionPlan)
 def update_production_plan(plan_id: int, plan: schemas.ProductionPlanCreate, db: Session = Depends(get_db)):
-    """Update production plan."""
-    try:
-        updated = crud.update_production_plan(db, plan_id=plan_id, plan_update=plan)
-        if updated is None:
-            raise HTTPException(status_code=404, detail="Plan not found")
-        return updated
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError:
-        raise HTTPException(status_code=500, detail="Database error")
+    """Update a production plan."""
+    db_plan = crud.update_production_plan(db, plan_id=plan_id, plan_update=plan)
+    if not db_plan:
+        raise HTTPException(status_code=404, detail="Production plan not found")
+    return db_plan
 
-
-@router.post("/production-plans/{plan_id}/cancel", response_model=schemas.ProductionPlan)
-def cancel_production_plan(plan_id: int, cancel_data: schemas.ProductionPlanCancel = None, db: Session = Depends(get_db)):
-    """Cancel a production plan and all its associated batches."""
-    try:
-        comment = cancel_data.comment if cancel_data else None
-        changed_by = cancel_data.changed_by if cancel_data else "system"
-        
-        cancelled = crud.cancel_production_plan(db, plan_id=plan_id, comment=comment, changed_by=changed_by)
-        if cancelled is None:
-            raise HTTPException(status_code=404, detail="Plan not found")
-        return cancelled
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError:
-        raise HTTPException(status_code=500, detail="Database error")
-
-
-@router.get("/production-plans/{plan_id}/history")
-def get_production_plan_history(plan_id: int, db: Session = Depends(get_db)):
-    """Get history of changes for a production plan."""
-    history = db.query(models.ProductionPlanHistory).filter(
-        models.ProductionPlanHistory.plan_db_id == plan_id
-    ).order_by(models.ProductionPlanHistory.changed_at.desc()).all()
-    
-    return [{
-        "id": h.id,
-        "action": h.action,
-        "old_status": h.old_status,
-        "new_status": h.new_status,
-        "remarks": h.remarks,
-        "changed_by": h.changed_by,
-        "changed_at": h.changed_at
-    } for h in history]
+@router.delete("/production-plans/{plan_id}")
+def cancel_production_plan(plan_id: int, cancel_data: schemas.ProductionPlanCancel, db: Session = Depends(get_db)):
+    """Cancel a production plan and its batches."""
+    db_plan = crud.cancel_production_plan(
+        db, 
+        plan_id=plan_id, 
+        comment=cancel_data.comment, 
+        changed_by=cancel_data.changed_by
+    )
+    if not db_plan:
+        raise HTTPException(status_code=404, detail="Production plan not found")
+    return {"status": "success", "message": "Plan and batches cancelled"}
 
 
 # =============================================================================
@@ -98,37 +70,40 @@ def get_production_plan_history(plan_id: int, db: Session = Depends(get_db)):
 
 @router.get("/production-batches/", response_model=List[schemas.ProductionBatch])
 def get_production_batches(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get all production batches with pagination."""
-    skip = max(0, skip)
-    limit = min(max(1, limit), 1000)
+    """Get all production batches."""
     return crud.get_production_batches(db, skip=skip, limit=limit)
 
-
-@router.get("/production-batches/ids", response_model=List[str])
-def get_production_batch_ids(db: Session = Depends(get_db)):
-    """Get unique list of all production batch IDs."""
-    batches = db.query(models.ProductionBatch.batch_id).distinct().all()
-    return [b[0] for b in batches]
-
-
-@router.get("/pre-batches/", response_model=List[schemas.ProductionBatch])
-def get_pre_batches(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Alias for /production-batches/ used by frontend dashboard."""
-    return get_production_batches(skip=skip, limit=limit, db=db)
-
+@router.get("/production-batches/{batch_id}", response_model=schemas.ProductionBatch)
+def get_production_batch(batch_id: int, db: Session = Depends(get_db)):
+    """Get a specific production batch by database ID."""
+    db_batch = crud.get_production_batch(db, batch_id=batch_id)
+    if not db_batch:
+        raise HTTPException(status_code=404, detail="Production batch not found")
+    return db_batch
 
 @router.put("/production-batches/{batch_id}", response_model=schemas.ProductionBatch)
 def update_production_batch(batch_id: int, batch: schemas.ProductionBatchUpdate, db: Session = Depends(get_db)):
-    """Update production batch."""
-    try:
-        db_batch = crud.update_production_batch(db, batch_id=batch_id, batch_update=batch)
-        if db_batch is None:
-            raise HTTPException(status_code=404, detail="Batch not found")
-        return db_batch
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError:
-        raise HTTPException(status_code=500, detail="Database error")
+    """Update a production batch."""
+    db_batch = crud.update_production_batch(db, batch_id=batch_id, batch_update=batch)
+    if not db_batch:
+        raise HTTPException(status_code=404, detail="Production batch not found")
+    return db_batch
+
+@router.patch("/production-batches/{batch_id}/status", response_model=schemas.ProductionBatch)
+def update_production_batch_status(batch_id: int, status: str, db: Session = Depends(get_db)):
+    """Quickly update batch status."""
+    db_batch = crud.update_production_batch_status(db, batch_id=batch_id, status=status)
+    if not db_batch:
+        raise HTTPException(status_code=404, detail="Production batch not found")
+    return db_batch
+
+@router.get("/production-batches/by-batch-id/{batch_id_str}", response_model=schemas.ProductionBatch)
+def get_production_batch_by_id_str(batch_id_str: str, db: Session = Depends(get_db)):
+    """Get a specific production batch by its string ID (e.g. 20251112-01001)."""
+    db_batch = db.query(models.ProductionBatch).filter(models.ProductionBatch.batch_id == batch_id_str).first()
+    if not db_batch:
+        raise HTTPException(status_code=404, detail="Production batch not found")
+    return db_batch
 
 
 # =============================================================================
@@ -139,97 +114,61 @@ def update_production_batch(batch_id: int, batch: schemas.ProductionBatchUpdate,
 def get_prebatch_recs(skip: int = 0, limit: int = 100, wh: Optional[str] = None, db: Session = Depends(get_db)):
     """Get all prebatch records."""
     return crud.get_prebatch_recs(db, skip=skip, limit=limit, wh=wh)
+
 @router.get("/prebatch-reqs/by-batch/{batch_id}", response_model=List[schemas.PreBatchReq])
 def get_prebatch_reqs_by_batch(batch_id: str, db: Session = Depends(get_db)):
     """Get prebatch requirements filtered by batch ID."""
-    return db.query(models.PreBatchReq).filter(models.PreBatchReq.batch_id == batch_id).all()
-
-
-@router.get("/prebatch-recs/by-plan/{plan_id}", response_model=List[schemas.PreBatchRec])
-def get_prebatch_recs_by_plan(plan_id: str, db: Session = Depends(get_db)):
-    """Get prebatch records filtered by plan ID."""
-    return db.query(models.PreBatchRec).filter(models.PreBatchRec.plan_id == plan_id).all()
-
+    return crud.get_prebatch_reqs_by_batch(db, batch_id=batch_id)
 
 @router.get("/prebatch-recs/by-batch/{batch_id}", response_model=List[schemas.PreBatchRec])
 def get_prebatch_recs_by_batch(batch_id: str, db: Session = Depends(get_db)):
     """Get prebatch records filtered by batch ID."""
-    # Since batch_record_id is "BATCH_ID-RE_CODE-PKG", we filter by prefix
-    return db.query(models.PreBatchRec).filter(models.PreBatchRec.batch_record_id.like(f"{batch_id}-%")).all()
-
+    # This queries the records table by searching for the batch ID in the record ID's prefix
+    # assuming record IDs follow batch_id-XXX format.
+    return db.query(models.PreBatchRec).filter(models.PreBatchRec.batch_record_id.like(f"{batch_id}%")).all()
 
 @router.post("/prebatch-recs/", response_model=schemas.PreBatchRec)
 def create_prebatch_rec(record: schemas.PreBatchRecCreate, db: Session = Depends(get_db)):
-    """Create new PreBatch record (transaction)."""
-    try:
-        return crud.create_prebatch_rec(db, record=record)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError:
-        raise HTTPException(status_code=500, detail="Database error")
-
+    """Create a new prebatch record (transaction)."""
+    return crud.create_prebatch_rec(db=db, record=record)
 
 @router.delete("/prebatch-recs/{record_id}")
 def delete_prebatch_rec(record_id: int, db: Session = Depends(get_db)):
     """Delete a prebatch record and revert inventory."""
     success = crud.delete_prebatch_rec(db, record_id=record_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Record not found or error during deletion")
-    return {"status": "success"}
-
-
-@router.get("/prebatch-reqs/{batch_id}", response_model=List[schemas.PreBatchReq])
-def get_prebatch_reqs(batch_id: str, db: Session = Depends(get_db)):
-    """Get ingredient requirements for a specific batch. Creates them if missing."""
-    crud.ensure_prebatch_reqs_for_batch(db, batch_id)
-    return crud.get_prebatch_reqs_by_batch(db, batch_id=batch_id)
-
-
-@router.put("/prebatch-reqs/{batch_id}/{re_code}/status")
-def update_prebatch_req_status(batch_id: str, re_code: str, status: int, db: Session = Depends(get_db)):
-    """Update requirement status (0=Pending, 1=In-Progress, 2=Completed)."""
-    success = crud.update_prebatch_req_status(db, batch_id=batch_id, re_code=re_code, status=status)
-    if not success:
-        raise HTTPException(status_code=404, detail="Requirement not found")
+        raise HTTPException(status_code=404, detail="Record not found")
     return {"status": "success"}
 
 
 # =============================================================================
-# REPORTING ENDPOINTS
+# DASHBOARD & ANALYTICS
 # =============================================================================
 
-@router.get("/reports/ingredient-intake-summary")
-def get_ingredient_intake_summary(start_date: str, end_date: str, db: Session = Depends(get_db)):
-    """Get summary of ingredient intakes grouped by ingredient, filtered by date range."""
-    try:
-        start = datetime.strptime(start_date, "%Y-%m-%d").date()
-        end = datetime.strptime(end_date, "%Y-%m-%d").date()
-        
-        # Join with ingredients to get the name, but fallback to material_description or mat_sap_code
-        results = db.query(
-            models.IngredientIntakeList.mat_sap_code.label('ingredient_id'),
-            func.coalesce(models.Ingredient.name, models.IngredientIntakeList.material_description, models.IngredientIntakeList.mat_sap_code).label('ingredient_name'),
-            func.sum(models.IngredientIntakeList.intake_vol).label('total_intake_vol'),
-            func.sum(models.IngredientIntakeList.package_intake).label('total_package_intake'),
-            func.count(models.IngredientIntakeList.id).label('intake_count')
-        ).outerjoin(
-            models.Ingredient, models.IngredientIntakeList.mat_sap_code == models.Ingredient.mat_sap_code
-        ).filter(
-            func.date(models.IngredientIntakeList.intake_at) >= start,
-            func.date(models.IngredientIntakeList.intake_at) <= end
-        ).group_by(
-            models.IngredientIntakeList.mat_sap_code,
-            'ingredient_name'
-        ).all()
-        
-        return [{
-            "ingredient_id": r.ingredient_id,
-            "ingredient_name": r.ingredient_name,
-            "total_intake_vol": float(r.total_intake_vol or 0),
-            "total_package_intake": int(r.total_package_intake or 0),
-            "intake_count": r.intake_count
-        } for r in results]
-
-    except Exception as e:
-        logger.error(f"Report generation failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to generate report")
+@router.get("/production-stats/summary")
+def get_production_summary_stats(db: Session = Depends(get_db)):
+    """Get high-level production summary stats for dashboard."""
+    total_plans = db.query(models.ProductionPlan).count()
+    active_plans = db.query(models.ProductionPlan).filter(models.ProductionPlan.status == "In-Progress").count()
+    completed_plans = db.query(models.ProductionPlan).filter(models.ProductionPlan.status == "Completed").count()
+    
+    total_batches = db.query(models.ProductionBatch).count()
+    pending_batches = db.query(models.ProductionBatch).filter(models.ProductionBatch.status == "Created").count()
+    
+    # Simple count of records today
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    records_today = db.query(models.PreBatchRec).filter(models.PreBatchRec.created_at >= today_start).count()
+    
+    return {
+        "plans": {
+            "total": total_plans,
+            "active": active_plans,
+            "completed": completed_plans
+        },
+        "batches": {
+            "total": total_batches,
+            "pending": pending_batches
+        },
+        "records_today": records_today,
+        "timestamp": datetime.now()
+    }
