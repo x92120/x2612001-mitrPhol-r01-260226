@@ -21,6 +21,8 @@ const plans = ref<any[]>([])
 const pendingRecord = ref<PreBatchRec | null>(null)
 const expandedRows = ref<any[]>([])
 const expandedBatches = ref<any[]>([])
+const showPrintListDialog = ref(false)
+const hasAutoPopulated = ref(false)
 
 // For Scan Feedback Dialog
 const scanFeedback = ref({
@@ -30,6 +32,8 @@ const scanFeedback = ref({
     title: '',
     batchId: ''
 })
+
+const selectedReCode = ref<string | null>(null)
 
 const planColumns: any[] = [
     { name: 'plan_id', label: 'Plan ID', field: 'plan_id', align: 'left', sortable: true },
@@ -49,7 +53,9 @@ const planColumns: any[] = [
 
 const batchColumns: any[] = [
     { name: 'batch_id', label: 'Batch ID', field: 'batch_id', align: 'left', sortable: true },
-    { name: 'batch_size', label: 'Size (kg)', field: 'batch_size', align: 'right', sortable: true },
+    { name: 'wh_manifest', label: 'WH Manifest', field: 'wh_manifest', align: 'left' },
+    { name: 'batch_size', label: 'Net Weight', field: 'batch_size', align: 'right', sortable: true },
+    { name: 'pkg_count', label: 'Packages', field: 'pkg_count', align: 'center' },
     { name: 'status', label: 'Status', field: 'status', align: 'center', sortable: true },
     { name: 'expand', label: '', field: 'expand', align: 'center' }
 ]
@@ -145,21 +151,29 @@ const reCodeSummary = computed(() => {
     return Object.values(summary).sort((a, b) => a.re_code.localeCompare(b.re_code))
 })
 
-// Group all pending records by Warehouse (if known) or by Re-Code
+// Group records for the inventory list
 const groupedRequirements = computed(() => {
     const groups: Record<string, any[]> = {}
     
-    // Items stay in the "Awaiting/Ready" list until they are FULLY confirmed (green)
-    const pendingBags = allRecords.value.filter(r => !confirmedRecordIds.value.has(r.batch_record_id))
+    // If a code is selected, show ALL records for that code (Packaged + Awaiting)
+    // Otherwise, show only pending bags across all codes
+    const baseList = selectedReCode.value 
+        ? allRecords.value.filter(r => r.re_code === selectedReCode.value)
+        : allRecords.value.filter(r => !confirmedRecordIds.value.has(r.batch_record_id))
     
-    // For universal view, we group by re_code as the primary header
-    pendingBags.forEach(bag => {
+    baseList.forEach(bag => {
         const code = (bag.re_code || 'OTHER').trim().toUpperCase()
         if (!groups[code]) groups[code] = []
         groups[code].push(bag)
     })
     
-    return groups
+    // Sort groups alphabetically
+    const sortedGroups: Record<string, any[]> = {}
+    Object.keys(groups).sort().forEach(key => {
+        sortedGroups[key] = groups[key]
+    })
+    
+    return sortedGroups
 })
 
 // Group confirmed records by Batch ID for printing labels
@@ -266,6 +280,12 @@ const fetchPlans = async () => {
             headers: getAuthHeader() as Record<string, string>
         })
         plans.value = data
+        
+        // Automatic generation of Print List from database data
+        if (!hasAutoPopulated.value && data.length > 0) {
+            onAddAllToPrintList()
+            hasAutoPopulated.value = true
+        }
     } catch (error) {
         console.error('Error fetching plans:', error)
     } finally {
@@ -280,6 +300,18 @@ const getRecordsForBatch = (batchId: string) => {
 const getRecordsForBatchRequirement = (batchId: string, reCode: string) => {
     // Records are matched by batch_record_id starting with batchId (e.g. batch-001 matches batch-001-recode-01)
     return allRecords.value.filter(r => r.batch_record_id.startsWith(batchId) && r.re_code === reCode)
+}
+
+const getWHSummary = (batch: any) => {
+    const reqs = batch.reqs || []
+    const whMap: Record<string, number> = {}
+    reqs.forEach((r: any) => {
+        const whName = r.wh || 'Default'
+        whMap[whName] = (whMap[whName] || 0) + 1
+    })
+    return Object.entries(whMap).length > 0 
+        ? Object.entries(whMap).map(([wh, count]) => `${wh}: ${count} packs`).join(' | ')
+        : '---'
 }
 
 const getReqStatus = (req: any) => {
@@ -554,37 +586,39 @@ const onPrintBatchLabel = (batch: any) => {
 }
 
 const addToPrintList = (batch: any, plan: any) => {
-    // Check if Already in list
-    if (printQueue.value.some(l => l.batch_id === batch.batch_id)) return
+    if (!batch || !batch.batch_id) return
 
-    const records = getRecordsForBatch(batch.batch_id)
+    // Check if Already in list
+    if (printQueue.value.find(l => l.batch_id === batch.batch_id)) return
+
+    const planId = plan?.plan_id || batch.plan_id || '---'
+    const skuId = plan?.sku_id || batch.sku_id || '---'
     
-    // Group by WH
+    // REQUIREMENT DATA: Calculate from prebatch_reqs (the batch.reqs array from DB)
+    const reqs = batch.reqs || []
+    
+    // Group requirements by WH
     const whMap: Record<string, number> = {}
-    records.forEach(r => {
-        const whName = r.wh || 'N/A'
+    reqs.forEach((r: any) => {
+        const whName = r.wh || 'Default'
         whMap[whName] = (whMap[whName] || 0) + 1
     })
-    const whSummary = Object.entries(whMap)
-        .map(([wh, count]) => `${wh}: ${count} packs`)
-        .join(' | ')
-
-    printQueue.value.push({
-        batch_id: batch.batch_id,
-        plan_id: plan.plan_id,
-        sku: plan.sku_id || '---',
-        plant: plan.plant || '---',
-        total_vol: batch.batch_size || plan.total_vol || 0,
-        bag_count: records.length,
-        wh_summary: whSummary
-    })
     
-    $q.notify({
-        type: 'info',
-        message: `Added Batch ${batch.batch_id} to Print List`,
-        position: 'bottom-left',
-        timeout: 1000
-    })
+    const whSummary = Object.entries(whMap).length > 0 
+        ? Object.entries(whMap).map(([wh, count]) => `${wh}: ${count} packs`).join(' | ')
+        : 'No Requirements'
+
+    const newLabel = {
+        batch_id: batch.batch_id,
+        plan_id: planId,
+        sku: skuId,
+        plant: plan?.plant || '---',
+        total_vol: batch.batch_size || 0,
+        bag_count: reqs.length, // Total packs required as per prebatch_req
+        wh_summary: whSummary
+    }
+
+    printQueue.value = [...printQueue.value, newLabel]
 }
 
 const removeFromPrintList = (batchId: string) => {
@@ -617,10 +651,12 @@ const onManualAdd = (item: any) => {
 
 <template>
   <q-page class="q-pa-md bg-white">
-    <!-- Header Version -->
-    <div class="row justify-between items-center q-mb-sm">
-      <div class="text-h6 text-primary">List all Packing</div>
-      <div class="text-caption text-weight-bold">Version {{ version }}</div>
+    <!-- Header Section -->
+    <div class="bg-blue-9 text-white q-pa-md rounded-borders q-mb-md shadow-2">
+      <div class="row justify-between items-center">
+        <div class="text-h6 text-weight-bolder">Production Plan List</div>
+        <div class="text-caption text-weight-bold">Version {{ version }}</div>
+      </div>
     </div>
 
     <div class="row q-col-gutter-md justify-center">
@@ -644,8 +680,17 @@ const onManualAdd = (item: any) => {
         <!-- CARD 1: Global Summary Table -->
         <q-card class="col column bg-white shadow-2" style="max-height: 42vh; min-height: 350px;">
             <div class="q-pa-sm bg-blue-grey-8 text-white text-weight-bold text-subtitle2 flex justify-between items-center">
-                <span>{{ selectedWarehouse === 'All Warehouse' ? 'Global Summary' : selectedWarehouse + ' Summary' }}</span>
+                <div class="row items-center">
+                    <span class="q-mr-sm">{{ selectedWarehouse === 'All Warehouse' ? 'Global Summary' : selectedWarehouse + ' Summary' }}</span>
+                    <q-badge v-if="selectedReCode" color="orange" outline class="q-ml-sm">
+                        Filtering: {{ selectedReCode }}
+                        <q-icon name="close" class="cursor-pointer q-ml-xs" @click.stop="selectedReCode = null" />
+                    </q-badge>
+                </div>
                 <div class="q-gutter-x-sm">
+                    <q-btn v-if="selectedReCode" icon="filter_list_off" flat round dense color="white" @click="selectedReCode = null">
+                        <q-tooltip>Clear Filter</q-tooltip>
+                    </q-btn>
                     <q-btn icon="playlist_add" flat round dense color="white" @click="onAddAllToPrintList">
                         <q-tooltip>Add all Batches to Print List</q-tooltip>
                     </q-btn>
@@ -665,8 +710,14 @@ const onManualAdd = (item: any) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="row in reCodeSummary" :key="row.re_code" class="hover-bg">
-                                    <td class="text-left text-weight-bold text-primary">{{ row.re_code }}</td>
+                                <tr 
+                                    v-for="row in reCodeSummary" 
+                                    :key="row.re_code" 
+                                    class="hover-bg cursor-pointer"
+                                    :class="{ 'bg-blue-1': selectedReCode === row.re_code }"
+                                    @click="selectedReCode = row.re_code"
+                                >
+                                    <td class="text-left text-weight-bold" :class="selectedReCode === row.re_code ? 'text-primary' : 'text-blue-9'">{{ row.re_code }}</td>
                                     <td class="text-center">{{ row.count }}</td>
                                     <td class="text-right">{{ row.weight.toFixed(3) }}</td>
                                 </tr>
@@ -686,50 +737,64 @@ const onManualAdd = (item: any) => {
         <div class="list-container q-pa-none shadow-2" style="height: 450px;">
           <!-- Header -->
           <div class="row items-center q-pa-sm bg-blue-grey-8 text-white border-bottom">
-            <div class="col-12 text-weight-bold">Awaiting Scan (Ready Bags)</div>
+            <div class="col-12 text-weight-bold">
+                {{ selectedReCode ? 'Inventory for ' + selectedReCode : 'Awaiting Scan (Ready Bags)' }}
+            </div>
           </div>
 
           <!-- List Items Grouped by Code -->
-          <div class="col scroll">
+          <!-- List Items Grouped by Code (Hierarchy Style) -->
+          <div class="col scroll bg-grey-2">
             <div
               v-if="pendingItems.length === 0"
-              class="q-pa-md text-grey-6 text-center"
+              class="q-pa-xl text-grey-6 text-center column items-center"
             >
-              {{ loading ? 'Loading...' : 'Everything is packed!' }}
+              <q-icon name="done_all" size="48px" color="grey-4" class="q-mb-sm" />
+              <div class="text-h6">{{ loading ? 'Syncing...' : 'All bags ready!' }}</div>
             </div>
             
-            <div v-for="(bags, code) in groupedRequirements" :key="code">
-              <!-- Header -->
-              <div class="row items-center q-pa-sm bg-blue-grey-2 text-blue-grey-9 text-weight-bold border-bottom">
-                <q-icon name="inventory_2" class="q-mr-sm" size="xs" />
-                {{ code }} ({{ bags.length }} bags)
+            <div v-for="(bags, code) in groupedRequirements" :key="code" class="q-mb-none">
+              <!-- Group Header: Ingredient Code -->
+              <div class="row items-center q-pa-sm bg-blue-grey-1 text-grey-9 text-weight-bold border-bottom">
+                <q-icon name="inventory_2" class="q-mr-sm" size="xs" color="blue-grey-7" />
+                <span>{{ code }} ({{ bags.length }} bags)</span>
               </div>
               
+              <!-- Child Items: Bag Labels -->
               <div
                 v-for="item in bags"
                 :key="item.batch_record_id"
                 v-ripple
-                class="row items-center q-pa-sm border-bottom cursor-pointer hover-bg"
-                :class="{ 
-                  'bg-white text-black': !verifiedRecordIds.has(item.batch_record_id),
-                  'bg-blink-yellow': verifiedRecordIds.has(item.batch_record_id)
-                }"
+                class="row items-center q-pa-md bg-white border-bottom cursor-pointer hover-bg transition-all"
+                style="border-left: 4px solid #fff"
+                @click="onManualAdd(item)"
               >
-                <div class="col-10 text-body2">
-                  <div class="text-weight-bold text-primary">{{ item.batch_record_id }}</div>
-                  <div class="text-caption">Net: <b>{{ item.net_volume }}</b> kg | WH: <q-badge color="grey-3" text-color="black">{{ item.wh || '-' }}</q-badge></div>
+                <div class="col-10">
+                  <div class="text-weight-bold text-blue-9 text-subtitle2" style="font-size: 1.1em; line-height: 1.2;">
+                    {{ item.batch_record_id }}
+                  </div>
+                  <div class="row items-center q-mt-xs">
+                    <span class="text-caption text-grey-8">Net: <b class="text-black">{{ item.net_volume }}</b> kg</span>
+                    <q-separator vertical class="q-mx-sm" inset />
+                    <span class="text-caption text-grey-8">Status: </span>
+                    <q-badge 
+                        :color="confirmedRecordIds.has(item.batch_record_id) ? 'positive' : 'orange'" 
+                        class="q-ml-sm q-px-sm"
+                        style="font-size: 0.8em"
+                    >
+                        {{ confirmedRecordIds.has(item.batch_record_id) ? '1 Packaged' : '0 Awaiting' }}
+                    </q-badge>
+                    <q-separator vertical class="q-mx-sm" inset />
+                    <span class="text-caption text-grey-8">WH: {{ item.wh || '-' }}</span>
+                  </div>
                 </div>
                 <div class="col-2 text-right">
-                  <q-btn 
-                    :icon="verifiedRecordIds.has(item.batch_record_id) ? 'check_circle' : 'check'" 
-                    flat 
-                    round 
-                    dense 
-                    :color="verifiedRecordIds.has(item.batch_record_id) ? 'orange-8' : 'grey-3'" 
-                    @click.stop="onManualAdd(item)"
-                  >
-                      <q-tooltip>{{ verifiedRecordIds.has(item.batch_record_id) ? 'Confirm to Box' : 'Manual Pick Bag' }}</q-tooltip>
-                  </q-btn>
+                  <q-icon 
+                    :name="confirmedRecordIds.has(item.batch_record_id) ? 'check_circle' : (verifiedRecordIds.has(item.batch_record_id) ? 'check' : 'done')" 
+                    size="32px"
+                    :color="confirmedRecordIds.has(item.batch_record_id) ? 'positive' : (verifiedRecordIds.has(item.batch_record_id) ? 'orange-8' : 'grey-3')" 
+                    class="transition-all"
+                  />
                 </div>
               </div>
             </div>
@@ -859,14 +924,20 @@ const onManualAdd = (item: any) => {
                   <template v-slot:body="props">
                     <q-tr 
                         :props="props" 
-                        class="hover-bg cursor-pointer" 
-                        :class="{ 'bg-blink-yellow': hasPendingRecords(getRecordsForPlan(props.row.plan_id)) }"
+                        class="cursor-pointer" 
                         @click="props.expand = !props.expand"
                     >
                       <q-td auto-width>
-                        <q-btn size="sm" color="primary" round flat :icon="props.expand ? 'expand_less' : 'expand_more'" @click.stop="props.expand = !props.expand" />
+                        <q-btn 
+                            size="sm" 
+                            :color="props.expand ? 'primary' : 'blue-1'" 
+                            :text-color="props.expand ? 'white' : 'primary'"
+                            round 
+                            unelevated
+                            :icon="props.expand ? 'keyboard_arrow_up' : 'keyboard_arrow_down'" 
+                        />
                       </q-td>
-                      <q-td key="plan_id" :props="props" class="text-weight-bold text-primary">
+                      <q-td key="plan_id" :props="props" class="text-weight-bold text-blue-9">
                         {{ props.row.plan_id }}
                       </q-td>
                       <q-td key="sku_id" :props="props">
@@ -881,32 +952,28 @@ const onManualAdd = (item: any) => {
                       <q-td key="create_list" :props="props" auto-width>
                         <q-btn 
                           outline 
-                          color="blue-8" 
+                          color="primary" 
                           icon="playlist_add" 
                           label="CREATE LIST" 
                           size="sm"
-                          class="text-weight-bold"
+                          class="text-weight-bold q-px-md"
                           @click.stop="onAddPlanToList(props.row)"
-                        >
-                            <q-tooltip>Add all Box Labels of this Plan to Print List</q-tooltip>
-                        </q-btn>
+                        />
                       </q-td>
                       <q-td key="package_info" :props="props" class="text-center">
-                        <q-badge color="grey-2" text-color="primary" class="text-weight-bold" outline>
-                            <span class="text-green-9">{{ getPlanPackedBatches(props.row) }}</span>
-                            <span class="q-mx-xs text-grey-4">/</span>
-                            <span class="text-blue-9">{{ getPlanReadyBatches(props.row) }}</span>
-                            <span class="q-mx-xs text-grey-4">/</span>
-                            <span class="text-black">{{ (props.row.batches?.length || 0) }}</span>
-                        </q-badge>
+                        <div class="bg-blue-1 rounded-borders q-pa-xs row no-wrap items-center justify-center">
+                            <span class="text-green-9 text-weight-bolder">{{ getPlanPackedBatches(props.row) }}</span>
+                            <span class="q-mx-xs text-grey-5">/</span>
+                            <span class="text-primary text-weight-bolder">0</span>
+                            <span class="q-mx-xs text-grey-5">/</span>
+                            <span class="text-black text-weight-bolder">{{ (props.row.batches?.length || 0) }}</span>
+                        </div>
                         <q-tooltip anchor="top middle" self="bottom middle" :offset="[0, 8]">
                           Packed Batches / Ready(Weighed) Batches / Total Planned Batches
                         </q-tooltip>
                       </q-td>
                       <q-td key="status" :props="props" class="text-center">
-                        <q-badge :color="props.row.status === 'Cancelled' ? 'negative' : 'positive'">
                           {{ props.row.status }}
-                        </q-badge>
                       </q-td>
                     </q-tr>
                     <q-tr v-show="props.expand" :props="props" class="bg-blue-grey-1">
@@ -955,41 +1022,48 @@ const onManualAdd = (item: any) => {
                             <template v-slot:body="batchProps">
                               <q-tr 
                                 :props="batchProps" 
-                                class="hover-bg cursor-pointer" 
-                                :class="{ 'bg-blink-yellow': hasPendingRecords(getRecordsForBatch(batchProps.row.batch_id)) }"
-                                @click="batchProps.expand = !batchProps.expand"
+                                class="hover-bg"
                               >
-                                <q-td key="batch_id" :props="batchProps" class="text-weight-bold">
-                                  <q-icon name="layers" color="primary" class="q-mr-xs" />
-                                  {{ batchProps.row.batch_id }}
+                                <q-td key="batch_id" :props="batchProps">
+                                  <div class="row no-wrap items-center">
+                                    <q-icon name="diamond" color="primary" size="xs" class="q-mr-sm" />
+                                    <span class="text-weight-bolder text-black">{{ batchProps.row.batch_id }}</span>
+                                  </div>
                                 </q-td>
-                                <q-td key="batch_size" :props="batchProps">
-                                  {{ batchProps.row.batch_size }} kg
+                                <q-td key="wh_manifest" :props="batchProps" class="text-caption grey-8">
+                                  {{ getWHSummary(batchProps.row) }}
+                                </q-td>
+                                <q-td key="batch_size" :props="batchProps" class="text-right">
+                                  <span class="text-weight-bolder" style="font-size: 1.1em">{{ batchProps.row.batch_size }} kg</span>
+                                </q-td>
+                                <q-td key="pkg_count" :props="batchProps" class="text-center">
+                                  <q-badge outline color="blue-grey-4" class="q-px-sm" text-color="blue-grey-9">
+                                    <span class="text-weight-bold">BAGS {{ batchProps.row.reqs?.length || 0 }}</span>
+                                  </q-badge>
                                 </q-td>
                                 <q-td key="status" :props="batchProps">
-                                  <div class="row items-center no-wrap">
-                                    <q-badge :color="isBatchPacked(batchProps.row) ? 'positive' : (getBatchBagProgress(batchProps.row).packed > 0 ? 'warning' : 'orange')" class="q-mr-xs">
-                                        {{ isBatchPacked(batchProps.row) ? 'Done' : (getBatchBagProgress(batchProps.row).packed > 0 ? 'Packing' : batchProps.row.status) }}
-                                        <span v-if="getBatchBagProgress(batchProps.row).total > 0" class="q-ml-xs">
-                                            ({{ getBatchBagProgress(batchProps.row).packed }}/{{ getBatchBagProgress(batchProps.row).total }})
-                                        </span>
-                                    </q-badge>
+                                  <div class="row items-center no-wrap justify-between">
+                                    <q-badge 
+                                        unelevated 
+                                        color="orange-8" 
+                                        class="q-px-md text-weight-bold" 
+                                        style="height: 24px; border-radius: 4px;"
+                                        label="Created"
+                                    />
                                     
                                     <q-btn 
                                         flat 
                                         round 
                                         dense 
-                                        size="xs" 
+                                        size="sm" 
                                         color="primary" 
                                         icon="add_circle" 
                                         @click.stop="addToPrintList(batchProps.row, props.row)"
-                                    >
-                                        <q-tooltip>Add to Print List</q-tooltip>
-                                    </q-btn>
+                                    />
                                   </div>
                                 </q-td>
                                 <q-td key="expand" :props="batchProps" auto-width>
-                                  <q-btn size="sm" color="primary" round flat :icon="batchProps.expand ? 'expand_less' : 'expand_more'" @click.stop="batchProps.expand = !batchProps.expand" />
+                                  <q-btn size="sm" color="blue-grey-3" round flat icon="keyboard_arrow_right" @click.stop="batchProps.expand = !batchProps.expand" />
                                 </q-td>
                               </q-tr>
 
@@ -1153,44 +1227,137 @@ const onManualAdd = (item: any) => {
         </q-card>
     </q-dialog>
 
-    <!-- PRINT SECTION (Hidden in Screen, Visible in Print) -->
+    <!-- PRINT LIST POPUP DIALOG -->
+    <q-dialog v-model="showPrintListDialog" position="right" full-height>
+        <q-card class="column" style="width: 450px; max-width: 90vw;">
+            <q-card-section class="bg-blue-9 text-white row items-center q-py-sm">
+                <div class="text-subtitle1 text-weight-bold">
+                    <q-icon name="print" class="q-mr-sm" />
+                    Box Label Print Queue
+                </div>
+                <q-space />
+                <q-btn icon="close" flat round dense v-close-popup />
+            </q-card-section>
+
+            <q-card-section class="col scroll q-pa-none">
+                <div v-if="printQueue.length === 0" class="flex flex-center full-height column text-grey q-pa-xl">
+                    <q-icon name="print_disabled" size="64px" class="q-mb-md" />
+                    <div class="text-h6">Queue is Empty</div>
+                    <div class="text-caption">Add labels from the planning list</div>
+                </div>
+
+                <q-list v-else separator class="bg-grey-2 q-pa-sm">
+                    <q-item v-for="(item, index) in printQueue" :key="item.batch_id" class="bg-white q-mb-sm shadow-1 rounded-borders q-pa-md">
+                        <q-item-section>
+                            <div class="row justify-between items-start">
+                                <div>
+                                    <div class="text-caption text-grey-7 text-weight-bold">#{{ index + 1 }} BOX LABEL</div>
+                                    <div class="text-h6 text-primary text-weight-bolder" style="line-height:1.2">{{ item.batch_id }}</div>
+                                </div>
+                                <q-btn flat round dense color="negative" icon="delete" @click="removeFromPrintList(item.batch_id)" />
+                            </div>
+
+                            <q-separator class="q-my-sm" />
+
+                            <div class="q-gutter-y-xs">
+                                <div class="row no-wrap items-center">
+                                    <q-icon name="warehouse" color="blue-grey" size="14px" class="q-mr-xs" />
+                                    <div class="text-caption text-weight-bold q-mr-xs">WH MANIFEST:</div>
+                                    <div class="text-caption">{{ item.wh_summary }}</div>
+                                </div>
+                                <div class="row no-wrap items-center">
+                                    <q-icon name="inventory_2" color="blue-grey" size="14px" class="q-mr-xs" />
+                                    <div class="text-caption text-weight-bold q-mr-xs">SKU/PLAN:</div>
+                                    <div class="text-caption">{{ item.sku }} | {{ item.plan_id }}</div>
+                                </div>
+                                <div class="row items-center q-mt-sm justify-between bg-blue-1 q-pa-sm rounded-borders">
+                                    <div class="column">
+                                        <div class="text-overline text-blue-9" style="line-height:1">NET WEIGHT</div>
+                                        <div class="text-subtitle1 text-weight-bolder">{{ item.total_vol }} kg</div>
+                                    </div>
+                                    <q-separator vertical class="q-mx-md" />
+                                    <div class="column">
+                                        <div class="text-overline text-blue-9" style="line-height:1">QUANTITY</div>
+                                        <div class="text-subtitle1 text-weight-bolder">{{ item.bag_count }} BAGS</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </q-item-section>
+                    </q-item>
+                </q-list>
+            </q-card-section>
+
+            <q-separator />
+
+            <q-card-section class="q-pa-md bg-white">
+                <div class="row q-col-gutter-md">
+                    <div class="col-6">
+                        <q-btn 
+                            stack
+                            outline 
+                            class="full-width q-py-md text-weight-bold" 
+                            color="negative" 
+                            label="CLEAR QUEUE" 
+                            icon="delete_sweep"
+                            @click="clearPrintList"
+                            :disable="printQueue.length === 0"
+                        />
+                    </div>
+                    <div class="col-6">
+                        <q-btn 
+                            stack
+                            unelevated 
+                            class="full-width q-py-md text-weight-bold shadow-3" 
+                            color="blue-9" 
+                            label="PRINT ALL" 
+                            icon="print"
+                            @click="onPrintAllInList"
+                            :disable="printQueue.length === 0"
+                        />
+                    </div>
+                </div>
+                <div class="text-center q-mt-sm text-caption text-grey-7 italic">
+                    Labels will be printed in 4x4 layout
+                </div>
+            </q-card-section>
+        </q-card>
+    </q-dialog>
+
     <div id="print-area" class="print-only">
         <div v-for="label in displayLabels" :key="label.batch_id" class="label-box">
-            <div class="label-logo">MITR PHOL GROUP</div>
-            <div class="label-header">BATCH PACKING LABEL</div>
+            <!-- Header Bar (Black with White Text) -->
+            <div class="label-header-bar row no-wrap items-center justify-between q-px-sm">
+                <div class="text-weight-bolder">MITR PHOL GROUP</div>
+                <div class="text-weight-bold">BATCH PACKING LABEL</div>
+            </div>
             
-            <div class="label-body column items-center">
-                <div class="label-field highlight full-width text-center">
-                    <div class="label-title">Batch Planning ID</div>
-                    <div class="label-value-large">{{ label.batch_id }}</div>
+            <div class="label-body column no-wrap" style="flex: 1">
+                <!-- Traceability Section -->
+                <div class="q-mt-md">
+                    <div class="label-row"><span class="label-title-inline">Batch Planning ID:</span> <span class="label-value-inline">{{ label.batch_id }}</span></div>
+                    <div class="label-row q-mt-xs"><span class="label-title-inline">Ingredient Packages by WH:</span> <span class="label-value-inline">{{ label.wh_summary }}</span></div>
+                    <div class="label-row q-mt-xs"><span class="label-title-inline">SKU:</span> <span class="label-value-inline">{{ label.sku }}</span> | <span class="label-title-inline">Plan:</span> <span class="label-value-inline">{{ label.plan_id }}</span></div>
+                    <div class="label-row q-mt-xs"><span class="label-title-inline">GENERATE STAMP TIME:</span> <span class="label-value-inline">{{ new Date().toLocaleString() }}</span></div>
                 </div>
 
-                <div class="row full-width border-bottom">
-                    <div class="col-6 label-field border-right text-center">
-                        <div class="label-title">TOTAL WEIGHT</div>
-                        <div class="label-value">{{ label.total_vol }} kg</div>
+                <!-- Bottom Section Separator -->
+                <div class="q-mt-auto" style="border-top: 2px solid #000; padding-top: 10px;">
+                    <div class="row no-wrap items-end full-width">
+                        <div class="col-7 column q-gutter-y-sm">
+                            <div class="weight-row">
+                                <div class="label-title-large">NET WEIGHT: <span class="label-value-extra-large">{{ label.total_vol }} kg</span></div>
+                            </div>
+                            <div class="package-row">
+                                <div class="label-title-large">NO. OF PACKAGE: <span class="label-value-extra-large">{{ label.bag_count }} bags</span></div>
+                            </div>
+                        </div>
+                        <div class="col-5 flex justify-end">
+                            <img 
+                              :src="`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${label.batch_id}`" 
+                              class="qr-image-fixed"
+                            />
+                        </div>
                     </div>
-                    <div class="col-6 label-field text-center">
-                        <div class="label-title">TOTAL PACKS</div>
-                        <div class="label-value">{{ label.bag_count }} bags</div>
-                    </div>
-                </div>
-
-                <div class="label-field full-width text-center q-mt-xs">
-                    <div class="label-title">INGR. PACKAGES BY WH</div>
-                    <div class="label-value text-blue-9" style="font-size: 14px">{{ label.wh_summary }}</div>
-                </div>
-
-                <div class="flex flex-center q-my-sm">
-                    <img 
-                      :src="`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${label.batch_id}`" 
-                      class="qr-image"
-                    />
-                </div>
-                
-                <div class="label-footer full-width">
-                     SKU: {{ label.sku }} | Plan: {{ label.plan_id }}<br>
-                     {{ new Date().toLocaleString() }}
                 </div>
             </div>
         </div>
@@ -1240,65 +1407,35 @@ const onManualAdd = (item: any) => {
         overflow: hidden;
         box-sizing: border-box;
     }
-    .label-logo {
-        font-size: 14px;
-        font-weight: 800;
-        text-align: center;
-        letter-spacing: 2px;
-        margin-bottom: 2px;
-    }
-    .label-header {
-        font-size: 20px;
-        font-weight: bold;
-        text-align: center;
-        border-top: 2px solid #000;
-        border-bottom: 2px solid #000;
+    .label-header-bar {
         background: #000;
         color: #fff;
-        margin-bottom: 10px;
-        padding: 4px 0;
-    }
-    .qr-image {
-        width: 180px;
-        height: 180px;
-    }
-    .label-field {
-        padding: 5px 0;
-        margin-bottom: 2px;
-    }
-    .label-field.highlight {
-        background: #f0f0f0;
-        padding: 8px;
-        text-align: center;
-        border: 1px solid #000;
-    }
-    .label-title {
-        font-size: 9px;
-        color: #000;
-        font-weight: bold;
-        text-transform: uppercase;
-        margin-bottom: 2px;
-    }
-    .label-value-large {
-        font-size: 22px;
-        font-weight: 900;
-        line-height: 1;
-    }
-    .label-value {
+        height: 45px;
         font-size: 16px;
-        font-weight: bold;
+        margin-bottom: 2px;
     }
-    .border-top { border-top: 1px solid #000; }
-    .border-bottom { border-bottom: 1px solid #000; }
-    .border-right { border-right: 1px solid #000; }
-    .bg-grey-light { background: #fafafa; }
-    
+    .qr-image-fixed {
+        width: 1.4in !important;
+        height: 1.4in !important;
+        display: block;
+    }
+    .label-title-inline {
+        font-weight: bold;
+        font-size: 13px;
+    }
+    .label-value-inline {
+        font-size: 13px;
+    }
+    .label-title-large {
+        font-weight: bold;
+        font-size: 18px;
+    }
+    .label-value-extra-large {
+        font-size: 30px;
+        font-weight: 900;
+    }
     .label-footer {
-        margin-top: auto;
-        border-top: 1px solid #000;
-        font-size: 9px;
-        text-align: center;
-        padding-top: 5px;
+        display: none;
     }
 }
 .list-container {

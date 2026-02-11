@@ -319,68 +319,100 @@ const scales = ref([
     targetScaleId: 'scale-01',
     connected: false,
     tolerance: 0.01,
-    precision: 4
+    precision: 4,
+    isStable: true,
+    isError: false
   },
   {
     id: 2,
     label: 'Scale 2 (30 Kg +/- 0.02)',
     value: 0.0,
-    displayValue: '0.000',
+    displayValue: '0.0000',
     targetScaleId: 'scale-02',
     connected: false,
     tolerance: 0.02,
-    precision: 3
+    precision: 4,
+    isStable: true,
+    isError: false
   },
   {
     id: 3,
     label: 'Scale 3 (150 Kg +/- 0.5)',
     value: 0.0,
-    displayValue: '0.00',
+    displayValue: '0.0000',
     targetScaleId: 'scale-03',
     connected: false,
     tolerance: 0.5,
-    precision: 2
+    precision: 4,
+    isStable: true,
+    isError: false
   },
 ])
 
-// Single shared topic
-const TOPIC_SCALE = 'scale'
 
-// Handle incoming messages
+
+// Handle incoming messages from scale/scale-XX topics
 const handleMqttMessage = (topic: string, message: any) => {
-  // Only process if it matches our shared topic
-  if (topic !== TOPIC_SCALE) return
+  console.log('📨 MQTT Message - Topic:', topic)
+  
+  // Only process scale topics
+  if (!topic.startsWith('scale/')) {
+    console.log('⚠️ Not a scale topic, ignoring')
+    return
+  }
 
   try {
-    const msgStr = message.toString()
-    const data = JSON.parse(msgStr)
+    // Extract scale ID from topic: "scale/scale-01" -> "scale-01"
+    const scaleIdFromTopic = topic.split('/')[1]
+    console.log('🎯 Scale ID from topic:', scaleIdFromTopic)
 
-    // Check payload for scale_id
-    if (data && data.scale_id && data.weight !== undefined) {
-      // Find matching scale by ID
-      const scale = scales.value.find(s => s.targetScaleId === data.scale_id && s.connected)
-      
-      if (scale) {
-        const val = parseFloat(data.weight)
-        if (!isNaN(val)) {
-          scale.value = val
-          scale.displayValue = val.toFixed((scale as any).precision || 3)
+    const msgStr = message.toString()
+    console.log('📦 Raw:', msgStr)
+    const data = JSON.parse(msgStr)
+    console.log('🔍 Parsed:', data)
+
+    // Find matching scale
+    const scale = scales.value.find(s => s.targetScaleId === scaleIdFromTopic && s.connected)
+    
+    if (scale) {
+        // Handle Error State
+        if (data.error_msg) {
+            console.warn(`⚠️ Scale Error: ${data.error_msg} on ${scale.label}`)
+            ;(scale as any).isError = true
+            scale.displayValue = "----"
+            return
         }
-      }
+
+        // Handle Normal Weight Data
+        if (data.weight !== undefined) {
+            ;(scale as any).isError = false
+            // Capture stable status (default to true if missing to avoid constant vibration)
+            ;(scale as any).isStable = (data.stable !== undefined) ? data.stable : true
+            
+            const val = parseFloat(data.weight)
+            
+            if (!isNaN(val)) {
+                scale.value = val
+                scale.displayValue = val.toFixed((scale as any).precision || 3)
+                // console.log('✨ Updated:', scale.label, '=', scale.displayValue)
+            }
+        }
     }
   } catch (e) {
-    console.warn('Failed to parse scale message', e)
+    console.error('💥 Parse error:', e)
   }
 }
 
 // Watch for client initialization to attach listeners
 watch(mqttClient, (client) => {
   if (client) {
+    console.log('🔗 Attaching scale handler')
     // Remove any existing listener to be safe (though this is a new client usually)
     client.removeListener('message', handleMqttMessage)
     client.on('message', handleMqttMessage)
+    console.log('✅ Handler attached')
   }
-})
+}, { immediate: true })
 
 // Watch for broker connection to Auto-Subscribe
 watch(isBrokerConnected, (connected) => {
@@ -401,13 +433,13 @@ const refreshSubscription = () => {
   const anyConnected = scales.value.some(s => s.connected)
   
   if (anyConnected) {
-    mqttClient.value.subscribe(TOPIC_SCALE, (err?: any) => {
+    mqttClient.value.subscribe('scale/#', (err?: any) => {
       if (err) console.error('Sub error', err)
-      else console.log('Subscribed to', TOPIC_SCALE)
+      else console.log('Subscribed to scale/#')
     })
   } else {
-    mqttClient.value.unsubscribe(TOPIC_SCALE, (err?: any) => { 
-        if (!err) console.log('Unsubscribed', TOPIC_SCALE)
+    mqttClient.value.unsubscribe('scale/#', (err?: any) => { 
+        if (!err) console.log('Unsubscribed scale/#')
     })
   }
 }
@@ -1156,6 +1188,11 @@ const getScaleClass = (scale: any) => {
 }
 
 const getDisplayClass = (scale: any) => {
+  // 0. Error state - Red Blink (Priority over selection)
+  if (scale.isError) {
+    return 'bg-red-blink text-white'
+  }
+
   // 1. Not selected - Gray (Inactive)
   if (selectedScale.value !== scale.id) {
     return 'bg-grey-4 text-grey-6' 
@@ -1461,8 +1498,16 @@ const onSelectBatch = (index: number) => {
       <div class="col-12 col-md-9">
         <!-- SCALES SECTION -->
         <q-card bordered flat class="q-mb-lg">
-          <q-card-section class="q-pb-none">
+          <q-card-section class="q-pb-none row items-center">
             <div class="text-h6">Weighting Scale</div>
+            <q-space />
+            <q-badge 
+              :color="isBrokerConnected ? 'green' : 'red'" 
+              :label="isBrokerConnected ? 'MQTT Connected' : 'MQTT Disconnected'"
+              class="q-px-md"
+            >
+              <q-tooltip>{{ isBrokerConnected ? 'Broker connected and ready' : 'Connecting to MQTT broker...' }}</q-tooltip>
+            </q-badge>
           </q-card-section>
 
           <q-card-section>
@@ -1478,26 +1523,21 @@ const onSelectBatch = (index: number) => {
                     ></div>
                   </div>
 
-                  <!-- Digital Display and Tare Row -->
-                  <div class="row q-col-gutter-sm q-mb-md">
-                    <div class="col">
-                      <div
-                        class="text-right q-pa-sm text-h3 text-weight-bold rounded-borders flex items-center justify-end full-height"
-                        :class="getDisplayClass(scale)"
-                      >
-                        {{ scale.displayValue }}
+                  <!-- Digital Display -->
+                  <div class="q-mb-md">
+                    <div
+                      class="relative-position text-right q-pa-sm text-h3 text-weight-bold rounded-borders flex items-center justify-end"
+                      :class="getDisplayClass(scale)"
+                    >
+                      <!-- Stable Indicator -->
+                      <div class="absolute-top-left q-ma-sm row items-center no-wrap" style="pointer-events: none;">
+                          <div 
+                              class="stable-spot shadow-1"
+                              :class="scale.isStable ? 'bg-green-14' : 'bg-orange-14 anim-vibrate'"
+                           ></div>
                       </div>
-                    </div>
-                    <div class="col-auto">
-                       <q-btn
-                          label="Tare"
-                          color="grey-6"
-                          text-color="black"
-                          unelevated
-                          class="text-weight-bold full-height"
-                          style="font-size: 1.2rem;"
-                          @click="onTare(scale.id)"
-                        />
+
+                      {{ scale.displayValue }}
                     </div>
                   </div>
                 </q-card>
@@ -2401,5 +2441,34 @@ const onSelectBatch = (index: number) => {
 }
 .anim-pulse {
   animation: pulse-orange 1.5s infinite;
+}
+@keyframes blink-red {
+  0% { background-color: #ef5350; }
+  50% { background-color: #b71c1c; }
+  100% { background-color: #ef5350; }
+}
+.bg-red-blink {
+  animation: blink-red 1s infinite;
+}
+
+/* Stable Indicator Styles */
+.stable-spot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid white;
+  transition: all 0.2s ease;
+}
+
+@keyframes vibrate {
+  0% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+  100% { transform: translate(0); }
+}
+.anim-vibrate {
+  animation: vibrate 0.2s linear infinite;
 }
 </style>

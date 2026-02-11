@@ -1,0 +1,6 @@
+{
+    "mqtt-broker-node": {
+        "user": "admin",
+        "password": "admin"
+    }
+}

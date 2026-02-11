@@ -19,7 +19,7 @@ const scanHistory = ref<ScanData[]>([])
 const connectionStatus = ref('Disconnected')
 
 // Topics to subscribe to
-const TOPICS = ['scanner/+/scan', 'scale-1', 'scale-2', 'scale-3']
+const TOPICS = ['scanner/+/scan', 'scale/#']
 
 export function useMqttLocalDevice() {
     // Configuration
@@ -52,9 +52,9 @@ export function useMqttLocalDevice() {
                 clientId: `xmixing-web-local-${Math.random().toString(16).substring(2, 10)}`,
                 username: MQTT_USERNAME,
                 password: MQTT_PASSWORD,
-                reconnectPeriod: 5000,
+                reconnectPeriod: 1000,
                 clean: true,
-                connectTimeout: 10000,
+                connectTimeout: 2000,
                 protocolVersion: 4,
                 protocol: url.protocol.replace(':', ''),
                 host: url.hostname,
@@ -80,6 +80,12 @@ export function useMqttLocalDevice() {
 
             mqttClient.value.on('message', (topic, message) => {
                 try {
+                    // Skip scale messages - handled by page-specific handlers
+                    if (topic.startsWith('scale/')) {
+                        console.log(`📊 MQTT (Local): Scale data on ${topic} - skipping global handler`)
+                        return
+                    }
+
                     const payload = message.toString()
                     let scanData: ScanData
 
