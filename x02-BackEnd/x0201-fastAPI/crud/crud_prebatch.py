@@ -27,6 +27,33 @@ def get_prebatch_recs(db: Session, skip: int = 0, limit: int = 100, wh: Optional
             
     return records
 
+def get_prebatch_recs_by_plan(db: Session, plan_id: str) -> List[models.PreBatchRec]:
+    """Get list of PreBatch records for a specific plan and populate wh field"""
+    records = db.query(models.PreBatchRec).outerjoin(
+        models.PreBatchReq, models.PreBatchRec.req_id == models.PreBatchReq.id
+    ).filter(models.PreBatchRec.plan_id == plan_id).all()
+    
+    for rec in records:
+        if rec.req:
+            rec.wh = rec.req.wh
+        else:
+            rec.wh = "-"
+    return records
+
+def get_prebatch_recs_by_batch(db: Session, batch_id: str) -> List[models.PreBatchRec]:
+    """Get list of PreBatch records for a specific batch and populate wh field"""
+    # Using LIKE because batch_record_id contains re_code and package_no suffix
+    records = db.query(models.PreBatchRec).outerjoin(
+        models.PreBatchReq, models.PreBatchRec.req_id == models.PreBatchReq.id
+    ).filter(models.PreBatchRec.batch_record_id.like(f"{batch_id}%")).all()
+    
+    for rec in records:
+        if rec.req:
+            rec.wh = rec.req.wh
+        else:
+            rec.wh = "-"
+    return records
+
 def create_prebatch_rec(db: Session, record: schemas.PreBatchRecCreate) -> models.PreBatchRec:
     """Create new PreBatch record (transaction) and update inventory"""
     try:

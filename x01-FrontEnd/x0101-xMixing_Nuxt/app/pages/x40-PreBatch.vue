@@ -4,9 +4,11 @@ import { useQuasar, type QTableColumn } from 'quasar'
 
 import { appConfig } from '../appConfig/config'
 import { useAuth } from '../composables/useAuth'
+import { useLabelPrinter } from '~/composables/useLabelPrinter'
 
 const $q = useQuasar()
 const { getAuthHeader, user } = useAuth()
+const { generateLabelSvg, printLabel } = useLabelPrinter()
 
 // --- State ---
 const selectedProductionPlan = ref('')
@@ -182,12 +184,13 @@ const onBatchSelect = async (plan: any, batch: any, index: number) => {
 
 const fetchPrebatchRequires = async (batchId: string) => {
   try {
-    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-reqs/${batchId}`, {
+    // Calling the new summary endpoint based on prebatch_recs as requested
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-recs/summary/${batchId}`, {
       headers: getAuthHeader() as Record<string, string>
     })
     prebatchRequires.value = data
   } catch (error) {
-    console.error('Error fetching prebatch requirements:', error)
+    console.error('Error fetching prebatch (recs) summary:', error)
     prebatchRequires.value = []
   }
 }
@@ -771,6 +774,7 @@ watch(selectedProductionPlan, () => {
 // Watch for batch selection changes
 watch(selectedBatchIndex, () => {
   updateRequireVolume()
+  fetchPreBatchRecords()
 })
 
 onUnmounted(() => {
@@ -832,27 +836,43 @@ const requestBatch = computed(() => {
     return Math.ceil(requireVolume.value / packageSize.value)
 })
 
-const labelData = computed(() => {
+// --- Package Label Dialog State ---
+const showLabelDialog = ref(false)
+const packageLabelId = ref('')
+const capturedScaleValue = ref(0)
+const renderedLabel = ref('')
+
+const labelDataMapping = computed(() => {
   if (!selectedBatch.value || !selectedReCode.value) return null
   
   const ing = selectableIngredients.value.find(i => i.re_code === selectedReCode.value)
-  const pkgNo = completedCount.value + 1
+  const pkgNo = nextPackageNo.value
   const totalPkgs = requestBatch.value
   
   return {
-    sku_id: selectedBatch.value.sku_id || '-',
-    sku_name: selectedBatch.value.sku_name || selectedBatch.value.sku_id || '-',
-    base_quantity: selectedBatch.value.batch_size || 0,
-    item_number: ing?.index || '-',
-    re_code: selectedReCode.value,
-    ingredient_name: ing?.ingredient_name || '-',
-    order_code: selectedBatch.value.plan_id || '-',
-    batch_id: selectedBatch.value.batch_id || '-',
-    net_volume: capturedScaleValue.value.toFixed(4),
-    total_volume: requireVolume.value.toFixed(4),
-    package_no: pkgNo,
-    total_packages: totalPkgs
+    RecipeName: selectedBatch.value.sku_name || selectedBatch.value.sku_id || '-',
+    BaseQuantity: selectedBatch.value.batch_size || 0,
+    ItemNumber: ing?.index || '-',
+    RefCode: selectedReCode.value,
+    OrderCode: selectedBatch.value.plan_id || '-',
+    BatchSize: selectedBatch.value.batch_size || 0,
+    Weight: `${capturedScaleValue.value.toFixed(2)} / ${requireVolume.value.toFixed(2)}`,
+    Packages: `${pkgNo} / ${totalPkgs}`,
+    LotID: selectedIntakeLotId.value || '-',
+    QRCode: `${selectedBatch.value.plan_id},${selectedBatch.value.batch_id},${selectedReCode.value},${capturedScaleValue.value}`,
+    SmallQRCode: `${selectedBatch.value.plan_id},${selectedBatch.value.batch_id},${selectedReCode.value},${capturedScaleValue.value}`
   }
+})
+
+const updateDialogPreview = async () => {
+  if (labelDataMapping.value) {
+    const svg = await generateLabelSvg('prebatch-label', labelDataMapping.value)
+    renderedLabel.value = svg || ''
+  }
+}
+
+watch(showLabelDialog, (val) => {
+  if (val) updateDialogPreview()
 })
 const batchedVolume = ref(0) // Total volume already batched
 const remainVolume = computed(() => {
@@ -879,12 +899,7 @@ watch(packageSize, (val) => {
   }
 })
 const filteredPreBatchLogs = computed(() => {
-    if (!selectedBatch.value || !selectedReCode.value) return []
-    return preBatchLogs.value.filter(log => {
-        const matchBatch = log.batch_record_id.startsWith(selectedBatch.value.batch_id)
-        const matchReCode = log.re_code === selectedReCode.value
-        return matchBatch && matchReCode
-    })
+    return preBatchLogs.value
 })
 
 const preBatchSummary = computed(() => {
@@ -949,13 +964,14 @@ const prebatchColumns: QTableColumn[] = [
     { name: 'package_no', align: 'center', label: 'Pkg', field: 'package_no' },
     { name: 'net_volume', align: 'right', label: 'Net (kg)', field: 'net_volume', format: (val: any) => Number(val).toFixed(4) },
     { name: 'intake_lot_id', align: 'left', label: 'Intake Lot', field: 'intake_lot_id', sortable: true },
+    { name: 'reprint', align: 'center', label: 'Print', field: 'id' },
     { name: 'actions', align: 'center', label: '', field: 'id' }
 ]
 
 const fetchPreBatchRecords = async () => {
-  if (!selectedProductionPlan.value) return
+  if (!selectedBatch.value) return
   try {
-    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-recs/by-plan/${selectedProductionPlan.value}`, {
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-recs/by-batch/${selectedBatch.value.batch_id}`, {
       headers: getAuthHeader() as Record<string, string>
     })
     preBatchLogs.value = data
@@ -1221,10 +1237,6 @@ const onTare = (scaleId: number) => {
 }
 
 // --- Package Label Dialog ---
-const showLabelDialog = ref(false)
-const packageLabelId = ref('')
-
-const capturedScaleValue = ref(0)
 const openLabelDialog = () => {
   capturedScaleValue.value = actualScaleValue.value
   if (selectedBatch.value && selectedReCode.value) {
@@ -1257,7 +1269,7 @@ const onPrintLabel = async () => {
         throw new Error('Invalid package numbers')
     }
 
-    // Construct Prebatch Record data
+    // Capture dynamic scale data for record
     const recordData = {
       req_id: selectedRequirementId.value,
       batch_record_id: `${selectedBatch.value.batch_id}-${selectedReCode.value}-${pkgNo}`,
@@ -1266,16 +1278,25 @@ const onPrintLabel = async () => {
       package_no: pkgNo,
       total_packages: totalPkgs,
       net_volume: capturedScaleValue.value,
-      total_volume: requireVolume.value, // This is the total required for this ingredient in this batch
+      total_volume: requireVolume.value,
       total_request_volume: targetWeight.value,
       intake_lot_id: selectedIntakeLotId.value
     }
 
+    // 1. Save to Database
     await $fetch(`${appConfig.apiBaseUrl}/prebatch-recs/`, {
       method: 'POST',
       body: recordData,
       headers: getAuthHeader() as Record<string, string>
     })
+
+    // 2. Generate and Print SVG Label
+    if (labelDataMapping.value) {
+      const svg = await generateLabelSvg('prebatch-label', labelDataMapping.value)
+      if (svg) {
+        printLabel(svg)
+      }
+    }
 
     $q.notify({ type: 'positive', message: 'Prebatch Record saved and Label Printed', position: 'top' })
     
@@ -1285,15 +1306,8 @@ const onPrintLabel = async () => {
     // Check if finished
     if (pkgNo >= totalPkgs) {
         $q.notify({ type: 'info', message: 'All packages for this ingredient completed' })
-        // Update ingredient status in database
         if (selectedBatch.value) {
             await updatePrebatchRequireStatus(selectedBatch.value.batch_id, selectedReCode.value, 2)
-        }
-        // Update ingredient status in local list (fallback/immediate UI)
-        const ing = selectableIngredients.value.find(i => i.re_code === selectedReCode.value)
-        if (ing) {
-            ing.isDone = true
-            ing.status = 2
         }
     }
 
@@ -1301,6 +1315,48 @@ const onPrintLabel = async () => {
   } catch (error) {
     console.error('Error saving prebatch record:', error)
     $q.notify({ type: 'negative', message: 'Failed to save record' })
+  }
+}
+
+const onReprintLabel = async (record: any) => {
+  if (!record || !selectedBatch.value) return
+  
+  try {
+    const data = {
+      RecipeName: selectedBatch.value.sku_name || selectedBatch.value.sku_id || '-',
+      BaseQuantity: selectedBatch.value.batch_size || 0,
+      ItemNumber: record.item_number || '-',
+      RefCode: record.re_code || '-',
+      OrderCode: record.plan_id || selectedBatch.value.plan_id || '-',
+      BatchSize: selectedBatch.value.batch_size || 0,
+      Weight: `${record.net_volume.toFixed(2)} / ${record.total_volume.toFixed(2)}`,
+      Packages: `${record.package_no} / ${record.total_packages}`,
+      LotID: record.intake_lot_id || '-',
+      QRCode: `${selectedBatch.value.plan_id},${record.batch_record_id},${record.re_code},${record.net_volume}`,
+      SmallQRCode: `${selectedBatch.value.plan_id},${record.batch_record_id},${record.re_code},${record.net_volume}`
+    }
+
+    const svg = await generateLabelSvg('prebatch-label', data)
+    if (svg) {
+      printLabel(svg)
+      $q.notify({ type: 'info', message: 'Reprinting label...', position: 'top', timeout: 800 })
+    }
+  } catch (err) {
+    console.error('Reprint failed:', err)
+    $q.notify({ type: 'negative', message: 'Reprint failed' })
+  }
+}
+
+const quickReprint = async (ing: any) => {
+  if (!ing || !selectedBatch.value) return
+  const batchId = selectedBatch.value.batch_id
+  const logs = preBatchLogs.value.filter(l => l.re_code === ing.re_code && l.batch_record_id.startsWith(batchId))
+  if (logs.length > 0) {
+    // Reprint the last one
+    const lastRecord = logs.reduce((prev: any, current: any) => (prev.package_no > current.package_no) ? prev : current)
+    await onReprintLabel(lastRecord)
+  } else {
+    $q.notify({ type: 'warning', message: 'No records found to reprint' })
   }
 }
 
@@ -1476,7 +1532,12 @@ const onSelectBatch = (index: number) => {
                             <td class="text-center text-caption" style="font-size: 0.7rem;">{{ ing.from_warehouse }}</td>
                             <td class="text-right text-weight-bold" style="font-size: 0.75rem;">{{ ing.batch_require ? ing.batch_require.toFixed(3) : '0' }}</td>
                             <td class="text-center">
-                                <q-badge v-if="ing.status === 2" color="green" label="Complete" size="sm" />
+                                <div v-if="ing.status === 2" class="row no-wrap items-center justify-center q-gutter-x-xs">
+                                    <q-badge color="green" label="Complete" size="sm" />
+                                    <q-btn flat round dense icon="print" size="xs" color="blue-7" @click.stop="quickReprint(ing)">
+                                        <q-tooltip>Reprint last package for this ingredient</q-tooltip>
+                                    </q-btn>
+                                </div>
                                 <q-badge v-else-if="ing.status === 1" color="orange" label="onBatch" size="sm" />
                                 <q-badge v-else color="grey-6" label="Created" size="sm" />
                             </td>
@@ -1862,6 +1923,21 @@ const onSelectBatch = (index: number) => {
                     style="max-height: 250px"
                     class="sticky-header-table"
                 >
+                    <template v-slot:body-cell-reprint="props">
+                        <q-td :props="props" class="text-center">
+                            <q-btn 
+                                icon="print" 
+                                color="primary" 
+                                flat 
+                                round 
+                                dense 
+                                size="sm" 
+                                @click.stop="onReprintLabel(props.row)"
+                            >
+                                <q-tooltip>Reprint this label</q-tooltip>
+                            </q-btn>
+                        </q-td>
+                    </template>
                     <template v-slot:body-cell-actions="props">
                         <q-td :props="props" class="text-center">
                             <q-btn 
@@ -2022,70 +2098,12 @@ const onSelectBatch = (index: number) => {
           <div class="row justify-center q-mb-md">
             <div class="label-preview-container q-pa-md shadow-2">
             <!-- Main Label Area -->
-            <div class="main-label-area q-pa-sm row">
-              <!-- Text Details -->
-              <div class="col-7 text-body2 q-pr-sm" style="line-height: 1.4">
-                <div class="row q-mb-xs">
-                  <div class="col-5 text-weight-light">SKU Name</div>
-                  <div class="col-7 text-weight-bolder text-uppercase">{{ labelData?.sku_id }}</div>
-                </div>
-                <div class="row q-mb-xs">
-                  <div class="col-5 text-weight-light">Base Quantity</div>
-                  <div class="col-7 text-weight-bolder">{{ labelData?.base_quantity }} kg</div>
-                </div>
-                <div class="row q-mb-xs">
-                  <div class="col-5 text-weight-light">Item Number</div>
-                  <div class="col-7 text-weight-bolder">{{ labelData?.item_number }}</div>
-                </div>
-                <div class="row q-mb-xs">
-                  <div class="col-5 text-weight-light">Ref Code</div>
-                  <div class="col-7 text-weight-bolder">{{ labelData?.re_code }}</div>
-                </div>
-                <div class="row q-mb-xs">
-                  <div class="col-5 text-weight-light">Order Code</div>
-                  <div class="col-7 text-weight-bolder">{{ labelData?.order_code }}</div>
-                </div>
-                <div class="row">
-                  <div class="col-5 text-weight-light">Batch ID</div>
-                  <div class="col-7 text-weight-bolder">{{ labelData?.batch_id }}</div>
-                </div>
-              </div>
-              <!-- QR Code -->
-              <div class="col-5 flex flex-center">
-                <q-icon name="qr_code_2" size="140px" />
-              </div>
-            </div>
-
-            <!-- Weight / Packages Footer of Main Label -->
-            <div class="row q-px-sm q-pb-md">
-              <div class="col-6 text-center">
-                <div class="text-overline text-grey-7" style="line-height: 1">Weight (kg)</div>
-                <div class="text-h6 text-weight-bold text-blue-9">
-                  {{ labelData?.net_volume }} / {{ labelData?.total_volume }}
-                </div>
-              </div>
-              <div class="col-6 text-center border-left">
-                <div class="text-overline text-grey-7" style="line-height: 1">Packages</div>
-                <div class="text-h6 text-weight-bold text-deep-orange-9">
-                  {{ labelData?.package_no }} / {{ labelData?.total_packages }}
-                </div>
-              </div>
-            </div>
-
-            <q-separator color="grey-3" size="2px" />
-
-            <!-- Sub Label Strip -->
-            <div class="sub-label-area q-pa-sm row items-center bg-white q-mt-sm rounded-borders">
-              <div class="col-9 text-caption text-mono" style="line-height: 1.2; font-size: 0.75rem;">
-                <div>{{ labelData?.order_code }}, {{ labelData?.item_number }}, {{ labelData?.re_code }}</div>
-                <div>{{ labelData?.sku_id }}, {{ labelData?.base_quantity }} kg</div>
-                <div>W: {{ labelData?.net_volume }} / {{ labelData?.total_volume }}</div>
-                <div>P: {{ labelData?.package_no }} / {{ labelData?.total_packages }}</div>
-              </div>
-              <div class="col-3 flex flex-center">
-                <q-icon name="qr_code_2" size="60px" />
-              </div>
-            </div>
+            <!-- SVG Production Label Render -->
+            <div 
+              v-if="labelDataMapping" 
+              class="label-svg-preview bg-white q-pa-md shadow-2 flex flex-center"
+              v-html="renderedLabel"
+            ></div>
             </div>
           </div>
 
@@ -2093,9 +2111,10 @@ const onSelectBatch = (index: number) => {
           <div class="row justify-end">
             <q-btn
               label="Print"
-              color="grey-6"
+              color="primary"
               class="q-px-xl q-py-sm"
               size="lg"
+              unelevated
               @click="onPrintLabel"
               no-caps
             />
@@ -2383,18 +2402,17 @@ const onSelectBatch = (index: number) => {
   word-break: break-all;
 }
 
-.intake-label-6x6 {
-  width: 550px;
-  height: 550px;
-  background: #fff;
-  border: 4px solid #000;
-  display: flex;
-  flex-direction: column;
+.label-svg-preview {
+  width: 100%;
+  max-width: 400px;
+  min-height: 400px;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-.intake-header {
-  border-bottom: 3px solid #000;
-  background: #eee;
+.label-svg-preview :deep(svg) {
+  width: 100%;
+  height: auto;
 }
 
 /* Print Specifics */

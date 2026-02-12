@@ -1,0 +1,11 @@
+{
+  "scripts": {
+    "start": "./start-app.sh",
+    "dev": "./dev-app.sh",
+    "stop": "./stop-app.sh",
+    "status": "./status-app.sh"
+  },
+  "dependencies": {
+    "pm2": "^6.0.14"
+  }
+}

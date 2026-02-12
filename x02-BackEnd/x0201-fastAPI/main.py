@@ -69,18 +69,13 @@ app = FastAPI(
 )
 
 # CORS Configuration
-allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
-allowed_origins = (
-    allowed_origins_env.split(",") 
-    if allowed_origins_env 
-    else ["http://localhost:3000", "http://127.0.0.1:3000", "*"]
-)
+allowed_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_credentials=False,
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -89,15 +84,14 @@ app.add_middleware(
 # =============================================================================
 
 # Include all routers
-app.include_router(auth_router)
-app.include_router(users_router)
-app.include_router(ingredients_router)
-app.include_router(skus_router)
-app.include_router(production_router)
-app.include_router(plants_router)
-app.include_router(monitoring_router)
-app.include_router(views_router)
-app.include_router(warehouses_router)
+all_routers = [
+    auth_router, users_router, ingredients_router, skus_router,
+    production_router, plants_router, monitoring_router,
+    views_router, warehouses_router
+]
+
+for router in all_routers:
+    app.include_router(router)
 
 
 # =============================================================================
@@ -120,4 +114,5 @@ def read_root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

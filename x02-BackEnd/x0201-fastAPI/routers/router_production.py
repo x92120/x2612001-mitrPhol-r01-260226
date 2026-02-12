@@ -110,6 +110,53 @@ def get_production_batch_by_id_str(batch_id_str: str, db: Session = Depends(get_
 # PREBATCH RECORD ENDPOINTS
 # =============================================================================
 
+@router.get("/prebatch-recs/summary/{batch_id}")
+@router.get("/prebatch_recs/summary/{batch_id}")
+def get_prebatch_records_summary(batch_id: str, db: Session = Depends(get_db)):
+    """
+    Returns a summary of prebatch records grouped by ingredient.
+    Matches records by either batch_record_id prefix or plan_id.
+    """
+    # Try searching by full batch ID prefix first
+    records = db.query(models.PreBatchRec).filter(
+        models.PreBatchRec.batch_record_id.like(f"{batch_id}%")
+    ).all()
+    
+    # If no records found, try searching by plan_id if the batch_id looks like a Plan ID
+    # or find records where plan_id matches the prefix of the batch_id
+    if not records:
+        # Example batch_id: plan-Line-3-2026-02-07-003-003
+        # Extract plan part: plan-Line-3-2026-02-07-003
+        plan_part = "-".join(batch_id.split("-")[:-1]) if "-" in batch_id else batch_id
+        records = db.query(models.PreBatchRec).filter(
+            models.PreBatchRec.plan_id == plan_part
+        ).all()
+    
+    summary = {}
+    for r in records:
+        if r.re_code not in summary:
+            # Try to find ingredient name
+            ing = db.query(models.Ingredient).filter(models.Ingredient.re_code == r.re_code).first()
+            summary[r.re_code] = {
+                "id": r.req_id,
+                "re_code": r.re_code,
+                "ingredient_name": ing.name if ing else r.re_code,
+                "required_volume": r.total_volume or 0,
+                "net_volume": 0,
+                "package_count": 0,
+                "total_packages": r.total_packages or 0,
+                "wh": r.req.wh if r.req else "-",
+                "status": 1
+            }
+        
+        summary[r.re_code]["net_volume"] += r.net_volume or 0
+        summary[r.re_code]["package_count"] += 1
+        
+        if r.package_no >= (r.total_packages or 0) and r.total_packages:
+            summary[r.re_code]["status"] = 2
+
+    return list(summary.values())
+
 @router.get("/prebatch-recs/", response_model=List[schemas.PreBatchRec])
 def get_prebatch_recs(skip: int = 0, limit: int = 100, wh: Optional[str] = None, db: Session = Depends(get_db)):
     """Get all prebatch records."""
@@ -123,9 +170,12 @@ def get_prebatch_reqs_by_batch(batch_id: str, db: Session = Depends(get_db)):
 @router.get("/prebatch-recs/by-batch/{batch_id}", response_model=List[schemas.PreBatchRec])
 def get_prebatch_recs_by_batch(batch_id: str, db: Session = Depends(get_db)):
     """Get prebatch records filtered by batch ID."""
-    # This queries the records table by searching for the batch ID in the record ID's prefix
-    # assuming record IDs follow batch_id-XXX format.
-    return db.query(models.PreBatchRec).filter(models.PreBatchRec.batch_record_id.like(f"{batch_id}%")).all()
+    return crud.get_prebatch_recs_by_batch(db, batch_id=batch_id)
+
+@router.get("/prebatch-recs/by-plan/{plan_id}", response_model=List[schemas.PreBatchRec])
+def get_prebatch_recs_by_plan(plan_id: str, db: Session = Depends(get_db)):
+    """Get prebatch records filtered by production plan ID."""
+    return crud.get_prebatch_recs_by_plan(db, plan_id=plan_id)
 
 @router.post("/prebatch-recs/", response_model=schemas.PreBatchRec)
 def create_prebatch_rec(record: schemas.PreBatchRecCreate, db: Session = Depends(get_db)):
@@ -139,7 +189,6 @@ def delete_prebatch_rec(record_id: int, db: Session = Depends(get_db)):
     if not success:
         raise HTTPException(status_code=404, detail="Record not found")
     return {"status": "success"}
-
 
 # =============================================================================
 # DASHBOARD & ANALYTICS
