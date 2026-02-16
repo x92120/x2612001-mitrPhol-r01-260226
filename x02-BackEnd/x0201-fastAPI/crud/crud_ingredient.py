@@ -1,0 +1,195 @@
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from typing import Optional, List
+from datetime import date
+import models
+import schemas
+
+# Ingredient CRUD
+def get_ingredient_by_id(db: Session, ingredient_id: str) -> Optional[models.Ingredient]:
+    """Get ingredient by ID"""
+    return db.query(models.Ingredient).filter(models.Ingredient.ingredient_id == ingredient_id).first()
+
+def get_ingredient_by_mat_sap_code(db: Session, mat_sap_code: str) -> Optional[models.Ingredient]:
+    """Get ingredient by mat_sap_code"""
+    return db.query(models.Ingredient).filter(models.Ingredient.mat_sap_code == mat_sap_code).first()
+
+def search_ingredient(db: Session, query: str) -> Optional[models.Ingredient]:
+    """Search ingredient by ID or blind code"""
+    # Try by ID first
+    ingredient = db.query(models.Ingredient).filter(models.Ingredient.ingredient_id == query).first()
+    if ingredient:
+        return ingredient
+    # Try by mat_sap_code
+    ingredient = db.query(models.Ingredient).filter(models.Ingredient.mat_sap_code == query).first()
+    if ingredient:
+        return ingredient
+    # Try by re_code
+    ingredient = db.query(models.Ingredient).filter(models.Ingredient.re_code == query).first()
+    if ingredient:
+        return ingredient
+    # Try by blind_code
+    return db.query(models.Ingredient).filter(models.Ingredient.blind_code == query).first()
+
+def get_ingredients(db: Session, skip: int = 0, limit: int = 100) -> List[models.Ingredient]:
+    """Get list of ingredients with pagination"""
+    return db.query(models.Ingredient).offset(skip).limit(limit).all()
+
+def create_ingredient(db: Session, ingredient: schemas.IngredientCreate) -> models.Ingredient:
+    """Create new ingredient with error handling"""
+    try:
+        db_ingredient = models.Ingredient(**ingredient.dict())
+        db.add(db_ingredient)
+        db.commit()
+        db.refresh(db_ingredient)
+        return db_ingredient
+    except IntegrityError as e:
+        db.rollback()
+        raise ValueError(f"Database integrity error: {str(e)}")
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise RuntimeError(f"Database error: {str(e)}")
+
+def update_ingredient(db: Session, ingredient_id: int, ingredient: schemas.IngredientCreate) -> Optional[models.Ingredient]:
+    """Update ingredient by ID"""
+    try:
+        db_ingredient = db.query(models.Ingredient).filter(models.Ingredient.id == ingredient_id).first()
+        if not db_ingredient:
+            return None
+        
+        update_data = ingredient.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(db_ingredient, key, value)
+            
+        db.commit()
+        db.refresh(db_ingredient)
+        return db_ingredient
+    except IntegrityError as e:
+        db.rollback()
+        raise ValueError(f"Database integrity error: {str(e)}")
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise RuntimeError(f"Database error: {str(e)}")
+
+def delete_ingredient(db: Session, ingredient_id: int) -> Optional[models.Ingredient]:
+    """Delete ingredient by ID"""
+    try:
+        db_ingredient = db.query(models.Ingredient).filter(models.Ingredient.id == ingredient_id).first()
+        if db_ingredient:
+            db.delete(db_ingredient)
+            db.commit()
+        return db_ingredient
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise RuntimeError(f"Database error: {str(e)}")
+
+# Ingredient Intake List CRUD
+def get_ingredient_intake_lists(db: Session, skip: int = 0, limit: int = 100) -> List[models.IngredientIntakeList]:
+    """Get list of ingredient intake list with pagination"""
+    return db.query(models.IngredientIntakeList).options(joinedload(models.IngredientIntakeList.history)).order_by(models.IngredientIntakeList.intake_at.desc()).offset(skip).limit(limit).all()
+
+def get_ingredient_intake_list(db: Session, list_id: int) -> Optional[models.IngredientIntakeList]:
+    """Get ingredient intake list by ID"""
+    return db.query(models.IngredientIntakeList).options(joinedload(models.IngredientIntakeList.history)).filter(models.IngredientIntakeList.id == list_id).first()
+
+def create_ingredient_intake_list(db: Session, list_data: schemas.IngredientIntakeListCreate) -> models.IngredientIntakeList:
+    """Create new ingredient intake list with error handling"""
+    try:
+        db_list = models.IngredientIntakeList(**list_data.dict())
+        db.add(db_list)
+        db.commit()
+        db.refresh(db_list)
+
+        # Log initial creation history
+        db_history = models.IngredientIntakeHistory(
+            intake_list_id=db_list.id,
+            action="Created",
+            new_status=db_list.status,
+            changed_by=db_list.intake_by,
+            remarks="Initial record creation"
+        )
+        db.add(db_history)
+        db.commit()
+        
+        return db_list
+    except IntegrityError as e:
+        db.rollback()
+        raise ValueError(f"Database integrity error: {str(e)}")
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise RuntimeError(f"Database error: {str(e)}")
+
+def update_ingredient_intake_list(db: Session, list_id: int, list_update: schemas.IngredientIntakeListCreate) -> Optional[models.IngredientIntakeList]:
+    """Update ingredient intake list"""
+    try:
+        db_list = db.query(models.IngredientIntakeList).filter(models.IngredientIntakeList.id == list_id).first()
+        if db_list:
+            old_status = db_list.status
+            update_data = list_update.dict(exclude_unset=True)
+            
+            # Check for significant changes to log
+            new_status = update_data.get('status')
+            
+            for key, value in update_data.items():
+                setattr(db_list, key, value)
+            
+            db.commit()
+            db.refresh(db_list)
+
+            # Log history if status changed or just a general update
+            action = "Status Change" if new_status and new_status != old_status else "Modified"
+            db_history = models.IngredientIntakeHistory(
+                intake_list_id=db_list.id,
+                action=action,
+                old_status=old_status,
+                new_status=db_list.status,
+                changed_by=db_list.edit_by or "system",
+                remarks=f"Record updated via API"
+            )
+            db.add(db_history)
+            db.commit()
+
+        return db_list
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise RuntimeError(f"Database error: {str(e)}")
+
+def delete_ingredient_intake_list(db: Session, list_id: int) -> Optional[models.IngredientIntakeList]:
+    """Delete ingredient intake list with error handling"""
+    try:
+        db_list = db.query(models.IngredientIntakeList).filter(models.IngredientIntakeList.id == list_id).first()
+        if db_list:
+            db.delete(db_list)
+            db.commit()
+        return db_list
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise RuntimeError(f"Database error: {str(e)}")
+
+def get_next_intake_id(db: Session) -> str:
+    """Generate next intake ID: intake-yyyy-mm-dd-nnn"""
+    today_str = date.today().strftime("%Y-%m-%d")
+    pattern = f"intake-{today_str}-%"
+    
+    # Count existing for today or find max
+    # We use len() of query to simple count since we renamed table
+    # Optimally we would parse the max number, but count+1 is usually fine if no deletes
+    # To be robust against deletes, let's try to find max
+    
+    # This query might be slow if huge data, but fine for now.
+    last_record = db.query(models.IngredientIntakeList)\
+        .filter(models.IngredientIntakeList.intake_lot_id.like(pattern))\
+        .order_by(models.IngredientIntakeList.intake_lot_id.desc())\
+        .first()
+        
+    if last_record:
+        try:
+            # Extract last 3 digits
+            last_num = int(last_record.intake_lot_id.split('-')[-1])
+            new_num = last_num + 1
+        except:
+            new_num = 1
+    else:
+        new_num = 1
+        
+    return f"intake-{today_str}-{new_num:03d}"
