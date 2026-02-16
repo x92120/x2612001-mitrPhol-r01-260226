@@ -5,21 +5,28 @@
 
 echo "🚀 Starting xMixing in DEVELOPMENT mode..."
 
-# Check if pm2 is installed
-if ! command -v pm2 &> /dev/null
-then
-    export PATH=$PATH:./node_modules/.bin
-fi
+# Start MQTT Bridge
+echo "🌉 Starting MQTT Bridge..."
+/Users/x92120/.xMixing_venv/bin/python3 ./x09-LocalMqtt/x01-ScaleRead/mqtt_bridge.py > bridge.log 2>&1 &
 
-# Start Docker Infrastructure (RabbitMQ, Node-Red)
-echo "🐳 Starting Docker Infrastructure..."
-cd x09-LocalMqtt
-docker-compose up -d
-cd ..
+# Start Backend
+echo "⚙️ Starting Backend (FastAPI)..."
+cd x02-BackEnd/x0201-fastAPI
+PORT=8001 /Users/x92120/.xMixing_venv/bin/python3 main.py > ../../backend.log 2>&1 &
+cd ../..
 
-# Start the application in development mode (with watch enabled for bridge)
-pm2 start ecosystem.config.js --env development
+# Start Frontend
+echo "💻 Starting Frontend (Nuxt)..."
+cd x01-FrontEnd/x0101-xMixing_Nuxt
+npm run dev > ../../frontend.log 2>&1 &
+cd ../..
 
 echo "✅ All services started in dev mode."
-echo "👀 Streaming logs... (Press Ctrl+C to stop streaming, services will continue running)"
-pm2 logs
+echo "------------------------------------------------"
+echo "Backend: http://localhost:8001/docs"
+echo "Frontend: http://localhost:3000"
+echo "------------------------------------------------"
+echo "Use './status-app.sh' to check status"
+echo "Use './stop-app.sh' to stop all services"
+echo "------------------------------------------------"
+echo "👀 To see logs, run: tail -f backend.log frontend.log bridge.log"

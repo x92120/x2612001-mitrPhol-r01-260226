@@ -5,18 +5,16 @@
 
 echo "🛑 Stopping xMixing Application Suite..."
 
-# Check if pm2 is installed
-if ! command -v pm2 &> /dev/null
-then
-    export PATH=$PATH:./node_modules/.bin
-fi
+echo "🛑 Stopping xMixing Application processes..."
 
-pm2 stop ecosystem.config.js
-pm2 delete ecosystem.config.js
+pkill -f "mqtt_bridge.py"
+pkill -f "python3 main.py"
+pkill -f "nuxt"
+pkill -f "pm2"
 
 echo "🐳 Stopping Docker Infrastructure..."
 cd x09-LocalMqtt
 docker-compose stop
 cd ..
 
-echo "✅ All services stopped (Docker containers stopped but not removed)."
+echo "✅ All services stopped."

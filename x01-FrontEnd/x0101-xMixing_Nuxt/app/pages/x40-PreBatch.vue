@@ -23,6 +23,9 @@ const deleteInput = ref('')
 const isPackageSizeLocked = ref(true)
 const showAuthDialog = ref(false)
 const authPassword = ref('')
+const selectedPreBatchLogs = ref<any[]>([])
+const showPackingBoxLabelDialog = ref(false)
+const renderedPackingBoxLabel = ref('')
 
 interface InventoryItem {
   id: number
@@ -51,7 +54,7 @@ const productionPlanOptions = ref<string[]>([])
 const allBatches = ref<any[]>([])
 const filteredBatches = ref<any[]>([])
 // const skuSteps = ref<any[]>([]) // Removed
-const prebatchRequires = ref<any[]>([])
+const prebatchItems = ref<any[]>([])
 const ingredientOptions = ref<{label: string, value: string}[]>([])
 
 
@@ -176,33 +179,33 @@ const onBatchSelect = async (plan: any, batch: any, index: number) => {
   filterBatchesByPlan()
 
   // Fetch prebatch requirements from db table (triggers auto-creation if missing)
-  await fetchPrebatchRequires(batch.batch_id)
+  await fetchPrebatchItems(batch.batch_id)
   
   // Fetch records for this plan
   await fetchPreBatchRecords()
 }
 
-const fetchPrebatchRequires = async (batchId: string) => {
+const fetchPrebatchItems = async (batchId: string) => {
   try {
-    // Calling the new summary endpoint based on prebatch_recs as requested
-    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-recs/summary/${batchId}`, {
+    // Calling the new summary endpoint
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-scans/summary/${batchId}`, {
       headers: getAuthHeader() as Record<string, string>
     })
-    prebatchRequires.value = data
+    prebatchItems.value = data
   } catch (error) {
-    console.error('Error fetching prebatch (recs) summary:', error)
-    prebatchRequires.value = []
+    console.error('Error fetching prebatch (scans) summary:', error)
+    prebatchItems.value = []
   }
 }
 
-const updatePrebatchRequireStatus = async (batchId: string, reCode: string, status: number) => {
+const updatePrebatchItemStatus = async (batchId: string, reCode: string, status: number) => {
   try {
-    await $fetch(`${appConfig.apiBaseUrl}/prebatch-reqs/${batchId}/${reCode}/status?status=${status}`, {
+    await $fetch(`${appConfig.apiBaseUrl}/prebatch-items/${batchId}/${reCode}/status?status=${status}`, {
       method: 'PUT',
       headers: getAuthHeader() as Record<string, string>
     })
     // Refresh local list
-    await fetchPrebatchRequires(batchId)
+    await fetchPrebatchItems(batchId)
   } catch (error) {
     console.error('Error updating prebatch requirement status:', error)
   }
@@ -213,12 +216,12 @@ const isBatchSelected = ref(false)
 
 // Computed ingredients list based on selected Batch (or Plan)
 const selectableIngredients = computed(() => {
-    if (!prebatchRequires.value || prebatchRequires.value.length === 0) return []
+    if (!prebatchItems.value || prebatchItems.value.length === 0) return []
 
     const invList = inventoryRows.value || []
     
     // Map PBTasks to UI rows
-    return prebatchRequires.value.map((task: any, index: number) => {
+    return prebatchItems.value.map((task: any, index: number) => {
         // Find Ingredient info for package size
         const ingInfo = ingredients.value.find(i => i.re_code === task.re_code)
         
@@ -277,7 +280,7 @@ const onSelectIngredient = async (ing: any) => {
 
     // Update status to onBatch (1) if it's currently Created (0)
     if (ing.status === 0 && selectedBatch.value) {
-        await updatePrebatchRequireStatus(selectedBatch.value.batch_id, ing.re_code, 1)
+        await updatePrebatchItemStatus(selectedBatch.value.batch_id, ing.re_code, 1)
     }
 }
 
@@ -874,6 +877,46 @@ const updateDialogPreview = async () => {
 watch(showLabelDialog, (val) => {
   if (val) updateDialogPreview()
 })
+
+const packingBoxLabelDataMapping = computed(() => {
+  if (!selectedBatch.value || selectedPreBatchLogs.value.length === 0) return null
+  
+  const totalWeight = selectedPreBatchLogs.value.reduce((sum, row) => sum + (Number(row.net_volume) || 0), 0)
+  const bagCount = selectedPreBatchLogs.value.length
+  
+  return {
+    BoxID: selectedBatch.value.plan_id || '-',
+    BatchID: selectedBatch.value.batch_id || '-',
+    BagCount: bagCount,
+    NetWeight: totalWeight.toFixed(2),
+    Operator: user.value?.username || '-',
+    Timestamp: new Date().toLocaleString(),
+    BoxQRCode: `${selectedBatch.value.plan_id},${selectedBatch.value.batch_id},BOX,${bagCount},${totalWeight.toFixed(2)}`
+  }
+})
+
+const updatePackingBoxPreview = async () => {
+  if (packingBoxLabelDataMapping.value) {
+    const svg = await generateLabelSvg('packingbox-label', packingBoxLabelDataMapping.value)
+    renderedPackingBoxLabel.value = svg || ''
+  }
+}
+
+watch(showPackingBoxLabelDialog, (val) => {
+  if (val) updatePackingBoxPreview()
+})
+
+const onPrintPackingBoxLabel = async () => {
+  if (!packingBoxLabelDataMapping.value) return
+  
+  if (renderedPackingBoxLabel.value) {
+    printLabel(renderedPackingBoxLabel.value)
+    $q.notify({ type: 'positive', message: 'Packing Box Label Sent to Printer' })
+    showPackingBoxLabelDialog.value = false
+    selectedPreBatchLogs.value = [] // Clear selection after print
+  }
+}
+
 const batchedVolume = ref(0) // Total volume already batched
 const remainVolume = computed(() => {
     return Math.max(0, requireVolume.value - batchedVolume.value)
@@ -1001,7 +1044,7 @@ const executeDeletion = async (record: any) => {
       
       await fetchPreBatchRecords()
       if (selectedBatch.value) {
-        await fetchPrebatchRequires(selectedBatch.value.batch_id)
+      await fetchPrebatchItems(selectedBatch.value.batch_id)
       }
     } catch (err) {
       console.error('Error deleting record:', err)
@@ -1920,9 +1963,24 @@ const onSelectBatch = (index: number) => {
                     square
                     separator="cell"
                     :pagination="{ rowsPerPage: 10 }"
+                    selection="multiple"
+                    v-model:selected="selectedPreBatchLogs"
                     style="max-height: 250px"
                     class="sticky-header-table"
                 >
+                    <template v-slot:top-right>
+                        <q-btn
+                            v-if="selectedPreBatchLogs.length > 0"
+                            label="Print Packing Box Label"
+                            color="green-7"
+                            icon="inventory_2"
+                            dense
+                            no-caps
+                            unelevated
+                            class="q-px-sm"
+                            @click="showPackingBoxLabelDialog = true"
+                        />
+                    </template>
                     <template v-slot:body-cell-reprint="props">
                         <q-td :props="props" class="text-center">
                             <q-btn 
@@ -2306,6 +2364,42 @@ const onSelectBatch = (index: number) => {
                     </div>
                 </div>
             </div>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- Packing Box Label Dialog -->
+    <q-dialog v-model="showPackingBoxLabelDialog" persistent>
+      <q-card style="min-width: 650px; max-width: 800px">
+        <q-card-section class="row items-center q-pb-none bg-green-1 text-green-9">
+          <div class="text-h6 text-weight-bold">Packing Box Label Preview</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section class="q-pa-md">
+          <div class="row justify-center q-mb-md">
+            <div class="label-preview-container q-pa-md shadow-2">
+              <div 
+                v-if="packingBoxLabelDataMapping" 
+                class="label-svg-preview bg-white q-pa-md flex flex-center"
+                v-html="renderedPackingBoxLabel"
+              ></div>
+            </div>
+          </div>
+
+          <div class="row justify-end q-gutter-sm">
+            <q-btn label="Cancel" flat color="grey-7" v-close-popup />
+            <q-btn
+              label="Print Packing Box Label"
+              color="green-7"
+              class="q-px-xl"
+              size="lg"
+              unelevated
+              @click="onPrintPackingBoxLabel"
+              no-caps
+            />
+          </div>
         </q-card-section>
       </q-card>
     </q-dialog>
