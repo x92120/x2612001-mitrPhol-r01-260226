@@ -44,23 +44,17 @@ const filteredPlans = computed(() => {
 // Fetch plants from API
 const fetchPlants = async () => {
   try {
-    const response = await fetch(`${appConfig.apiBaseUrl}/plants/`)
-    if (response.ok) {
-      const data = await response.json()
-      // Use map-options/emit-value in q-select to handle objects
-      plantOptions.value = data.map((p: any) => ({
-        label: p.plant_name,
-        value: p.plant_id,
-      }))
-      // Build capacity and name map
-      data.forEach((p: any) => {
-        plantConfigs.value[p.plant_id] = p.plant_capacity
-        plantNames.value[p.plant_id] = p.plant_name
-      })
-      // Set default plant if available
-      if (plantOptions.value.length > 0 && !plant.value) {
-        plant.value = plantOptions.value[0]?.value || ''
-      }
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/plants/`)
+    plantOptions.value = data.map((p: any) => ({
+      label: p.plant_name,
+      value: p.plant_id,
+    }))
+    data.forEach((p: any) => {
+      plantConfigs.value[p.plant_id] = p.plant_capacity
+      plantNames.value[p.plant_id] = p.plant_name
+    })
+    if (plantOptions.value.length > 0 && !plant.value) {
+      plant.value = plantOptions.value[0]?.value || ''
     }
   } catch (error) {
     console.error('Error fetching plants:', error)
@@ -229,22 +223,15 @@ const batchColumns: QTableColumn[] = [
 // Fetch SKUs
 const fetchSkus = async () => {
   try {
-    const response = await fetch(`${appConfig.apiBaseUrl}/skus/`)
-    if (response.ok) {
-      availableSkus.value = await response.json()
-    }
+    availableSkus.value = await $fetch<any[]>(`${appConfig.apiBaseUrl}/skus/`)
   } catch (error) {
     console.error('Error fetching SKUs:', error)
   }
 }
 
-// Fetch Plans
 const fetchPlans = async () => {
   try {
-    const response = await fetch(`${appConfig.apiBaseUrl}/production-plans/?skip=0&limit=100`)
-    if (response.ok) {
-      plans.value = await response.json()
-    }
+    plans.value = await $fetch<any[]>(`${appConfig.apiBaseUrl}/production-plans/?skip=0&limit=100`)
   } catch (error) {
     console.error('Error fetching plans:', error)
   }
@@ -271,23 +258,17 @@ const onCreatePlan = async () => {
       finish_date: finishDate.value,
     }
 
-    const response = await fetch(`${appConfig.apiBaseUrl}/production-plans/`, {
+    await $fetch(`${appConfig.apiBaseUrl}/production-plans/`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: payload,
     })
 
-    if (response.ok) {
-      $q.notify({ type: 'positive', message: 'Plan created successfully' })
-      resetForm()
-      fetchPlans()
-    } else {
-      const err = await response.json()
-      $q.notify({ type: 'negative', message: err.detail || 'Failed to create plan' })
-    }
-  } catch (error) {
+    $q.notify({ type: 'positive', message: 'Plan created successfully' })
+    resetForm()
+    fetchPlans()
+  } catch (error: any) {
     console.error('Error creating plan:', error)
-    $q.notify({ type: 'negative', message: 'Network error or server down' })
+    $q.notify({ type: 'negative', message: error.data?.detail || 'Failed to create plan' })
   } finally {
     isCreating.value = false
   }
@@ -309,22 +290,15 @@ const onCancelPlan = async (plan: any) => {
     persistent: true
   }).onOk(async (comment: string) => {
     try {
-      const response = await fetch(`${appConfig.apiBaseUrl}/production-plans/${plan.id}/cancel`, {
+      await $fetch(`${appConfig.apiBaseUrl}/production-plans/${plan.id}/cancel`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           comment: comment || null,
-          changed_by: 'user' // You can replace this with actual user info
-        })
+          changed_by: 'user'
+        }
       })
-
-      if (response.ok) {
-        $q.notify({ type: 'positive', message: 'Plan cancelled successfully' })
-        fetchPlans()
-      } else {
-        const error = await response.json()
-        $q.notify({ type: 'negative', message: `Failed to cancel plan: ${error.detail || 'Unknown error'}` })
-      }
+      $q.notify({ type: 'positive', message: 'Plan cancelled successfully' })
+      fetchPlans()
     } catch (e) {
       console.error(e)
       $q.notify({ type: 'negative', message: 'Network error while cancelling plan' })
@@ -333,37 +307,31 @@ const onCancelPlan = async (plan: any) => {
 }
 
 const showHistory = async (plan: any) => {
-  try {
-    const response = await fetch(`${appConfig.apiBaseUrl}/production-plans/${plan.id}/history`)
-    if (response.ok) {
-      const history = await response.json()
-      
-      // Format history for display
-      const historyText = history.length > 0 
-        ? history.map((h: any) => {
-            const date = new Date(h.changed_at).toLocaleString()
-            const statusChange = h.old_status && h.new_status 
-              ? `${h.old_status} → ${h.new_status}` 
-              : h.new_status || 'N/A'
-            return `<div style="margin-bottom: 12px; padding: 8px; background: #f5f5f5; border-radius: 4px;">
-              <strong>${h.action.toUpperCase()}</strong> by <strong>${h.changed_by}</strong><br/>
-              <small>${date}</small><br/>
-              Status: ${statusChange}<br/>
-              ${h.remarks ? `<em>${h.remarks}</em>` : ''}
-            </div>`
-          }).join('')
-        : '<p>No history available for this plan.</p>'
-      
-      $q.dialog({
-        title: `History: ${plan.plan_id}`,
-        message: historyText,
-        html: true,
-        style: 'max-width: 600px'
-      })
-    } else {
-      $q.notify({ type: 'negative', message: 'Failed to load history' })
-    }
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/production-plans/${plan.id}/history`)
+    const historyText = data.length > 0 
+      ? data.map((h: any) => {
+          const date = new Date(h.changed_at).toLocaleString()
+          const statusChange = h.old_status && h.new_status 
+            ? `${h.old_status} → ${h.new_status}` 
+            : h.new_status || 'N/A'
+          return `<div style="margin-bottom: 12px; padding: 8px; background: #f5f5f5; border-radius: 4px;">
+            <strong>${h.action.toUpperCase()}</strong> by <strong>${h.changed_by}</strong><br/>
+            <small>${date}</small><br/>
+            Status: ${statusChange}<br/>
+            ${h.remarks ? `<em>${h.remarks}</em>` : ''}
+          </div>`
+        }).join('')
+      : '<p>No history available for this plan.</p>'
+    
+    $q.dialog({
+      title: `History: ${plan.plan_id}`,
+      message: historyText,
+      html: true,
+      style: 'max-width: 600px'
+    })
   } catch (e) {
+    console.error('Error loading history:', e)
+    $q.notify({ type: 'negative', message: 'Failed to load history' })
   }
 }
 
@@ -676,484 +644,281 @@ onMounted(() => {
   <RouterView v-slot="{ Component }">
     <component v-if="Component" :is="Component" />
     <q-page v-else class="q-pa-md bg-white">
-      <div class="row justify-between items-center q-mb-sm">
-        <div class="row items-center q-gutter-sm">
-          <q-btn
-            :label="showSkuList ? 'Hide SKU List' : 'Show SKU List'"
-            :color="showSkuList ? 'grey-7' : 'primary'"
-            unelevated
-            no-caps
-            dense
-            @click="showSkuList = !showSkuList"
-            icon="list_alt"
-          />
+      <!-- Header Section -->
+      <div class="bg-blue-9 text-white q-pa-md rounded-borders q-mb-md shadow-2">
+        <div class="row justify-between items-center">
+          <div class="text-h6 text-weight-bolder">Production Plan List</div>
+          <div class="text-caption text-weight-bold">Version 0.3</div>
         </div>
-        <div class="text-caption">Version 0.2</div>
       </div>
 
-      <!-- SKU Master List Table -->
-      <q-slide-transition>
-        <div v-show="showSkuList" class="q-mb-xl">
-          <div class="row items-center justify-between q-mb-sm">
-            <div class="text-h6">SKU Master List</div>
-            <div class="row items-center q-gutter-sm">
-              <q-btn
-                icon="refresh"
-                color="primary"
-                round
-                flat
-                dense
-                @click="fetchSkus"
-              >
-                <q-tooltip>Refresh</q-tooltip>
-              </q-btn>
-              <q-btn
-                icon="filter_alt_off"
-                color="primary"
-                round
-                flat
-                dense
-                @click="resetSkuFilters"
-              >
-                <q-tooltip>Reset Filters</q-tooltip>
-              </q-btn>
-              <q-btn
-                icon="filter_alt"
-                color="accent"
-                round
-                flat
-                dense
-                @click="showSkuFilters = !showSkuFilters"
-              >
-                <q-tooltip>{{ showSkuFilters ? 'Hide Filters' : 'Show Filters' }}</q-tooltip>
-              </q-btn>
-              <q-checkbox
-                v-model="showAllSkus"
-                label="Show All (including Inactive)"
-                dense
-              />
+      <div class="row q-col-gutter-md">
+        <!-- LEFT COLUMN: Production Plans List -->
+        <div class="col-12 col-md-4 column q-gutter-y-sm" style="height: calc(100vh - 160px);">
+          <div class="row items-center justify-between q-mb-xs">
+            <div class="text-subtitle2 text-weight-bold">Plans Master</div>
+            <div class="row items-center q-gutter-x-xs">
+              <q-btn icon="refresh" flat round dense color="primary" @click="fetchPlans" size="sm" />
+              <q-checkbox v-model="showAll" label="Show All" dense class="text-caption" />
             </div>
           </div>
-          <q-card flat bordered class="custom-table-border">
+          
+          <q-card flat bordered class="col column shadow-1 overflow-hidden" style="border-radius: 8px;">
             <q-table
-              :rows="filteredSkus"
-              :columns="skuColumns"
+              :rows="filteredPlans"
+              :columns="columns"
               row-key="id"
               flat
               dense
-              :pagination="{ rowsPerPage: 10 }"
+              class="fit text-caption sticky-header-table"
+              :pagination="{ rowsPerPage: 0 }"
+              hide-bottom
             >
               <template v-slot:header="props">
-                <q-tr :props="props">
+                <q-tr :props="props" class="bg-blue-grey-2">
+                  <q-th auto-width />
                   <q-th
                     v-for="col in props.cols"
                     :key="col.name"
                     :props="props"
-                    class="text-black bg-white"
-                    style="vertical-align: bottom; font-weight: normal; border-bottom: 2px solid #000"
+                    class="text-weight-bold"
                   >
-                    <div v-if="showSkuFilters && col.name !== 'sku_actions'" class="q-pb-sm">
-                      <q-input
-                        v-model="skuFilters[col.field]"
-                        dense
-                        outlined
-                        bg-color="white"
-                        class="q-pa-none"
-                        placeholder="Search"
-                        style="font-weight: normal"
-                        @click.stop
-                      ></q-input>
-                    </div>
                     {{ col.label }}
                   </q-th>
                 </q-tr>
               </template>
-              <template v-slot:body-cell-status="props">
-                <q-td :props="props">
-                  <q-chip
-                    :color="props.value === 'Active' ? 'positive' : 'grey'"
-                    text-color="white"
-                    size="xs"
-                  >
-                    {{ props.value }}
-                  </q-chip>
-                </q-td>
-              </template>
-              <template v-slot:body-cell-sku_actions="props">
-                <q-td :props="props" align="center">
-                  <q-btn
-                    icon="check_circle"
-                    color="positive"
-                    unelevated
-                    no-caps
-                    dense
-                    size="sm"
-                    label="Select"
-                    @click="selectSku(props.row)"
-                  >
-                    <q-tooltip>Use this SKU for New Plan</q-tooltip>
-                  </q-btn>
-                </q-td>
+
+              <template v-slot:body="props">
+                <q-tr :props="props" class="cursor-pointer hover-bg" @click="props.expand = !props.expand">
+                  <q-td auto-width>
+                    <q-btn
+                      size="xs"
+                      color="primary"
+                      round
+                      flat
+                      dense
+                      @click.stop="props.expand = !props.expand"
+                      :icon="props.expand ? 'keyboard_arrow_up' : 'keyboard_arrow_down'"
+                    />
+                  </q-td>
+                  <q-td v-for="col in props.cols" :key="col.name" :props="props">
+                    <template v-if="col.name === 'plant'">
+                      <span class="text-weight-medium">{{ plantNames[props.row.plant] || props.row.plant }}</span>
+                    </template>
+                    <template v-else-if="col.name === 'status'">
+                       <q-badge
+                          :color="
+                            props.row.status === 'Cancelled'
+                              ? 'red'
+                              : props.row.status === 'Planned'
+                                ? 'blue'
+                                : 'green'
+                          "
+                          text-color="white"
+                          class="text-weight-bold"
+                        >
+                          {{ props.row.status }}
+                        </q-badge>
+                    </template>
+                    <template v-else-if="col.name === 'plan_id'">
+                      <span class="text-weight-bolder text-blue-9">{{ props.row.plan_id }}</span>
+                    </template>
+                    <template v-else-if="col.name === 'total_volume'">
+                      <span class="text-weight-bold">{{ props.row.total_volume }}</span>
+                    </template>
+                    <template v-else-if="col.name === 'actions'">
+                        <q-btn icon="more_vert" flat round dense size="sm" color="grey-7">
+                            <q-menu auto-close>
+                                <q-list style="min-width: 150px">
+                                    <q-item clickable @click="printPlan(props.row)">
+                                        <q-item-section avatar><q-icon name="print" color="primary" /></q-item-section>
+                                        <q-item-section>Print Plan</q-item-section>
+                                    </q-item>
+                                    <q-item clickable @click="showHistory(props.row)">
+                                        <q-item-section avatar><q-icon name="history" color="primary" /></q-item-section>
+                                        <q-item-section>View History</q-item-section>
+                                    </q-item>
+                                    <q-separator />
+                                    <q-item clickable @click="onCancelPlan(props.row)" :disable="props.row.status === 'Cancelled'">
+                                        <q-item-section avatar><q-icon name="cancel" color="negative" /></q-item-section>
+                                        <q-item-section class="text-negative">Cancel Plan</q-item-section>
+                                    </q-item>
+                                </q-list>
+                            </q-menu>
+                        </q-btn>
+                    </template>
+                    <template v-else>
+                      {{ col.value }}
+                    </template>
+                  </q-td>
+                </q-tr>
               </template>
             </q-table>
           </q-card>
-          <q-separator class="q-mt-md" color="black" size="2px" />
         </div>
-      </q-slide-transition>
 
-      <!-- HEADER FORM -->
-      <div class="q-mb-lg" id="create-plan-form">
-        <div class="text-h6 q-mb-md">Create Production Plan</div>
-        <!-- Row 1 -->
-        <div class="row q-col-gutter-md q-mb-sm">
-          <div class="col-12 col-md-3">
-            <div class="text-subtitle2 q-mb-xs">SKU-ID</div>
-            <q-select
-              outlined
-              v-model="skuId"
-              :options="filteredSkuIdOptions"
-              dense
-              bg-color="white"
-              use-input
-              input-debounce="0"
-              @filter="onSkuIdFilter"
-              emit-value
-              map-options
-              @update:model-value="onSkuIdSelect"
-            />
-          </div>
-          <div class="col-12 col-md-6">
-            <div class="text-subtitle2 q-mb-xs">SKU-Name</div>
-            <q-select
-              outlined
-              v-model="skuName"
-              :options="filteredSkuNameOptions"
-              dense
-              bg-color="white"
-              use-input
-              input-debounce="0"
-              @filter="onSkuNameFilter"
-              emit-value
-              map-options
-              @update:model-value="onSkuNameSelect"
-            />
-          </div>
-          <div class="col-12 col-md-3">
-            <div class="text-subtitle2 q-mb-xs">Plant</div>
-            <div class="row q-gutter-xs">
-              <div class="col">
-                <q-select
-                  outlined
-                  v-model="plant"
-                  :options="plantOptions"
-                  dense
-                  bg-color="white"
-                  dropdown-icon="arrow_drop_down"
-                  emit-value
-                  map-options
-                />
+        <!-- RIGHT COLUMN: Creation & SKU Master -->
+        <div class="col-12 col-md-8 column q-gutter-y-md">
+          <!-- SKU Selection Card -->
+          <q-card flat bordered class="shadow-1">
+            <q-card-section class="q-pa-sm bg-blue-grey-1 row items-center justify-between">
+              <div class="text-subtitle2 text-weight-bold">
+                <q-icon name="list_alt" class="q-mr-xs" />
+                SKU Master Lookup
               </div>
-              <div>
-                <q-btn
-                  icon="settings"
-                  color="primary"
-                  outline
-                  dense
-                  @click="$router.push({ name: 'PlantConfig' })"
-                  style="height: 40px; width: 40px"
-                >
-                  <q-tooltip>Plant Configuration</q-tooltip>
-                </q-btn>
-              </div>
-            </div>
-          </div>
-        </div>
+              <q-btn
+                :label="showSkuList ? 'Hide List' : 'Show List'"
+                :color="showSkuList ? 'grey-7' : 'primary'"
+                unelevated
+                no-caps
+                dense
+                size="sm"
+                @click="showSkuList = !showSkuList"
+                class="q-px-sm"
+              />
+            </q-card-section>
 
-        <!-- Row 2 -->
-        <div class="row q-col-gutter-md q-mb-sm">
-          <div class="col-12 col-md-3">
-            <div class="text-subtitle2 q-mb-xs">Require Total Volume</div>
-            <q-input outlined v-model="productionRequire" type="number" dense bg-color="white" />
-          </div>
-          <div class="col-12 col-md-2">
-            <div class="text-subtitle2 q-mb-xs">Batch Standard</div>
-            <q-input outlined v-model="batchStandard" type="number" dense bg-color="white" />
-          </div>
-          <div class="col-12 col-md-2">
-            <div class="text-subtitle2 q-mb-xs">Number of Batch</div>
-            <q-input
-              outlined
-              v-model="numberOfBatch"
-              type="number"
-              @update:model-value="onManualBatchChange"
-              dense
-              bg-color="white"
-            />
-          </div>
-          <div class="col-12 col-md-2">
-            <div class="text-subtitle2 q-mb-xs">Total Plan Volume</div>
-             <q-input
-              outlined
-              :model-value="totalPlanVolume"
-              readonly
-              type="number"
-              dense
-              bg-color="grey-2"
-            />
-          </div>
-        </div>
-
-        <!-- Row 3 - Dates and Action -->
-        <div class="row q-col-gutter-md q-mb-sm">
-          <div class="col-12 col-md-3">
-            <div class="text-subtitle2 q-mb-xs">Plan Start Date</div>
-            <q-input outlined v-model="startDate" dense bg-color="white" type="date" />
-          </div>
-          <div class="col-12 col-md-3">
-            <div class="text-subtitle2 q-mb-xs">Plan Finish Date</div>
-            <q-input outlined v-model="finishDate" dense bg-color="white" type="date" />
-          </div>
-          <div class="col-12 col-md-6 flex items-end justify-end">
-            <q-btn
-              label="Add Plan"
-              color="primary"
-              class="q-px-lg"
-              @click="onCreatePlan"
-              unelevated
-              no-caps
-              :loading="isCreating"
-              :disable="isCreating"
-              style="height: 40px"
-            />
-          </div>
-        </div>
-      </div>
-
-      <q-separator class="q-mb-md" color="black" size="2px" />
-
-      <!-- BATCH TABLE -->
-      <div class="row items-center justify-between q-mb-sm">
-        <div class="text-h6">Production Plans</div>
-        <div class="row items-center q-gutter-sm">
-          <q-btn
-            icon="refresh"
-            color="primary"
-            round
-            flat
-            dense
-            @click="fetchPlans"
-          >
-            <q-tooltip>Refresh</q-tooltip>
-          </q-btn>
-          <q-btn
-            icon="print"
-            color="primary"
-            round
-            flat
-            dense
-            @click="printAllPlans"
-          >
-            <q-tooltip>Print All</q-tooltip>
-          </q-btn>
-          <q-checkbox
-            v-model="showAll"
-            label="Show All (including Cancelled)"
-            dense
-          />
-        </div>
-      </div>
-      <q-card flat bordered class="q-mb-md custom-table-border">
-        <q-table
-          :rows="filteredPlans"
-          :columns="columns"
-          row-key="id"
-          flat
-          hide-bottom
-          :pagination="{ rowsPerPage: 20 }"
-        >
-          <template v-slot:header="props">
-            <q-tr :props="props">
-              <q-th auto-width />
-              <q-th
-                v-for="col in props.cols"
-                :key="col.name"
-                :props="props"
-                class="text-black bg-white"
-                style="font-weight: normal; border-bottom: 2px solid #000"
-              >
-                {{ col.label }}
-              </q-th>
-            </q-tr>
-          </template>
-
-          <template v-slot:body="props">
-            <q-tr :props="props">
-              <q-td auto-width>
-                <q-btn
-                  size="sm"
-                  color="accent"
-                  round
-                  dense
-                  @click="props.expand = !props.expand"
-                  :icon="props.expand ? 'remove' : 'add'"
-                />
-              </q-td>
-              <q-td v-for="col in props.cols" :key="col.name" :props="props">
-                <template v-if="col.name === 'plant'">
-                  {{ plantNames[props.row.plant] || props.row.plant }}
-                </template>
-                <template
-                  v-else-if="
-                    [
-                      'flavour_house',
-                      'spp',
-                      'batch_prepare',
-                      'ready_to_product',
-                      'production',
-                      'done',
-                    ].includes(col.name)
-                  "
-                >
-                  <q-checkbox
-                    v-model="props.row[col.name]"
-                    disable
-                  />
-                </template>
-                <template v-else-if="col.name === 'status'">
-                   <q-chip
-                      :color="
-                        props.row.status === 'Cancelled'
-                          ? 'red'
-                          : props.row.status === 'Planned'
-                            ? 'blue'
-                            : 'green'
-                      "
-                      text-color="white"
-                      size="sm"
-                    >
-                      {{ props.row.status }}
-                    </q-chip>
-                </template>
-                  <template v-else-if="col.name === 'actions'">
-                    <q-btn
-                        icon="print"
-                        color="primary"
-                        unelevated
-                        no-caps
-                        dense
-                        size="sm"
-                        class="q-mr-xs"
-                        @click="printPlan(props.row)"
-                      >
-                        <q-tooltip>Print Plan</q-tooltip>
-                      </q-btn>
-                    <q-btn
-                        icon="history"
-                        color="primary"
-                        unelevated
-                        no-caps
-                        dense
-                        size="sm"
-                        class="q-mr-xs"
-                        @click="showHistory(props.row)"
-                      >
-                        <q-tooltip>View History</q-tooltip>
-                      </q-btn>
-                    <q-btn
-                        icon="cancel"
-                        color="negative"
-                        unelevated
-                        no-caps
-                        dense
-                        size="sm"
-                        @click="onCancelPlan(props.row)"
-                        :disable="props.row.status === 'Cancelled'"
-                      >
-                        <q-tooltip>Cancel Plan</q-tooltip>
-                      </q-btn>
-                  </template>
-                <template v-else>
-                  {{ col.value }}
-                </template>
-              </q-td>
-            </q-tr>
-            <q-tr v-show="props.expand" :props="props">
-              <q-td colspan="100%">
-                <div class="q-pa-md">
-                  <div class="text-subtitle2 q-mb-xs">Batch List</div>
+            <q-slide-transition>
+              <div v-show="showSkuList">
+                <q-card-section class="q-pa-none">
+                  <div class="row items-center q-pa-sm q-gutter-sm bg-white border-bottom">
+                    <q-btn icon="refresh" color="primary" round flat dense size="sm" @click="fetchSkus" />
+                    <q-btn icon="filter_alt_off" color="grey" round flat dense size="sm" @click="resetSkuFilters" />
+                    <q-checkbox v-model="showAllSkus" label="Show Inactive" dense size="xs" class="text-caption" />
+                    <q-space />
+                    <div class="text-caption text-grey-7">{{ filteredSkus.length }} SKUs found</div>
+                  </div>
+                  
                   <q-table
-                    :rows="props.row.batches || []"
-                    :columns="batchColumns"
+                    :rows="filteredSkus"
+                    :columns="skuColumns"
                     row-key="id"
                     flat
-                    bordered
                     dense
-                    hide-bottom
+                    :pagination="{ rowsPerPage: 5 }"
+                    style="max-height: 250px"
                   >
-                    <template v-slot:body-cell-flavour_house="bProps">
-                      <q-td :props="bProps">
-                        <q-checkbox
-                          v-model="bProps.row.flavour_house"
-                          disable
-                          size="sm"
+                    <template v-slot:body-cell-status="props">
+                      <q-td :props="props">
+                        <q-chip :color="props.value === 'Active' ? 'positive' : 'grey'" text-color="white" size="xs">
+                          {{ props.value }}
+                        </q-chip>
+                      </q-td>
+                    </template>
+                    <template v-slot:body-cell-sku_actions="props">
+                      <q-td :props="props" align="center">
+                        <q-btn
+                          icon="check_circle"
+                          color="positive"
+                          unelevated
+                          no-caps
+                          dense
+                          size="xs"
+                          label="Select"
+                          @click="selectSku(props.row)"
                         />
                       </q-td>
                     </template>
-                    <template v-slot:body-cell-spp="bProps">
-                      <q-td :props="bProps">
-                        <q-checkbox
-                          v-model="bProps.row.spp"
-                          disable
-                          size="sm"
-                        />
-                      </q-td>
-                    </template>
-                    <template v-slot:body-cell-batch_prepare="bProps">
-                      <q-td :props="bProps">
-                        <q-checkbox
-                          v-model="bProps.row.batch_prepare"
-                          disable
-                          size="sm"
-                        />
-                      </q-td>
-                    </template>
-                    <template v-slot:body-cell-ready_to_product="bProps">
-                      <q-td :props="bProps">
-                        <q-checkbox
-                          v-model="bProps.row.ready_to_product"
-                          disable
-                          size="sm"
-                        />
-                      </q-td>
-                    </template>
-                    <template v-slot:body-cell-production="bProps">
-                      <q-td :props="bProps">
-                        <q-checkbox
-                          v-model="bProps.row.production"
-                          disable
-                          size="sm"
-                        />
-                      </q-td>
-                    </template>
-                    <template v-slot:body-cell-done="bProps">
-                      <q-td :props="bProps">
-                        <q-checkbox
-                          v-model="bProps.row.done"
-                          disable
-                          size="sm"
-                        />
-                      </q-td>
-                    </template>
-
                   </q-table>
-                </div>
-              </q-td>
-            </q-tr>
-          </template>
-        </q-table>
-      </q-card>
+                </q-card-section>
+              </div>
+            </q-slide-transition>
+          </q-card>
 
+          <!-- Create Plan Form -->
+          <q-card flat bordered class="shadow-1" id="create-plan-form">
+            <q-card-section class="q-pa-sm bg-primary text-white">
+              <div class="text-subtitle2 text-weight-bold">
+                <q-icon name="add_circle" class="q-mr-xs" />
+                Create New Production Plan
+              </div>
+            </q-card-section>
+
+            <q-card-section class="q-pa-md bg-blue-grey-1">
+              <!-- Form Row 1 -->
+              <div class="row q-col-gutter-md q-mb-md">
+                <div class="col-12 col-md-4">
+                  <div class="text-caption text-weight-bold q-mb-xs">SKU-ID</div>
+                  <q-select
+                    outlined v-model="skuId" :options="filteredSkuIdOptions"
+                    dense bg-color="white" use-input input-debounce="0"
+                    @filter="onSkuIdFilter" emit-value map-options
+                    @update:model-value="onSkuIdSelect"
+                  />
+                </div>
+                <div class="col-12 col-md-5">
+                  <div class="text-caption text-weight-bold q-mb-xs">SKU Name</div>
+                  <q-select
+                    outlined v-model="skuName" :options="filteredSkuNameOptions"
+                    dense bg-color="white" use-input input-debounce="0"
+                    @filter="onSkuNameFilter" emit-value map-options
+                    @update:model-value="onSkuNameSelect"
+                  />
+                </div>
+                <div class="col-12 col-md-3">
+                  <div class="text-caption text-weight-bold q-mb-xs">Plant</div>
+                  <q-select
+                    outlined v-model="plant" :options="plantOptions"
+                    dense bg-color="white" emit-value map-options
+                  >
+                    <template v-slot:append>
+                      <q-btn icon="settings" flat round dense size="sm" color="primary" @click="$router.push({ name: 'PlantConfig' })" />
+                    </template>
+                  </q-select>
+                </div>
+              </div>
+
+              <!-- Form Row 2 -->
+              <div class="row q-col-gutter-md q-mb-md">
+                <div class="col-12 col-md-3">
+                  <div class="text-caption text-weight-bold q-mb-xs">Require Vol (kg)</div>
+                  <q-input outlined v-model="productionRequire" type="number" dense bg-color="white" input-class="text-right" />
+                </div>
+                <div class="col-12 col-md-3">
+                  <div class="text-caption text-weight-bold q-mb-xs">Batch Standard</div>
+                  <q-input outlined v-model="batchStandard" type="number" dense bg-color="white" input-class="text-right" />
+                </div>
+                <div class="col-12 col-md-3">
+                  <div class="text-caption text-weight-bold q-mb-xs">No. of Batches</div>
+                  <q-input outlined v-model="numberOfBatch" type="number" dense bg-color="white" @update:model-value="onManualBatchChange" input-class="text-center" />
+                </div>
+                <div class="col-12 col-md-3">
+                  <div class="text-caption text-weight-bold q-mb-xs">Total Plan Vol</div>
+                  <q-input outlined :model-value="totalPlanVolume" readonly dense bg-color="grey-2" input-class="text-right text-weight-bold" />
+                </div>
+              </div>
+
+              <!-- Form Row 3 -->
+              <div class="row q-col-gutter-md">
+                <div class="col-12 col-md-4">
+                  <div class="text-caption text-weight-bold q-mb-xs">Start Date</div>
+                  <q-input outlined v-model="startDate" dense bg-color="white" type="date" />
+                </div>
+                <div class="col-12 col-md-4">
+                  <div class="text-caption text-weight-bold q-mb-xs">Finish Date</div>
+                  <q-input outlined v-model="finishDate" dense bg-color="white" type="date" />
+                </div>
+                <div class="col-12 col-md-4 flex items-end">
+                  <q-btn
+                    label="Generate Plan"
+                    color="primary"
+                    class="full-width text-weight-bold"
+                    @click="onCreatePlan"
+                    unelevated
+                    no-caps
+                    :loading="isCreating"
+                    icon="playlist_add"
+                    size="md"
+                    style="height: 40px"
+                  />
+                </div>
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+      </div>
     </q-page>
+
   </RouterView>
 </template>
 

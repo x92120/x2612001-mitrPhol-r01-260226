@@ -304,15 +304,8 @@ const displayLabels = computed(() => {
     return printLabels.value
 })
 
-const pendingItems = computed(() => {
-    // Items are "pending" until boxed (confirmed)
-    return allRecords.value.filter(r => !confirmedRecordIds.value.has(r.batch_record_id))
-})
-
-const confirmedItems = computed(() => {
-    // These are the records that have actually been scanned into boxes in this session
-    return allRecords.value.filter(r => confirmedRecordIds.value.has(r.batch_record_id))
-})
+const pendingItems = computed(() => allRecords.value.filter(r => !confirmedRecordIds.value.has(r.batch_record_id)))
+const confirmedItems = computed(() => allRecords.value.filter(r => confirmedRecordIds.value.has(r.batch_record_id)))
 
 // --- Data Fetching ---
 const fetchWarehouses = async () => {
@@ -490,8 +483,7 @@ const handleBarcodeScan = (barcode: string) => {
 
     // A. CHECK IF SCAN IS A BOX/PLAN (To confirm multiple pending bags)
     const matchedPlan = plans.value.find(p => barcode === p.plan_id || barcode === `PKG-${p.plan_id}`)
-    const allBatches = plans.value.flatMap(p => p.batches || [])
-    const matchedBatch = allBatches.find(b => barcode === b.batch_id || barcode === `PKG-${b.batch_id}`)
+    const matchedBatch = allBatches.value.find(b => barcode === b.batch_id || barcode === `PKG-${b.batch_id}`)
     
     if (matchedPlan || matchedBatch) {
         const targetId = matchedBatch ? matchedBatch.batch_id : matchedPlan.plan_id
@@ -971,7 +963,7 @@ const onPreviewPackingBoxLabel = async () => {
                                 unelevated 
                                 color="blue-grey-8" 
                                 icon="print" 
-                                label="PRINT ALL NOW" 
+                                label="Print" 
                                 size="sm"
                                 class="text-weight-bold shadow-1"
                                 :loading="labelsGenerating"
@@ -1112,7 +1104,7 @@ const onPreviewPackingBoxLabel = async () => {
                     <q-btn icon="delete_sweep" flat round dense color="white" size="sm" @click="clearPrintList" v-if="printQueue.length > 0">
                         <q-tooltip>Clear List</q-tooltip>
                     </q-btn>
-                    <q-btn icon="print" unelevated color="positive" size="xs" label="PRINT ALL" :loading="labelsGenerating" @click="onPrintAllInList" v-if="printQueue.length > 0" />
+                    <q-btn icon="print" unelevated color="positive" size="xs" label="Print" :loading="labelsGenerating" @click="onPrintAllInList" v-if="printQueue.length > 0" />
                 </div>
             </div>
 
@@ -1381,26 +1373,14 @@ const onPreviewPackingBoxLabel = async () => {
             <q-separator />
 
             <q-card-section class="q-pa-md bg-white">
-                <div class="row q-col-gutter-md">
-                    <div class="col-6">
-                        <q-btn 
-                            stack
-                            outline 
-                            class="full-width q-py-md text-weight-bold" 
-                            color="negative" 
-                            label="CLEAR QUEUE" 
-                            icon="delete_sweep"
-                            @click="clearPrintList"
-                            :disable="printQueue.length === 0"
-                        />
-                    </div>
-                    <div class="col-6">
+                <div class="row">
+                    <div class="col-12">
                         <q-btn 
                             stack
                             unelevated 
                             class="full-width q-py-md text-weight-bold shadow-3" 
                             color="blue-9" 
-                            label="PRINT ALL" 
+                            label="Print" 
                             icon="print"
                             @click="onPrintAllInList"
                             :disable="printQueue.length === 0"

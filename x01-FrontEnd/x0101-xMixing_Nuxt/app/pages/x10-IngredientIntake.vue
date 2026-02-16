@@ -229,14 +229,11 @@ const getHeaders = (extraHeaders: Record<string, string> = {}) => {
 const fetchReceipts = async (isBackground = false) => {
   if (!isBackground) isLoading.value = true
   try {
-    const response = await fetch(`${appConfig.apiBaseUrl}/ingredient-intake-lists/`, {
+    const data = await $fetch<IngredientIntake[]>(`${appConfig.apiBaseUrl}/ingredient-intake-lists/`, {
       headers: getAuthHeader() as Record<string, string>,
     })
-    if (response.ok) {
-      const newData = await response.json()
-      if (JSON.stringify(newData) !== JSON.stringify(rows.value)) {
-        rows.value = newData
-      }
+    if (JSON.stringify(data) !== JSON.stringify(rows.value)) {
+      rows.value = data
     }
   } catch (error) {
     console.error('Failed to fetch history:', error)
@@ -248,49 +245,35 @@ const fetchReceipts = async (isBackground = false) => {
 // Lookup Ingredient by ID or blind code
 const lookupIngredient = async (query: string) => {
   if (!query || query.length < 3) {
-    xIngredientName.value = ''
-    xMatSapCode.value = ''
-    xReCode.value = ''
+    xIngredientName.value = xMatSapCode.value = xReCode.value = ''
     return
   }
 
   try {
-    // We'll use a new general lookup parameter handled by backend
-    const response = await fetch(`${appConfig.apiBaseUrl}/ingredients/?lookup=${query}`, {
-      headers: getHeaders(),
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/ingredients/?lookup=${query}`, {
+      headers: getAuthHeader() as Record<string, string>,
     })
 
-    if (response.ok) {
-      const ingredients = await response.json()
-      if (ingredients.length > 0) {
-        const ingredient = ingredients[0]
-        xIngredientName.value = ingredient.name
-        xMatSapCode.value = ingredient.mat_sap_code
-        xReCode.value = ingredient.re_code || ''
+    if (data.length > 0) {
+      const ingredient = data[0]
+      xIngredientName.value = ingredient.name
+      xMatSapCode.value = ingredient.mat_sap_code
+      xReCode.value = ingredient.re_code || ''
 
-        // Only update ingredientId if it's different and we are not currently typing it?
-        // Actually, if we scanned a blind code, we want to swap it to the ID.
-        // If we typed the ID, it stays the ID.
-        if (ingredientId.value !== ingredient.ingredient_id) {
-          ingredientId.value = ingredient.ingredient_id
-        }
-
-        // Set package volume from ingredient master
-        packageVol.value = Number(ingredient.std_package_size || 25).toFixed(3)
-
-        $q.notify({
-          type: 'positive',
-          message: `Found: ${ingredient.name} (Pkg: ${ingredient.std_package_size || 25}kg)`,
-          position: 'top',
-          timeout: 1000,
-        })
-      } else {
-        // Don't clear immediately if typing?
-        // But maybe we should clear the read-only fields
-        xIngredientName.value = ''
-        xMatSapCode.value = ''
-        xReCode.value = ''
+      if (ingredientId.value !== ingredient.ingredient_id) {
+        ingredientId.value = ingredient.ingredient_id
       }
+
+      packageVol.value = Number(ingredient.std_package_size || 25).toFixed(3)
+
+      $q.notify({
+        type: 'positive',
+        message: `Found: ${ingredient.name}`,
+        position: 'top',
+        timeout: 1000,
+      })
+    } else {
+      xIngredientName.value = xMatSapCode.value = xReCode.value = ''
     }
   } catch (error) {
     console.error('Lookup error:', error)
@@ -332,17 +315,11 @@ watch([intakeVol, packageVol], ([newVol, newPkg]) => {
 // Generate new Intake Lot ID
 const generateIntakeLotId = async () => {
   try {
-    const response = await fetch(`${appConfig.apiBaseUrl}/ingredient-intake-next-id`)
-    if (response.ok) {
-      const data = await response.json()
-      intakeLotId.value = data.next_id
-    } else {
-      // Fallback
-      intakeLotId.value = 'Error generating ID'
-    }
-  } catch (e) {
+    const data = await $fetch<{next_id: string}>(`${appConfig.apiBaseUrl}/ingredient-intake-next-id`)
+    intakeLotId.value = data.next_id
+  } catch (e: any) {
     console.error('Failed to generate ID', e)
-    intakeLotId.value = 'Network Error: ' + (e as any).message
+    intakeLotId.value = 'Error: ' + e.message
   }
 }
 
