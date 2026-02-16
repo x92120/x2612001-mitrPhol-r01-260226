@@ -1,0 +1,32 @@
+<svg width="400" height="250" viewBox="0 0 400 250" xmlns="http://www.w3.org/2000/svg">
+  <!-- Label Border -->
+  <rect x="5" y="5" width="390" height="240" rx="10" fill="white" stroke="#333" stroke-width="2"/>
+  
+  <!-- Header -->
+  <rect x="5" y="5" width="390" height="40" rx="10" fill="#1976d2"/>
+  <text x="200" y="32" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="white" text-anchor="middle">
+    PRODUCTION LABEL
+  </text>
+
+  <!-- Content Fields -->
+  <text x="20" y="75" font-family="Monaco, monospace" font-size="14" fill="#666">BATCH ID:</text>
+  <text x="120" y="75" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="black">{{BATCH_ID}}</text>
+
+  <text x="20" y="105" font-family="Monaco, monospace" font-size="14" fill="#666">INGREDIENT:</text>
+  <text x="120" y="105" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="black">{{INGREDIENT_NAME}}</text>
+
+  <text x="20" y="135" font-family="Monaco, monospace" font-size="14" fill="#666">TARGET WT:</text>
+  <text x="120" y="135" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="black">{{TARGET_WEIGHT}} kg</text>
+
+  <text x="20" y="165" font-family="Monaco, monospace" font-size="14" fill="#666">ACTUAL WT:</text>
+  <text x="120" y="165" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#2e7d32">{{ACTUAL_WEIGHT}} kg</text>
+
+  <!-- QR Code Placeholder (could be generated/injected) -->
+  <rect x="280" y="65" width="100" height="100" fill="#f5f5f5" stroke="#ccc" stroke-dasharray="4"/>
+  <text x="330" y="120" font-family="Arial, sans-serif" font-size="10" fill="#999" text-anchor="middle">QR CODE</text>
+
+  <!-- Footer -->
+  <line x1="20" y1="190" x2="380" y2="190" stroke="#eee" stroke-width="1"/>
+  <text x="20" y="215" font-family="Arial, sans-serif" font-size="12" fill="#888">DATE: {{PRINT_DATE}}</text>
+  <text x="380" y="215" font-family="Arial, sans-serif" font-size="12" fill="#888" text-anchor="end">OPERATOR: {{OPERATOR}}</text>
+</svg>

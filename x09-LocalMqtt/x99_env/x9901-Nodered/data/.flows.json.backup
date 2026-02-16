@@ -1,0 +1,723 @@
+[
+    {
+        "id": "scale_dashboard_tab",
+        "type": "tab",
+        "label": "Scale Dashboard",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "ui_base_id",
+        "type": "ui_base",
+        "theme": {
+            "name": {
+                "name": "theme-dark",
+                "lightTheme": {
+                    "default": "#0094CE",
+                    "baseColor": "#0094CE",
+                    "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
+                    "edited": true,
+                    "reset": false
+                },
+                "darkTheme": {
+                    "default": "#097479",
+                    "baseColor": "#097479",
+                    "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
+                    "edited": true,
+                    "reset": false
+                },
+                "customTheme": {
+                    "name": "Untitled Theme 1",
+                    "default": "#4B7930",
+                    "baseColor": "#4B7930",
+                    "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif"
+                },
+                "themeState": {
+                    "base-color": {
+                        "default": "#097479",
+                        "value": "#097479",
+                        "edited": false
+                    },
+                    "page-titlebar-backgroundColor": {
+                        "value": "#097479",
+                        "edited": false
+                    },
+                    "page-backgroundColor": {
+                        "value": "#111111",
+                        "edited": false
+                    },
+                    "page-sidebar-backgroundColor": {
+                        "value": "#333333",
+                        "edited": false
+                    },
+                    "group-textColor": {
+                        "value": "#0eb8c0",
+                        "edited": false
+                    },
+                    "group-backgroundColor": {
+                        "value": "#333333",
+                        "edited": false
+                    },
+                    "widget-textColor": {
+                        "value": "#eeeeee",
+                        "edited": false
+                    },
+                    "widget-backgroundColor": {
+                        "value": "#097479",
+                        "edited": false
+                    },
+                    "widget-borderColor": {
+                        "value": "#333333",
+                        "edited": false
+                    },
+                    "base-font": {
+                        "value": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif"
+                    }
+                },
+                "angularState": {
+                    "baseColor": "#097479",
+                    "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
+                    "pageTitleBackgroundColor": "#097479",
+                    "pageBackgroundColor": "#111111",
+                    "pageSidebarBackgroundColor": "#333333",
+                    "groupTextColor": "#0eb8c0",
+                    "groupBackgroundColor": "#333333",
+                    "widgetTextColor": "#eeeeee",
+                    "widgetBackgroundColor": "#097479",
+                    "widgetBorderColor": "#333333"
+                },
+                "angularTheme": {
+                    "primary": "indigo",
+                    "accents": "blue",
+                    "warn": "red",
+                    "background": "grey",
+                    "palette": "light"
+                }
+            },
+            "lightTheme": {
+                "default": "#0094CE",
+                "baseColor": "#0094CE",
+                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
+                "edited": false
+            },
+            "darkTheme": {
+                "default": "#097479",
+                "baseColor": "#097479",
+                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
+                "edited": false
+            },
+            "customTheme": {
+                "name": "Untitled Theme 1",
+                "default": "#4B7930",
+                "baseColor": "#4B7930",
+                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif"
+            },
+            "themeState": {
+                "base-color": {
+                    "default": "#0094CE",
+                    "value": "#0094CE",
+                    "edited": false
+                },
+                "page-titlebar-backgroundColor": {
+                    "value": "#0094CE",
+                    "edited": false
+                },
+                "page-backgroundColor": {
+                    "value": "#111111",
+                    "edited": false
+                },
+                "page-sidebar-backgroundColor": {
+                    "value": "#ffffff",
+                    "edited": false
+                },
+                "group-textColor": {
+                    "value": "#1bbfff",
+                    "edited": false
+                },
+                "group-borderColor": {
+                    "value": "#555555",
+                    "edited": false
+                },
+                "group-backgroundColor": {
+                    "value": "#333333",
+                    "edited": false
+                },
+                "widget-textColor": {
+                    "value": "#eeeeee",
+                    "edited": false
+                },
+                "widget-backgroundColor": {
+                    "value": "#0094ce",
+                    "edited": false
+                },
+                "widget-borderColor": {
+                    "value": "#333333",
+                    "edited": false
+                },
+                "base-font": {
+                    "value": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif"
+                }
+            },
+            "angularTheme": {
+                "primary": "indigo",
+                "accents": "blue",
+                "warn": "red",
+                "background": "grey",
+                "palette": "light"
+            }
+        },
+        "site": {
+            "name": "Node-RED Dashboard",
+            "hideToolbar": "false",
+            "allowSwipe": "false",
+            "lockMenu": "false",
+            "allowTempTheme": "true",
+            "dateFormat": "DD/MM/YYYY",
+            "sizes": {
+                "sx": 48,
+                "sy": 48,
+                "gx": 6,
+                "gy": 6,
+                "cx": 6,
+                "cy": 6,
+                "px": 0,
+                "py": 0
+            }
+        }
+    },
+    {
+        "id": "ui_tab_id",
+        "type": "ui_tab",
+        "name": "Scales",
+        "icon": "dashboard",
+        "order": 1
+    },
+    {
+        "id": "ui_group_scale1",
+        "type": "ui_group",
+        "name": "Scale 01",
+        "tab": "ui_tab_id",
+        "order": 1,
+        "disp": true,
+        "width": "6",
+        "collapse": false
+    },
+    {
+        "id": "ui_group_scale2",
+        "type": "ui_group",
+        "name": "Scale 02",
+        "tab": "ui_tab_id",
+        "order": 2,
+        "disp": true,
+        "width": "6",
+        "collapse": false
+    },
+    {
+        "id": "ui_group_scale3",
+        "type": "ui_group",
+        "name": "Scale 03",
+        "tab": "ui_tab_id",
+        "order": 3,
+        "disp": true,
+        "width": "6",
+        "collapse": false
+    },
+    {
+        "id": "mqtt-broker-node",
+        "type": "mqtt-broker",
+        "name": "RabbitMQ",
+        "broker": "rabbitmq",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "btn_s1_up",
+        "type": "ui_button",
+        "z": "scale_dashboard_tab",
+        "name": "",
+        "group": "ui_group_scale1",
+        "order": 1,
+        "width": 2,
+        "height": 1,
+        "passthru": false,
+        "label": "+",
+        "color": "",
+        "bgcolor": "",
+        "icon": "",
+        "payload": "up",
+        "payloadType": "str",
+        "topic": "action",
+        "x": 100,
+        "y": 100,
+        "wires": [
+            [
+                "func_s1"
+            ]
+        ]
+    },
+    {
+        "id": "btn_s1_down",
+        "type": "ui_button",
+        "z": "scale_dashboard_tab",
+        "name": "",
+        "group": "ui_group_scale1",
+        "order": 2,
+        "width": 2,
+        "height": 1,
+        "passthru": false,
+        "label": "-",
+        "color": "",
+        "bgcolor": "",
+        "icon": "",
+        "payload": "down",
+        "payloadType": "str",
+        "topic": "action",
+        "x": 100,
+        "y": 140,
+        "wires": [
+            [
+                "func_s1"
+            ]
+        ]
+    },
+    {
+        "id": "btn_s1_tare",
+        "type": "ui_button",
+        "z": "scale_dashboard_tab",
+        "name": "",
+        "group": "ui_group_scale1",
+        "order": 3,
+        "width": 2,
+        "height": 1,
+        "passthru": false,
+        "label": "Tare",
+        "color": "",
+        "bgcolor": "orange",
+        "icon": "",
+        "payload": "tare",
+        "payloadType": "str",
+        "topic": "action",
+        "x": 100,
+        "y": 180,
+        "wires": [
+            [
+                "func_s1"
+            ]
+        ]
+    },
+    {
+        "id": "disp_s1",
+        "type": "ui_text",
+        "z": "scale_dashboard_tab",
+        "group": "ui_group_scale1",
+        "order": 4,
+        "width": 6,
+        "height": 1,
+        "name": "",
+        "label": "Weight",
+        "format": "{{msg.payload.weight}} kg",
+        "layout": "row-spread",
+        "x": 500,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "func_s1",
+        "type": "function",
+        "z": "scale_dashboard_tab",
+        "name": "Logic S1",
+        "func": "let weight = flow.get('w1') || 0;\nif (msg.payload === 'up') weight += Math.random() * (0.005 - 0.0001) + 0.0001;\nelse if (msg.payload === 'down') weight -= Math.random() * (0.005 - 0.0001) + 0.0001;\nelse if (msg.payload === 'tare') weight = 0;\nweight = Math.max(0, weight);\nflow.set('w1', weight);\nmsg.payload = { scale_id: 'scale-01', weight: parseFloat(weight.toFixed(4)) };\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 300,
+        "y": 140,
+        "wires": [
+            [
+                "disp_s1",
+                "mqtt_out"
+            ]
+        ]
+    },
+    {
+        "id": "btn_s2_up",
+        "type": "ui_button",
+        "z": "scale_dashboard_tab",
+        "name": "",
+        "group": "ui_group_scale2",
+        "order": 1,
+        "width": 2,
+        "height": 1,
+        "passthru": false,
+        "label": "+",
+        "color": "",
+        "bgcolor": "",
+        "icon": "",
+        "payload": "up",
+        "payloadType": "str",
+        "topic": "action",
+        "x": 100,
+        "y": 260,
+        "wires": [
+            [
+                "func_s2"
+            ]
+        ]
+    },
+    {
+        "id": "btn_s2_down",
+        "type": "ui_button",
+        "z": "scale_dashboard_tab",
+        "name": "",
+        "group": "ui_group_scale2",
+        "order": 2,
+        "width": 2,
+        "height": 1,
+        "passthru": false,
+        "label": "-",
+        "color": "",
+        "bgcolor": "",
+        "icon": "",
+        "payload": "down",
+        "payloadType": "str",
+        "topic": "action",
+        "x": 100,
+        "y": 300,
+        "wires": [
+            [
+                "func_s2"
+            ]
+        ]
+    },
+    {
+        "id": "btn_s2_tare",
+        "type": "ui_button",
+        "z": "scale_dashboard_tab",
+        "name": "",
+        "group": "ui_group_scale2",
+        "order": 3,
+        "width": 2,
+        "height": 1,
+        "passthru": false,
+        "label": "Tare",
+        "color": "",
+        "bgcolor": "orange",
+        "icon": "",
+        "payload": "tare",
+        "payloadType": "str",
+        "topic": "action",
+        "x": 100,
+        "y": 340,
+        "wires": [
+            [
+                "func_s2"
+            ]
+        ]
+    },
+    {
+        "id": "disp_s2",
+        "type": "ui_text",
+        "z": "scale_dashboard_tab",
+        "group": "ui_group_scale2",
+        "order": 4,
+        "width": 6,
+        "height": 1,
+        "name": "",
+        "label": "Weight",
+        "format": "{{msg.payload.weight}} kg",
+        "layout": "row-spread",
+        "x": 500,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "func_s2",
+        "type": "function",
+        "z": "scale_dashboard_tab",
+        "name": "Logic S2",
+        "func": "let weight = flow.get('w2') || 0;\nif (msg.payload === 'up') weight += Math.random() * (0.005 - 0.0001) + 0.0001;\nelse if (msg.payload === 'down') weight -= Math.random() * (0.005 - 0.0001) + 0.0001;\nelse if (msg.payload === 'tare') weight = 0;\nweight = Math.max(0, weight);\nflow.set('w2', weight);\nmsg.payload = { scale_id: 'scale-02', weight: parseFloat(weight.toFixed(3)) };\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 300,
+        "y": 300,
+        "wires": [
+            [
+                "disp_s2",
+                "mqtt_out"
+            ]
+        ]
+    },
+    {
+        "id": "btn_s3_up",
+        "type": "ui_button",
+        "z": "scale_dashboard_tab",
+        "name": "",
+        "group": "ui_group_scale3",
+        "order": 1,
+        "width": 2,
+        "height": 1,
+        "passthru": false,
+        "label": "+",
+        "color": "",
+        "bgcolor": "",
+        "icon": "",
+        "payload": "up",
+        "payloadType": "str",
+        "topic": "action",
+        "x": 100,
+        "y": 420,
+        "wires": [
+            [
+                "func_s3"
+            ]
+        ]
+    },
+    {
+        "id": "btn_s3_down",
+        "type": "ui_button",
+        "z": "scale_dashboard_tab",
+        "name": "",
+        "group": "ui_group_scale3",
+        "order": 2,
+        "width": 2,
+        "height": 1,
+        "passthru": false,
+        "label": "-",
+        "color": "",
+        "bgcolor": "",
+        "icon": "",
+        "payload": "down",
+        "payloadType": "str",
+        "topic": "action",
+        "x": 100,
+        "y": 460,
+        "wires": [
+            [
+                "func_s3"
+            ]
+        ]
+    },
+    {
+        "id": "btn_s3_tare",
+        "type": "ui_button",
+        "z": "scale_dashboard_tab",
+        "name": "",
+        "group": "ui_group_scale3",
+        "order": 3,
+        "width": 2,
+        "height": 1,
+        "passthru": false,
+        "label": "Tare",
+        "color": "",
+        "bgcolor": "orange",
+        "icon": "",
+        "payload": "tare",
+        "payloadType": "str",
+        "topic": "action",
+        "x": 100,
+        "y": 500,
+        "wires": [
+            [
+                "func_s3"
+            ]
+        ]
+    },
+    {
+        "id": "disp_s3",
+        "type": "ui_text",
+        "z": "scale_dashboard_tab",
+        "group": "ui_group_scale3",
+        "order": 4,
+        "width": 6,
+        "height": 1,
+        "name": "",
+        "label": "Weight",
+        "format": "{{msg.payload.weight}} kg",
+        "layout": "row-spread",
+        "x": 500,
+        "y": 460,
+        "wires": []
+    },
+    {
+        "id": "func_s3",
+        "type": "function",
+        "z": "scale_dashboard_tab",
+        "name": "Logic S3",
+        "func": "let weight = flow.get('w3') || 0;\nif (msg.payload === 'up') weight += Math.random() * (0.005 - 0.0001) + 0.0001;\nelse if (msg.payload === 'down') weight -= Math.random() * (0.005 - 0.0001) + 0.0001;\nelse if (msg.payload === 'tare') weight = 0;\nweight = Math.max(0, weight);\nflow.set('w3', weight);\nmsg.payload = { scale_id: 'scale-03', weight: parseFloat(weight.toFixed(2)) };\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 300,
+        "y": 460,
+        "wires": [
+            [
+                "disp_s3",
+                "mqtt_out"
+            ]
+        ]
+    },
+    {
+        "id": "mqtt_out",
+        "type": "mqtt out",
+        "z": "scale_dashboard_tab",
+        "name": "Topic: scale",
+        "topic": "scale",
+        "qos": "0",
+        "retain": "false",
+        "broker": "mqtt-broker-node",
+        "x": 700,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "refresh_timer",
+        "type": "inject",
+        "z": "scale_dashboard_tab",
+        "name": "1s Tick",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "1",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 300,
+        "y": 560,
+        "wires": [
+            [
+                "refresh_logic"
+            ]
+        ]
+    },
+    {
+        "id": "refresh_logic",
+        "type": "function",
+        "z": "scale_dashboard_tab",
+        "name": "Format Periodic MQTT",
+        "func": "const w1 = flow.get('w1') || 0;\nconst w2 = flow.get('w2') || 0;\nconst w3 = flow.get('w3') || 0;\n\nreturn [\n    { payload: { scale_id: 'scale-01', weight: parseFloat(w1.toFixed(4)) } },\n    { payload: { scale_id: 'scale-02', weight: parseFloat(w2.toFixed(3)) } },\n    { payload: { scale_id: 'scale-03', weight: parseFloat(w3.toFixed(2)) } }\n];",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 520,
+        "y": 560,
+        "wires": [
+            [
+                "mqtt_out"
+            ]
+        ]
+    },
+    {
+        "id": "scale_rs232_tab",
+        "type": "tab",
+        "label": "Scale RS232",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "serial_config_s2",
+        "type": "serial-port",
+        "serialport": "/dev/ttyUSB0",
+        "serialbaud": "9600",
+        "databits": "8",
+        "parity": "none",
+        "stopbits": "1",
+        "waitfor": "",
+        "dtr": "none",
+        "rts": "none",
+        "cts": "none",
+        "dsr": "none",
+        "newline": "\\n",
+        "bin": "false",
+        "out": "char",
+        "addchar": "",
+        "responsetime": "10000"
+    },
+    {
+        "id": "serial_in_s2",
+        "type": "serial in",
+        "z": "scale_rs232_tab",
+        "name": "Scale ID-2 RS232",
+        "serial": "serial_config_s2",
+        "x": 150,
+        "y": 100,
+        "wires": [
+            [
+                "func_parse_rs232_s2"
+            ]
+        ]
+    },
+    {
+        "id": "func_parse_rs232_s2",
+        "type": "function",
+        "z": "scale_rs232_tab",
+        "name": "Parse Weight S2",
+        "func": "const raw = msg.payload.toString();\n// Regex to find decimal numbers in strings like 'ST,GS,+  12.34 kg'\nconst match = raw.match(/[-+]?\\d*\\.?\\d+/);\nif (match) {\n    const weight = parseFloat(match[0]);\n    msg.payload = { scale_id: 'scale-02', weight: weight, source: 'rs232' };\n    return msg;\n}\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 100,
+        "wires": [
+            [
+                "debug_s2_rs232",
+                "disp_s2"
+            ]
+        ]
+    },
+    {
+        "id": "debug_s2_rs232",
+        "type": "debug",
+        "z": "scale_rs232_tab",
+        "name": "Debug RS232 S2",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 650,
+        "y": 100,
+        "wires": []
+    }
+]
