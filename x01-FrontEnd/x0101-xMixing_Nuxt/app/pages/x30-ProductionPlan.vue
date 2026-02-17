@@ -653,9 +653,170 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="row q-col-gutter-md">
-        <!-- LEFT COLUMN: Production Plans List -->
-        <div class="col-12 col-md-4 column q-gutter-y-sm" style="height: calc(100vh - 160px);">
+      <div class="column q-gutter-y-md">
+        <!-- TOP SECTION: Creation & SKU Master -->
+        <div class="col-12 column q-gutter-y-md">
+          <!-- SKU Selection Card -->
+          <q-card flat bordered class="shadow-1">
+            <q-card-section class="q-pa-sm bg-blue-grey-1 row items-center justify-between">
+              <div class="text-subtitle2 text-weight-bold">
+                <q-icon name="list_alt" class="q-mr-xs" />
+                SKU Master Lookup
+              </div>
+              <q-btn
+                :label="showSkuList ? 'Hide List' : 'Show List'"
+                :color="showSkuList ? 'grey-7' : 'primary'"
+                unelevated
+                no-caps
+                dense
+                size="sm"
+                @click="showSkuList = !showSkuList"
+                class="q-px-sm"
+              />
+            </q-card-section>
+
+            <q-slide-transition>
+              <div v-show="showSkuList">
+                <q-card-section class="q-pa-none">
+                  <div class="row items-center q-pa-sm q-gutter-sm bg-white border-bottom">
+                    <q-btn icon="refresh" color="primary" round flat dense size="sm" @click="fetchSkus" />
+                    <q-btn icon="filter_alt_off" color="grey" round flat dense size="sm" @click="resetSkuFilters" />
+                    <q-checkbox v-model="showAllSkus" label="Show Inactive" dense size="xs" class="text-caption" />
+                    <q-space />
+                    <div class="text-caption text-grey-7">{{ filteredSkus.length }} SKUs found</div>
+                  </div>
+                  
+                  <q-table
+                    :rows="filteredSkus"
+                    :columns="skuColumns"
+                    row-key="id"
+                    flat
+                    dense
+                    :pagination="{ rowsPerPage: 5 }"
+                    style="max-height: 250px"
+                  >
+                    <template v-slot:body-cell-status="props">
+                      <q-td :props="props">
+                        <q-chip :color="props.value === 'Active' ? 'positive' : 'grey'" text-color="white" size="xs">
+                          {{ props.value }}
+                        </q-chip>
+                      </q-td>
+                    </template>
+                    <template v-slot:body-cell-sku_actions="props">
+                      <q-td :props="props" align="center">
+                        <q-btn
+                          icon="check_circle"
+                          color="positive"
+                          unelevated
+                          no-caps
+                          dense
+                          size="xs"
+                          label="Select"
+                          @click="selectSku(props.row)"
+                        />
+                      </q-td>
+                    </template>
+                  </q-table>
+                </q-card-section>
+              </div>
+            </q-slide-transition>
+          </q-card>
+
+          <!-- Create Plan Form -->
+          <q-card flat bordered class="shadow-1" id="create-plan-form">
+            <q-card-section class="q-pa-sm bg-primary text-white row items-center justify-between">
+              <div class="text-subtitle2 text-weight-bold">
+                <q-icon name="add_circle" class="q-mr-xs" />
+                Create New Production Plan
+              </div>
+              <q-btn
+                label="Generate Plan"
+                color="white"
+                text-color="primary"
+                unelevated
+                no-caps
+                dense
+                @click="onCreatePlan"
+                :loading="isCreating"
+                icon="playlist_add"
+                class="q-px-md text-weight-bold"
+              />
+            </q-card-section>
+
+            <q-card-section class="q-pa-md bg-blue-grey-1">
+              <!-- Form Row 1 -->
+              <div class="row q-col-gutter-md q-mb-md">
+                <div class="col-12 col-md-4">
+                  <div class="text-caption text-weight-bold q-mb-xs">SKU-ID</div>
+                  <q-select
+                    outlined v-model="skuId" :options="filteredSkuIdOptions"
+                    dense bg-color="white" use-input input-debounce="0"
+                    @filter="onSkuIdFilter" emit-value map-options
+                    @update:model-value="onSkuIdSelect"
+                  />
+                </div>
+                <div class="col-12 col-md-5">
+                  <div class="text-caption text-weight-bold q-mb-xs">SKU Name</div>
+                  <q-select
+                    outlined v-model="skuName" :options="filteredSkuNameOptions"
+                    dense bg-color="white" use-input input-debounce="0"
+                    @filter="onSkuNameFilter" emit-value map-options
+                    @update:model-value="onSkuNameSelect"
+                  />
+                </div>
+                <div class="col-12 col-md-3">
+                  <div class="text-caption text-weight-bold q-mb-xs">Plant</div>
+                  <q-select
+                    outlined v-model="plant" :options="plantOptions"
+                    dense bg-color="white" emit-value map-options
+                  >
+                    <template v-slot:append>
+                      <q-btn icon="settings" flat round dense size="sm" color="primary" @click="$router.push({ name: 'PlantConfig' })" />
+                    </template>
+                  </q-select>
+                </div>
+              </div>
+
+              <!-- Form Row 2 -->
+              <div class="row q-col-gutter-md q-mb-md">
+                <div class="col-12 col-md-3">
+                  <div class="text-caption text-weight-bold q-mb-xs">Require Vol (kg)</div>
+                  <q-input outlined v-model="productionRequire" type="number" dense bg-color="white" input-class="text-right" />
+                </div>
+                <div class="col-12 col-md-3">
+                  <div class="text-caption text-weight-bold q-mb-xs">Batch Standard</div>
+                  <q-input outlined v-model="batchStandard" type="number" dense bg-color="white" input-class="text-right" />
+                </div>
+                <div class="col-12 col-md-3">
+                  <div class="text-caption text-weight-bold q-mb-xs">No. of Batches</div>
+                  <q-input outlined v-model="numberOfBatch" type="number" dense bg-color="white" @update:model-value="onManualBatchChange" input-class="text-center" />
+                </div>
+                <div class="col-12 col-md-3">
+                  <div class="text-caption text-weight-bold q-mb-xs">Total Plan Vol</div>
+                  <q-input outlined :model-value="totalPlanVolume" readonly dense bg-color="grey-2" input-class="text-right text-weight-bold" />
+                </div>
+              </div>
+
+              <!-- Form Row 3 -->
+              <div class="row q-col-gutter-md">
+                <div class="col-12 col-md-4">
+                  <div class="text-caption text-weight-bold q-mb-xs">Start Date</div>
+                  <q-input outlined v-model="startDate" dense bg-color="white" type="date" />
+                </div>
+                <div class="col-12 col-md-4">
+                  <div class="text-caption text-weight-bold q-mb-xs">Finish Date</div>
+                  <q-input outlined v-model="finishDate" dense bg-color="white" type="date" />
+                </div>
+                <div class="col-12 col-md-4">
+                  <!-- Button moved to header -->
+                </div>
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+
+        <!-- BOTTOM SECTION: Production Plans List (Plans Master) -->
+        <div class="col-12 column q-gutter-y-sm" style="min-height: 400px; height: calc(50vh);">
           <div class="row items-center justify-between q-mb-xs">
             <div class="text-subtitle2 text-weight-bold">Plans Master</div>
             <div class="row items-center q-gutter-x-xs">
@@ -757,167 +918,8 @@ onMounted(() => {
             </q-table>
           </q-card>
         </div>
-
-        <!-- RIGHT COLUMN: Creation & SKU Master -->
-        <div class="col-12 col-md-8 column q-gutter-y-md">
-          <!-- SKU Selection Card -->
-          <q-card flat bordered class="shadow-1">
-            <q-card-section class="q-pa-sm bg-blue-grey-1 row items-center justify-between">
-              <div class="text-subtitle2 text-weight-bold">
-                <q-icon name="list_alt" class="q-mr-xs" />
-                SKU Master Lookup
-              </div>
-              <q-btn
-                :label="showSkuList ? 'Hide List' : 'Show List'"
-                :color="showSkuList ? 'grey-7' : 'primary'"
-                unelevated
-                no-caps
-                dense
-                size="sm"
-                @click="showSkuList = !showSkuList"
-                class="q-px-sm"
-              />
-            </q-card-section>
-
-            <q-slide-transition>
-              <div v-show="showSkuList">
-                <q-card-section class="q-pa-none">
-                  <div class="row items-center q-pa-sm q-gutter-sm bg-white border-bottom">
-                    <q-btn icon="refresh" color="primary" round flat dense size="sm" @click="fetchSkus" />
-                    <q-btn icon="filter_alt_off" color="grey" round flat dense size="sm" @click="resetSkuFilters" />
-                    <q-checkbox v-model="showAllSkus" label="Show Inactive" dense size="xs" class="text-caption" />
-                    <q-space />
-                    <div class="text-caption text-grey-7">{{ filteredSkus.length }} SKUs found</div>
-                  </div>
-                  
-                  <q-table
-                    :rows="filteredSkus"
-                    :columns="skuColumns"
-                    row-key="id"
-                    flat
-                    dense
-                    :pagination="{ rowsPerPage: 5 }"
-                    style="max-height: 250px"
-                  >
-                    <template v-slot:body-cell-status="props">
-                      <q-td :props="props">
-                        <q-chip :color="props.value === 'Active' ? 'positive' : 'grey'" text-color="white" size="xs">
-                          {{ props.value }}
-                        </q-chip>
-                      </q-td>
-                    </template>
-                    <template v-slot:body-cell-sku_actions="props">
-                      <q-td :props="props" align="center">
-                        <q-btn
-                          icon="check_circle"
-                          color="positive"
-                          unelevated
-                          no-caps
-                          dense
-                          size="xs"
-                          label="Select"
-                          @click="selectSku(props.row)"
-                        />
-                      </q-td>
-                    </template>
-                  </q-table>
-                </q-card-section>
-              </div>
-            </q-slide-transition>
-          </q-card>
-
-          <!-- Create Plan Form -->
-          <q-card flat bordered class="shadow-1" id="create-plan-form">
-            <q-card-section class="q-pa-sm bg-primary text-white">
-              <div class="text-subtitle2 text-weight-bold">
-                <q-icon name="add_circle" class="q-mr-xs" />
-                Create New Production Plan
-              </div>
-            </q-card-section>
-
-            <q-card-section class="q-pa-md bg-blue-grey-1">
-              <!-- Form Row 1 -->
-              <div class="row q-col-gutter-md q-mb-md">
-                <div class="col-12 col-md-4">
-                  <div class="text-caption text-weight-bold q-mb-xs">SKU-ID</div>
-                  <q-select
-                    outlined v-model="skuId" :options="filteredSkuIdOptions"
-                    dense bg-color="white" use-input input-debounce="0"
-                    @filter="onSkuIdFilter" emit-value map-options
-                    @update:model-value="onSkuIdSelect"
-                  />
-                </div>
-                <div class="col-12 col-md-5">
-                  <div class="text-caption text-weight-bold q-mb-xs">SKU Name</div>
-                  <q-select
-                    outlined v-model="skuName" :options="filteredSkuNameOptions"
-                    dense bg-color="white" use-input input-debounce="0"
-                    @filter="onSkuNameFilter" emit-value map-options
-                    @update:model-value="onSkuNameSelect"
-                  />
-                </div>
-                <div class="col-12 col-md-3">
-                  <div class="text-caption text-weight-bold q-mb-xs">Plant</div>
-                  <q-select
-                    outlined v-model="plant" :options="plantOptions"
-                    dense bg-color="white" emit-value map-options
-                  >
-                    <template v-slot:append>
-                      <q-btn icon="settings" flat round dense size="sm" color="primary" @click="$router.push({ name: 'PlantConfig' })" />
-                    </template>
-                  </q-select>
-                </div>
-              </div>
-
-              <!-- Form Row 2 -->
-              <div class="row q-col-gutter-md q-mb-md">
-                <div class="col-12 col-md-3">
-                  <div class="text-caption text-weight-bold q-mb-xs">Require Vol (kg)</div>
-                  <q-input outlined v-model="productionRequire" type="number" dense bg-color="white" input-class="text-right" />
-                </div>
-                <div class="col-12 col-md-3">
-                  <div class="text-caption text-weight-bold q-mb-xs">Batch Standard</div>
-                  <q-input outlined v-model="batchStandard" type="number" dense bg-color="white" input-class="text-right" />
-                </div>
-                <div class="col-12 col-md-3">
-                  <div class="text-caption text-weight-bold q-mb-xs">No. of Batches</div>
-                  <q-input outlined v-model="numberOfBatch" type="number" dense bg-color="white" @update:model-value="onManualBatchChange" input-class="text-center" />
-                </div>
-                <div class="col-12 col-md-3">
-                  <div class="text-caption text-weight-bold q-mb-xs">Total Plan Vol</div>
-                  <q-input outlined :model-value="totalPlanVolume" readonly dense bg-color="grey-2" input-class="text-right text-weight-bold" />
-                </div>
-              </div>
-
-              <!-- Form Row 3 -->
-              <div class="row q-col-gutter-md">
-                <div class="col-12 col-md-4">
-                  <div class="text-caption text-weight-bold q-mb-xs">Start Date</div>
-                  <q-input outlined v-model="startDate" dense bg-color="white" type="date" />
-                </div>
-                <div class="col-12 col-md-4">
-                  <div class="text-caption text-weight-bold q-mb-xs">Finish Date</div>
-                  <q-input outlined v-model="finishDate" dense bg-color="white" type="date" />
-                </div>
-                <div class="col-12 col-md-4 flex items-end">
-                  <q-btn
-                    label="Generate Plan"
-                    color="primary"
-                    class="full-width text-weight-bold"
-                    @click="onCreatePlan"
-                    unelevated
-                    no-caps
-                    :loading="isCreating"
-                    icon="playlist_add"
-                    size="md"
-                    style="height: 40px"
-                  />
-                </div>
-              </div>
-            </q-card-section>
-          </q-card>
-        </div>
       </div>
+
     </q-page>
 
   </RouterView>
