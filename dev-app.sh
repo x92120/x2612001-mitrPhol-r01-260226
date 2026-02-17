@@ -5,14 +5,15 @@
 
 echo "🚀 Starting xMixing in DEVELOPMENT mode..."
 
-# Start MQTT Bridge
-echo "🌉 Starting MQTT Bridge..."
-/Users/x92120/.xMixing_venv/bin/python3 ./x09-LocalMqtt/x01-ScaleRead/mqtt_bridge.py > bridge.log 2>&1 &
+# Start MQTT Bridge (Separated)
+echo "🌉 Starting Scale and Scanner Readers..."
+python3 -u ./x09-LocalMqtt/x01-EquipmentRead/scale_read.py > bridge.log 2>&1 &
+python3 -u ./x09-LocalMqtt/x01-EquipmentRead/scanner_read.py >> bridge.log 2>&1 &
 
 # Start Backend
 echo "⚙️ Starting Backend (FastAPI)..."
 cd x02-BackEnd/x0201-fastAPI
-PORT=8001 /Users/x92120/.xMixing_venv/bin/python3 main.py > ../../backend.log 2>&1 &
+PORT=8001 python3 main.py > ../../backend.log 2>&1 &
 cd ../..
 
 # Start Frontend

@@ -307,6 +307,7 @@ const onCancelPlan = async (plan: any) => {
 }
 
 const showHistory = async (plan: any) => {
+  try {
     const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/production-plans/${plan.id}/history`)
     const historyText = data.length > 0 
       ? data.map((h: any) => {

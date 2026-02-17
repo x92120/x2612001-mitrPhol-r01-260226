@@ -13,6 +13,8 @@ services:
     restart: unless-stopped
     depends_on:
       - rabbitmq
+    networks:
+      - xmixing-net
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -34,3 +36,9 @@ services:
     command: >
       sh -c "rabbitmq-plugins enable --offline rabbitmq_mqtt rabbitmq_web_mqtt && rabbitmq-server"
     restart: unless-stopped
+    networks:
+      - xmixing-net
+
+networks:
+  xmixing-net:
+    driver: bridge

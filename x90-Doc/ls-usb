@@ -1,0 +1,55 @@
+xmitrphol-ubuntu2404@xmitrphol-ubuntu2404:~/xApp/x90-Doc$ kill -9 ace2e3cf-d1cd-4ad2-bcbc-2a3a92191ed3 || true && lsusb
+bash: kill: ace2e3cf-d1cd-4ad2-bcbc-2a3a92191ed3: arguments must be process or job IDs
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 001 Device 002: ID 1d6f:0003 Vendor Acm_Hid
+Bus 001 Device 003: ID 8087:0026 Intel Corp. AX201 Bluetooth
+Bus 001 Device 004: ID 17ef:6190 Lenovo Lenovo Calliope USB Keyboard G2
+Bus 001 Device 005: ID 17ef:608d Lenovo Optical Mouse
+Bus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+
+
+Active USB Devices
+Scanner: Bus 001 Device 002: ID 1d6f:0003 Vendor Acm_Hid
+This is your barcode scanner at /dev/ttyACM0.
+Bluetooth: Bus 001 Device 003: ID 8087:0026 Intel Corp. AX201 Bluetooth
+Keyboard: Bus 001 Device 004: ID 17ef:6190 Lenovo Lenovo Calliope USB Keyboard G2
+Mouse: Bus 001 Device 005: ID 17ef:608d Lenovo Optical Mouse
+
+Configuring Scanner Mode
+User wants to disable keyboard mode. Checking if the scanner is registered as an input device.
+
+Progress Updates
+1
+Checking if scanner is registered as keyboard input
+
+Ran background command
+Relocate
+~/xApp/x90-Doc $ cat /proc/bus/input/devices | grep -C 5 "1d6f"
+
+
+Ask every time
+Exit code 0
+Checked command status
+The scanner is being recognized as both a keyboard (Handlers=... kbd) and a serial device.
+
+To make it act only as a serial device, we can tell the system to ignore the keyboard interface for this specific device using a udev rule. This will prevent it from typing into your text editor or terminal, but the 
+/dev/ttyACM0
+ serial port will still work for your Python script.
+
+I will create a udev rule to unbind the device from the usbhid driver.
+
+Plan
+Create a udev rule file: /etc/udev/rules.d/99-barcode-scanner.rules which tells the system to ignore the HID interface for Vendor 1d6f Product 0003.
+Reload udev rules.
+Ask the user to unplug and replug the scanner.
+Since I don't have sudo access to write directly to /etc, I will create the file in your home directory and ask you to copy it.
+
+Wait, I need to be careful. If the device uses the same interface for both, unbinding it might kill both. lsusb -t would show the tree. Let's check lsusb -t to see if it has multiple interfaces.
+
+If it has:
+
+Interface 0: CDC ACM (Driver=cdc_acm)
+Interface 1: HID (Driver=usbhid)
+Then we can unbind just the HID driver.
+
+Let's check the interface structure.

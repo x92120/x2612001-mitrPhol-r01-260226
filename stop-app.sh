@@ -7,6 +7,8 @@ echo "🛑 Stopping xMixing Application Suite..."
 
 echo "🛑 Stopping xMixing Application processes..."
 
+pkill -f "scale_read.py"
+pkill -f "scanner_read.py"
 pkill -f "mqtt_bridge.py"
 pkill -f "python3 main.py"
 pkill -f "nuxt"
@@ -14,7 +16,7 @@ pkill -f "pm2"
 
 echo "🐳 Stopping Docker Infrastructure..."
 cd x09-LocalMqtt
-docker-compose stop
+docker compose stop
 cd ..
 
 echo "✅ All services stopped."
