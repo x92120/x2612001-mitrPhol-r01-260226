@@ -12,7 +12,7 @@ services:
       - ./data:/data
     # devices:
     #   - "/dev/tty.usbserial-FTARKJMG2:/dev/ttyUSB0"
-    restart: unless-stopped
+    restart: "no"
     depends_on:
       - rabbitmq
 
@@ -33,4 +33,4 @@ services:
     # Enable MQTT and Web MQTT plugins
     command: >
       sh -c "rabbitmq-plugins enable --offline rabbitmq_mqtt rabbitmq_web_mqtt && rabbitmq-server"
-    restart: unless-stopped
+    restart: "no"

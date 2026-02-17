@@ -13,7 +13,8 @@ import glob
 
 # specific to Mac; update for Linux/Windows if needed
 # Find all matching USB serial ports
-PORTS = glob.glob("/dev/cu.usbserial-FTARK*") + glob.glob("/dev/cu.usbserial-FTWK*")
+# Find all matching USB serial ports
+PORTS = glob.glob("/dev/cu.usbserial-FTARK*") + glob.glob("/dev/cu.usbserial-FTWK*") + glob.glob("/dev/ttyACM*") + glob.glob("/dev/ttyUSB*")
 if not PORTS:
     # Fallback/Default for testing if no devices found
     PORTS = ["/dev/cu.usbserial-FTARKJMG0", "/dev/cu.usbserial-FTARKJMG1", "/dev/cu.usbserial-FTARKJMG2"]
