@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import type { QTableColumn } from 'quasar'
 import { useQuasar, exportFile } from 'quasar'
 import { appConfig } from '~/appConfig/config'
 import { useAuth } from '~/composables/useAuth'
-import { useMqttLocalDevice } from '~/composables/useMqttLocalDevice'
 
 interface IngredientIntakeHistory {
   id: number
@@ -43,14 +42,9 @@ interface IngredientIntake {
 const $q = useQuasar()
 const { getAuthHeader, user } = useAuth()
 
-// MQTT Integration
-const {
-  connect: connectMQTT,
-  disconnect: disconnectMQTT,
-  isConnected: mqttConnected,
-  connectionStatus,
-  lastScan,
-} = useMqttLocalDevice()
+// Scanner input ref (keyboard emulator mode)
+const ingredientCodeRef = ref<any>(null)
+const scannerReady = ref(true)
 
 const lotNumber = ref('')
 const warehouseLocation = ref('')
@@ -74,29 +68,20 @@ const editId = ref<number | null>(null)
 const originalRemainVol = ref<number | null>(null)
 const originalStatus = ref<string>('Active')
 
-// Watch for scans from ANY node in the network
-watch(lastScan, (newScan) => {
-  if (newScan && newScan.barcode) {
-    // Update the barcode field
-    ingredientId.value = newScan.barcode
-
-    // If scanning while dialog is open, update temp field too
-    if (showIngredientDialog.value) {
-      tempIngredientId.value = newScan.barcode
-    }
-
-    // Trigger lookup logic
-    lookupIngredient(newScan.barcode)
-
-    $q.notify({
-      type: 'info',
-      message: `Intake scan from ${newScan.node_id}`,
-      caption: `Barcode: ${newScan.barcode}`,
-      icon: 'qr_code_scanner',
-      position: 'top-right',
-    })
+// Handle barcode scanner input (keyboard emulator sends chars + Enter)
+const onScannerEnter = () => {
+  const code = ingredientId.value?.trim()
+  if (code) {
+    lookupIngredient(code)
   }
-})
+}
+
+// Focus the scanner input field
+const focusScannerInput = () => {
+  nextTick(() => {
+    ingredientCodeRef.value?.focus()
+  })
+}
 
 const columns: QTableColumn[] = [
   { name: 'id', align: 'center', label: 'ID', field: 'id', sortable: true },
@@ -525,7 +510,7 @@ const onRejectIntake = async (row: IngredientIntake) => {
   })
 }
 
-// Disconnect is handled by useMqttLocalDevice composable
+
 
 // Initialize
 // Filtering state
@@ -560,9 +545,9 @@ let refreshInterval: any = null
 onMounted(() => {
   fetchReceipts()
   generateIntakeLotId() // Generate initial ID
-  setTimeout(() => {
-    connectMQTT()
-  }, 100)
+
+  // Auto-focus scanner input on mount
+  focusScannerInput()
 
   // Auto-refresh every 5 seconds
   refreshInterval = setInterval(() => {
@@ -571,7 +556,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  disconnectMQTT()
   if (refreshInterval) clearInterval(refreshInterval)
 })
 
@@ -594,6 +578,7 @@ const onClear = () => {
   originalRemainVol.value = null
   originalStatus.value = 'Active'
   generateIntakeLotId() // Get fresh ID after clear/save
+  focusScannerInput() // Re-focus for next scan
 }
 
 // Open dialog to enter ingredient code
@@ -1086,15 +1071,17 @@ const onFileSelected = async (event: Event) => {
             <div class="row q-col-gutter-md">
               <div class="col-12 col-md-4">
                 <q-input
+                  ref="ingredientCodeRef"
                   outlined
                   v-model="ingredientId"
                   label="Scan/Type Ingredient Code *"
-                  @keyup.enter="lookupIngredient(ingredientId)"
+                  @keyup.enter="onScannerEnter"
+                  autofocus
                 >
                   <template v-slot:prepend>
                     <q-icon
                       name="circle"
-                      :color="mqttConnected ? 'positive' : 'negative'"
+                      color="positive"
                     />
                   </template>
                   <template v-slot:append>
