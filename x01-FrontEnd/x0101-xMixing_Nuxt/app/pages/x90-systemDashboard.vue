@@ -60,9 +60,24 @@ interface HostInfo {
   boot_time_iso: string
 }
 
+interface ConnectedDevice {
+  name: string
+  type: string
+  status: string
+  details: string
+  icon: string
+}
+
+interface ConnectedDevices {
+  usb_devices: ConnectedDevice[]
+  network_devices: ConnectedDevice[]
+  serial_devices: ConnectedDevice[]
+}
+
 const status = ref<ServerStatus | null>(null)
 const history = ref<ServerHistory | null>(null)
 const hostInfo = ref<HostInfo | null>(null)
+const connectedDevices = ref<ConnectedDevices | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 let pollTimer: any = null
@@ -108,6 +123,34 @@ const fetchHostInfo = async () => {
     hostInfo.value = await response.json()
   } catch (e) {
     console.error('Host info fetch error:', e)
+  }
+}
+
+const fetchConnectedDevices = async () => {
+  try {
+    const response = await fetch(`${appConfig.apiBaseUrl}/connected-devices`)
+    if (!response.ok) throw new Error('Failed to fetch connected devices')
+    connectedDevices.value = await response.json()
+  } catch (e) {
+    console.error('Connected devices fetch error:', e)
+  }
+}
+
+const totalDevices = computed(() => {
+  if (!connectedDevices.value) return 0
+  return connectedDevices.value.usb_devices.length +
+    connectedDevices.value.network_devices.length +
+    connectedDevices.value.serial_devices.length
+})
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'connected': return 'green'
+    case 'up': return 'green'
+    case 'active': return 'green'
+    case 'available': return 'blue'
+    case 'down': return 'red'
+    default: return 'grey'
   }
 }
 
@@ -175,6 +218,7 @@ onMounted(() => {
   fetchStatus()
   fetchHistory()
   fetchHostInfo()
+  fetchConnectedDevices()
   pollTimer = setInterval(fetchStatus, 3000)
   historyTimer = setInterval(fetchHistory, 10000) // History every 10s
 })
@@ -310,6 +354,93 @@ onUnmounted(() => {
             <q-card-section v-else class="flex flex-center q-pa-lg">
               <q-spinner-dots size="40px" color="teal" />
             </q-card-section>
+          </q-card>
+
+          <!-- Connected Devices Card -->
+          <q-card flat bordered class="q-mt-md">
+            <q-card-section class="bg-indigo-9 text-white">
+              <div class="text-subtitle1 text-weight-bold flex items-center">
+                <q-icon name="devices" class="q-mr-xs" />
+                Connected Devices
+                <q-spacer />
+                <q-badge color="white" text-color="indigo-9" :label="totalDevices" />
+              </div>
+            </q-card-section>
+            <q-card-section v-if="connectedDevices" class="q-pa-none">
+              <!-- USB Devices -->
+              <div v-if="connectedDevices.usb_devices.length > 0">
+                <q-item-label header class="text-weight-bold text-caption bg-grey-2">
+                  <q-icon name="usb" class="q-mr-xs" size="xs" /> USB Devices ({{ connectedDevices.usb_devices.length }})
+                </q-item-label>
+                <q-list dense separator>
+                  <q-item v-for="(dev, idx) in connectedDevices.usb_devices" :key="'usb-' + idx">
+                    <q-item-section avatar>
+                      <q-icon :name="dev.icon" :color="getStatusColor(dev.status)" />
+                    </q-item-section>
+                    <q-item-section>
+                      <q-item-label class="text-caption text-weight-bold" style="word-break: break-word;">{{ dev.name }}</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge :color="getStatusColor(dev.status)" :label="dev.status" dense />
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </div>
+
+              <!-- Network Interfaces -->
+              <div v-if="connectedDevices.network_devices.length > 0">
+                <q-item-label header class="text-weight-bold text-caption bg-grey-2">
+                  <q-icon name="settings_ethernet" class="q-mr-xs" size="xs" /> Network Interfaces ({{ connectedDevices.network_devices.length }})
+                </q-item-label>
+                <q-list dense separator>
+                  <q-item v-for="(dev, idx) in connectedDevices.network_devices" :key="'net-' + idx">
+                    <q-item-section avatar>
+                      <q-icon :name="dev.icon" :color="getStatusColor(dev.status)" />
+                    </q-item-section>
+                    <q-item-section>
+                      <q-item-label class="text-weight-bold">{{ dev.name }}</q-item-label>
+                      <q-item-label caption style="word-break: break-word;">{{ dev.details }}</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge :color="getStatusColor(dev.status)" :label="dev.status" dense />
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </div>
+
+              <!-- Serial Devices -->
+              <div v-if="connectedDevices.serial_devices.length > 0">
+                <q-item-label header class="text-weight-bold text-caption bg-grey-2">
+                  <q-icon name="settings_input_component" class="q-mr-xs" size="xs" /> Serial Ports ({{ connectedDevices.serial_devices.length }})
+                </q-item-label>
+                <q-list dense separator>
+                  <q-item v-for="(dev, idx) in connectedDevices.serial_devices" :key="'serial-' + idx">
+                    <q-item-section avatar>
+                      <q-icon :name="dev.icon" :color="getStatusColor(dev.status)" />
+                    </q-item-section>
+                    <q-item-section>
+                      <q-item-label class="text-weight-bold">{{ dev.name }}</q-item-label>
+                      <q-item-label caption>{{ dev.details }}</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge :color="getStatusColor(dev.status)" :label="dev.status" dense />
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </div>
+
+              <!-- No devices -->
+              <div v-if="totalDevices === 0" class="q-pa-md text-center text-grey">
+                <q-icon name="devices_other" size="md" />
+                <div class="text-caption">No devices detected</div>
+              </div>
+            </q-card-section>
+            <q-card-section v-else class="flex flex-center q-pa-lg">
+              <q-spinner-dots size="40px" color="indigo" />
+            </q-card-section>
+            <q-card-actions align="right">
+              <q-btn flat dense size="sm" icon="refresh" label="Refresh" color="indigo" @click="fetchConnectedDevices" />
+            </q-card-actions>
           </q-card>
         </div>
 

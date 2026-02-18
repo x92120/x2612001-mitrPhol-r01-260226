@@ -82,6 +82,91 @@ def get_host_info():
     }
 
 
+@router.get("/connected-devices", response_model=schemas.ConnectedDevices)
+def get_connected_devices():
+    """Get devices connected to this system (USB, Network interfaces, Serial ports)."""
+    import subprocess
+    import glob
+
+    usb_devices = []
+    network_devices = []
+    serial_devices = []
+
+    # USB Devices
+    try:
+        result = subprocess.run(
+            ['lsusb'], capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                if line.strip():
+                    # Parse: Bus 001 Device 002: ID 1234:5678 Device Name
+                    parts = line.split('ID ')
+                    name = parts[1].strip() if len(parts) > 1 else line.strip()
+                    # Skip root hubs
+                    if 'root hub' in name.lower():
+                        continue
+                    usb_devices.append({
+                        "name": name,
+                        "type": "usb",
+                        "status": "connected",
+                        "details": line.strip(),
+                        "icon": "usb"
+                    })
+    except Exception as e:
+        logger.warning(f"Failed to list USB devices: {e}")
+
+    # Network Interfaces
+    try:
+        net_if = psutil.net_if_addrs()
+        net_stats = psutil.net_if_stats()
+        for iface_name, addrs in net_if.items():
+            if iface_name == 'lo':
+                continue  # Skip loopback
+            stat = net_stats.get(iface_name)
+            is_up = stat.isup if stat else False
+            ip_addr = ""
+            for addr in addrs:
+                if addr.family.name == 'AF_INET':
+                    ip_addr = addr.address
+                    break
+            speed_info = f"{stat.speed}Mbps" if stat and stat.speed > 0 else "N/A"
+            network_devices.append({
+                "name": iface_name,
+                "type": "network",
+                "status": "up" if is_up else "down",
+                "details": f"IP: {ip_addr or 'N/A'} | Speed: {speed_info}",
+                "icon": "wifi" if "wl" in iface_name else "settings_ethernet"
+            })
+    except Exception as e:
+        logger.warning(f"Failed to list network interfaces: {e}")
+
+    # Serial Devices (scales, scanners, etc.)
+    try:
+        serial_ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*') + glob.glob('/dev/ttyS*')
+        for port in sorted(serial_ports):
+            # Only show ttyS ports that are likely real (skip ttyS4+)
+            if '/dev/ttyS' in port:
+                port_num = int(port.replace('/dev/ttyS', ''))
+                if port_num >= 4:
+                    continue
+            serial_devices.append({
+                "name": port.split('/')[-1],
+                "type": "serial",
+                "status": "available",
+                "details": port,
+                "icon": "serial_port" if "ttyUSB" in port else "settings_input_component"
+            })
+    except Exception as e:
+        logger.warning(f"Failed to list serial devices: {e}")
+
+    return {
+        "usb_devices": usb_devices,
+        "network_devices": network_devices,
+        "serial_devices": serial_devices,
+    }
+
+
 @router.get("/server-status", response_model=schemas.ServerStatus)
 def get_server_status():
     """Get system resource usage statistics."""

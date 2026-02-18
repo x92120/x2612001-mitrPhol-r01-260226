@@ -480,6 +480,18 @@ class HostInfo(BaseModel):
     uptime: str
     boot_time_iso: str
 
+class ConnectedDevice(BaseModel):
+    name: str
+    type: str  # 'usb', 'network', 'serial'
+    status: str  # 'connected', 'active'
+    details: str
+    icon: str  # icon name for frontend
+
+class ConnectedDevices(BaseModel):
+    usb_devices: List[ConnectedDevice]
+    network_devices: List[ConnectedDevice]
+    serial_devices: List[ConnectedDevice]
+
 class MetricPoint(BaseModel):
     timestamp: datetime
     value: float
