@@ -467,6 +467,19 @@ class ServerStatus(BaseModel):
     os: str
     python_version: str
 
+class HostInfo(BaseModel):
+    hostname: str
+    ip_addresses: List[str]
+    os_name: str
+    os_version: str
+    kernel: str
+    architecture: str
+    cpu_model: str
+    total_ram: str
+    username: str
+    uptime: str
+    boot_time_iso: str
+
 class MetricPoint(BaseModel):
     timestamp: datetime
     value: float

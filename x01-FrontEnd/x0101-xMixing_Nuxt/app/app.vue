@@ -75,7 +75,7 @@ const handleLogout = async () => {
           v-if="hasPermission('production_list')"
         />
         <q-route-tab to="/x89-UserConfig" label="User" v-if="hasPermission('admin')" />
-        <q-route-tab to="/x90-ServerStatus" label="Server Status" v-if="hasPermission('admin')" />
+        <q-route-tab to="/x90-systemDashboard" label="System Dashboard" v-if="hasPermission('admin')" />
         <q-route-tab to="/x99-About" label="About" />
       </q-tabs>
     </q-header>
