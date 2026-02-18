@@ -249,7 +249,7 @@ onUnmounted(() => {
 
         <!-- Host Info Card (Left Side) -->
         <div class="col-12 col-md-3">
-          <q-card flat bordered class="full-height">
+          <q-card flat bordered>
             <q-card-section class="bg-teal-9 text-white">
               <div class="text-subtitle1 text-weight-bold flex items-center">
                 <q-icon name="computer" class="q-mr-xs" />
@@ -260,7 +260,7 @@ onUnmounted(() => {
               <q-list dense separator>
                 <q-item>
                   <q-item-section avatar>
-                    <q-icon name="badge" color="teal" />
+                    <q-icon name="dns" color="teal" />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label caption>Hostname</q-item-label>
@@ -280,7 +280,7 @@ onUnmounted(() => {
 
                 <q-item>
                   <q-item-section avatar>
-                    <q-icon name="lan" color="teal" />
+                    <q-icon name="public" color="teal" />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label caption>IP Addresses</q-item-label>
@@ -292,7 +292,7 @@ onUnmounted(() => {
 
                 <q-item>
                   <q-item-section avatar>
-                    <q-icon name="desktop_windows" color="teal" />
+                    <q-icon name="laptop" color="teal" />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label caption>Operating System</q-item-label>
@@ -302,7 +302,7 @@ onUnmounted(() => {
 
                 <q-item>
                   <q-item-section avatar>
-                    <q-icon name="terminal" color="teal" />
+                    <q-icon name="code" color="teal" />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label caption>Kernel</q-item-label>
@@ -312,7 +312,7 @@ onUnmounted(() => {
 
                 <q-item>
                   <q-item-section avatar>
-                    <q-icon name="architecture" color="teal" />
+                    <q-icon name="developer_board" color="teal" />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label caption>Architecture</q-item-label>
@@ -332,7 +332,7 @@ onUnmounted(() => {
 
                 <q-item>
                   <q-item-section avatar>
-                    <q-icon name="sd_card" color="teal" />
+                    <q-icon name="save" color="teal" />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label caption>Total RAM</q-item-label>
