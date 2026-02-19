@@ -19,3 +19,4 @@ coverage/
 pytest_cache/
 x09-LocalMqtt/rabbitmq-data/
 .venv/
+x01-FrontEnd.zip

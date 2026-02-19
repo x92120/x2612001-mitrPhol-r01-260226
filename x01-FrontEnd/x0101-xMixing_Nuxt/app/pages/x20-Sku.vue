@@ -678,6 +678,17 @@ const togglePhase = (skuId: string, phaseNumber: string) => {
 
 const isPhaseExpanded = (skuId: string, phaseNumber: string) => expandedPhases.value[skuId]?.includes(phaseNumber) ?? false
 
+const expandAllPhases = () => {
+  if (!selectedSkuId.value) return
+  const allPhaseNums = groupedSteps.value.map(g => g.phaseNum)
+  expandedPhases.value[selectedSkuId.value] = [...allPhaseNums]
+}
+
+const collapseAllPhases = () => {
+  if (!selectedSkuId.value) return
+  expandedPhases.value[selectedSkuId.value] = []
+}
+
 const getPhaseDescription = (phaseId: string | null) => {
   if (!phaseId) return ''
   return skuPhases.value.find(p => p.phase_code === phaseId)?.phase_description || ''
@@ -787,17 +798,17 @@ const masterColumns: QTableColumn[] = [
 ]
 
 const stepColumns: QTableColumn[] = [
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'center', style: 'width: 80px' },
-  { name: 'sub_step', label: 'Sub', field: 'sub_step', align: 'center', sortable: true },
-  { name: 'action_code', label: 'Action', field: 'action_code', align: 'center', sortable: true },
-  { name: 'action_description', label: 'Description', field: 'action_description', align: 'left', sortable: true, style: 'min-width: 150px' },
-  { name: 'ingredient_name', label: 'Ingredient', field: 'ingredient_name', align: 'left', sortable: true },
-  { name: 'require', label: 'Vol', field: 'require', align: 'right' },
-  { name: 'uom', label: 'UOM', field: 'uom', align: 'center' },
-  { name: 'temperature', label: 'Temp', field: 'temperature', align: 'right' },
-  { name: 'agitator_rpm', label: 'Agitator', field: 'agitator_rpm', align: 'right' },
-  { name: 'step_time', label: 'Time', field: (row: any) => row.step_time ? (row.step_time / 60).toFixed(1) : '', align: 'right' },
-  { name: 'qc_flags', label: 'QC/Rec', field: 'qc_temp', align: 'center' }
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center', style: 'width: 90px' },
+  { name: 'sub_step', label: 'Sub', field: 'sub_step', align: 'center', sortable: true, style: 'width: 55px' },
+  { name: 'action_code', label: 'Action', field: 'action_code', align: 'center', sortable: true, style: 'width: 70px' },
+  { name: 'action_description', label: 'Description', field: 'action_description', align: 'left', sortable: true, style: 'width: 160px' },
+  { name: 'ingredient_name', label: 'Ingredient', field: 'ingredient_name', align: 'left', sortable: true, style: 'width: auto' },
+  { name: 'require', label: 'Vol', field: 'require', align: 'right', style: 'width: 65px' },
+  { name: 'uom', label: 'UOM', field: 'uom', align: 'center', style: 'width: 55px' },
+  { name: 'temperature', label: 'Temp', field: 'temperature', align: 'right', style: 'width: 60px' },
+  { name: 'agitator_rpm', label: 'Agitator', field: 'agitator_rpm', align: 'right', style: 'width: 70px' },
+  { name: 'step_time', label: 'Time', field: (row: any) => row.step_time ? (row.step_time / 60).toFixed(1) : '', align: 'right', style: 'width: 55px' },
+  { name: 'qc_flags', label: 'QC/Rec', field: 'qc_temp', align: 'center', style: 'width: 70px' }
 ]
 
 const refreshAll = async () => {
@@ -1020,13 +1031,9 @@ onMounted(refreshAll)
       </template>
     </q-table>
 
-    <!-- Detail View (Selected SKU) -->
-    <transition
-      appear
-      enter-active-class="animated fadeIn"
-      leave-active-class="animated fadeOut"
-    >
-      <div v-if="selectedSkuId" class="detail-container q-pa-md bg-white rounded-borders shadow-1 bordered">
+    <!-- Detail View (Always Visible) -->
+      <div class="detail-container q-pa-md bg-white rounded-borders shadow-1 bordered">
+      <template v-if="selectedSkuId">
         <div class="row items-center q-mb-md">
           <div class="text-h6 text-primary row items-center">
             <q-icon name="format_list_numbered" size="md" class="q-mr-sm" />
@@ -1070,6 +1077,29 @@ onMounted(refreshAll)
               @click="addStep(selectedSkuId)"
             >
               <q-tooltip>Add New Phase</q-tooltip>
+            </q-btn>
+
+            <q-separator vertical inset class="q-mx-xs" />
+
+            <q-btn 
+              flat 
+              round 
+              dense 
+              icon="unfold_more" 
+              color="teal" 
+              @click="expandAllPhases"
+            >
+              <q-tooltip>Expand All</q-tooltip>
+            </q-btn>
+            <q-btn 
+              flat 
+              round 
+              dense 
+              icon="unfold_less" 
+              color="teal" 
+              @click="collapseAllPhases"
+            >
+              <q-tooltip>Collapse All</q-tooltip>
             </q-btn>
           </div>
         </div>
@@ -1194,8 +1224,15 @@ onMounted(refreshAll)
           <div class="text-h6">No Process Steps Defined</div>
           <div class="text-subtitle2">Click the plus icon above to add your first phase</div>
         </div>
+      </template>
+
+      <!-- Placeholder when no SKU selected -->
+      <div v-else class="text-center text-grey-5 q-pa-xl">
+        <q-icon name="touch_app" size="4em" class="q-mb-md" />
+        <div class="text-h6">Select a SKU</div>
+        <div class="text-subtitle2">Click on a SKU row above to view its process steps</div>
       </div>
-    </transition>
+    </div>
 
     <!-- Step Edit Dialog -->
     <q-dialog v-model="showStepDialog" persistent>
@@ -1887,6 +1924,11 @@ onMounted(refreshAll)
 
 .child-table {
   background: white;
+}
+
+.child-table :deep(table) {
+  table-layout: fixed;
+  width: 100%;
 }
 
 .child-table :deep(thead) {

@@ -147,7 +147,7 @@ const saveUserChanges = async () => {
       }
       throw new Error(errorMessage)
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating user:', error)
     $q.notify({
       type: 'negative',
@@ -184,7 +184,7 @@ const createUser = async () => {
       const errorData = await response.json()
       throw new Error(errorData.detail || 'Failed to create user')
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating user:', error)
     $q.notify({
       type: 'negative',
@@ -231,6 +231,32 @@ const hasPermission = (permission: string) => {
 
 const closeDialog = () => {
   selectedUser.value = null
+}
+
+const deleteUser = (user: User) => {
+  $q.dialog({
+    title: 'Delete User',
+    message: `Are you sure you want to delete "${user.full_name || user.username}"? This action cannot be undone.`,
+    cancel: true,
+    persistent: true,
+    color: 'negative',
+  }).onOk(async () => {
+    try {
+      const response = await fetch(`${appConfig.apiBaseUrl}/users/${user.id}`, {
+        method: 'DELETE',
+        headers: getAuthHeader() as Record<string, string>,
+      })
+      if (response.ok) {
+        users.value = users.value.filter(u => u.id !== user.id)
+        $q.notify({ type: 'positive', message: `User "${user.full_name || user.username}" deleted`, position: 'top' })
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to delete user')
+      }
+    } catch (error: any) {
+      $q.notify({ type: 'negative', message: error.message || 'Failed to delete user', position: 'top' })
+    }
+  })
 }
 </script>
 
@@ -308,8 +334,17 @@ const closeDialog = () => {
                   color="info"
                   size="sm"
                   padding="xs md"
-                  class="text-white text-weight-bold"
+                  class="text-white text-weight-bold q-mr-sm"
                   @click="selectUser(props.row)"
+                />
+                <q-btn
+                  label="Delete"
+                  color="negative"
+                  size="sm"
+                  padding="xs md"
+                  class="text-white text-weight-bold"
+                  icon="delete"
+                  @click="deleteUser(props.row)"
                 />
               </q-td>
             </template>
