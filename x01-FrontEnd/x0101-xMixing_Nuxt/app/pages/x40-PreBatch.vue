@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useQuasar, type QTableColumn } from 'quasar'
 
 import { appConfig } from '../appConfig/config'
@@ -301,21 +301,7 @@ const updateRequireVolume = () => {
    }
 }
 
-// --- MQTT Configuration ---
-import { useMqttLocalDevice } from '~/composables/useMqttLocalDevice'
-
-// Use shared MQTT composable
-const { 
-  connect: connectMQTT, 
-  disconnect: disconnectMQTT, 
-  mqttClient, 
-  isConnected: isBrokerConnected,
-  lastScan,
-  publish: publishMQTT 
-} = useMqttLocalDevice()
-
-
-// Init scales with connection state and topic
+// --- Scales (static display, no MQTT) ---
 const scales = ref([
   {
     id: 1,
@@ -355,122 +341,31 @@ const scales = ref([
   },
 ])
 
-
-
-// Handle incoming messages from scale/scale-XX topics
-const handleMqttMessage = (topic: string, message: any) => {
-  console.log('📨 MQTT Message - Topic:', topic)
-  
-  // Only process scale topics
-  if (!topic.startsWith('scale/')) {
-    console.log('⚠️ Not a scale topic, ignoring')
-    return
-  }
-
-  try {
-    // Extract scale ID from topic: "scale/scale-01" -> "scale-01"
-    const scaleIdFromTopic = topic.split('/')[1]
-    console.log('🎯 Scale ID from topic:', scaleIdFromTopic)
-
-    const msgStr = message.toString()
-    console.log('📦 Raw:', msgStr)
-    const data = JSON.parse(msgStr)
-    console.log('🔍 Parsed:', data)
-
-    // Find matching scale
-    const scale = scales.value.find(s => s.targetScaleId === scaleIdFromTopic && s.connected)
-    
-    if (scale) {
-        // Handle Error State
-        if (data.error_msg) {
-            console.warn(`⚠️ Scale Error: ${data.error_msg} on ${scale.label}`)
-            ;(scale as any).isError = true
-            scale.displayValue = "----"
-            return
-        }
-
-        // Handle Normal Weight Data
-        if (data.weight !== undefined) {
-            ;(scale as any).isError = false
-            // Capture stable status (default to true if missing to avoid constant vibration)
-            ;(scale as any).isStable = (data.stable !== undefined) ? data.stable : true
-            
-            const val = parseFloat(data.weight)
-            
-            if (!isNaN(val)) {
-                scale.value = val
-                scale.displayValue = val.toFixed((scale as any).precision || 3)
-                // console.log('✨ Updated:', scale.label, '=', scale.displayValue)
-            }
-        }
-    }
-  } catch (e) {
-    console.error('💥 Parse error:', e)
-  }
-}
-
-// Watch for client initialization to attach listeners
-watch(mqttClient, (client) => {
-  if (client) {
-    console.log('🔗 Attaching scale handler')
-    // Remove any existing listener to be safe (though this is a new client usually)
-    client.removeListener('message', handleMqttMessage)
-    client.on('message', handleMqttMessage)
-    console.log('✅ Handler attached')
-  }
-}, { immediate: true })
-
-// Watch for broker connection to Auto-Subscribe
-watch(isBrokerConnected, (connected) => {
-  if (connected && mqttClient.value) {
-    console.log('Broker connected - Auto-subscribing scales')
-    // Reset subscriptions based on desired state
-    refreshSubscription()
-    
-    // Auto-connect all scales visually if they were default
-    scales.value.forEach(s => s.connected = true)
-    refreshSubscription()
-  }
-})
-
-const refreshSubscription = () => {
-  if (!mqttClient.value || !isBrokerConnected.value) return
-
-  const anyConnected = scales.value.some(s => s.connected)
-  
-  if (anyConnected) {
-    mqttClient.value.subscribe('scale/#', (err?: any) => {
-      if (err) console.error('Sub error', err)
-      else console.log('Subscribed to scale/#')
-    })
-  } else {
-    mqttClient.value.unsubscribe('scale/#', (err?: any) => { 
-        if (!err) console.log('Unsubscribed scale/#')
-    })
-  }
-}
-
 const toggleScaleConnection = (scaleId: number) => {
   const scale = scales.value.find((s) => s.id === scaleId)
   if (!scale) return
-
-  if (!isBrokerConnected.value) {
-    $q.notify({ type: 'warning', message: 'Broker connecting... please wait', timeout: 1000 })
-    return
-  }
-
-  // Toggle visual state
   scale.connected = !scale.connected
-  
-  // Update subscription
-  refreshSubscription()
-
   $q.notify({
     type: scale.connected ? 'positive' : 'info',
     message: scale.connected ? `Connected ${scale.label}` : `Disconnected ${scale.label}`,
     position: 'top',
     timeout: 500
   })
+}
+
+// --- Scanner input ref (keyboard emulator mode) ---
+const intakeLotInputRef = ref<any>(null)
+
+const focusIntakeLotInput = () => {
+  nextTick(() => {
+    intakeLotInputRef.value?.focus()
+  })
+}
+
+// Handle barcode scanner Enter key for intake lot ID
+const onIntakeLotScanEnter = () => {
+  // The watcher on selectedIntakeLotId already handles lookup/FIFO validation
+  // So when scanner sends Enter, the value is already set and watcher fires
 }
 
 const selectedPlanDetails = computed(() => {
@@ -510,14 +405,13 @@ const structuredSkuList = computed(() => {
 })
 
 onMounted(() => {
-  // Connect to shared broker
-  connectMQTT()
   fetchIngredients()
   fetchProductionPlans()
   fetchBatchIds()
   fetchInventory()
   fetchPreBatchRecords()
   fetchWarehouses()
+  focusIntakeLotInput()
 })
 
 const fetchWarehouses = async () => {
@@ -781,7 +675,7 @@ watch(selectedBatchIndex, () => {
 })
 
 onUnmounted(() => {
-  disconnectMQTT()
+  // cleanup if needed
 })
 
 // Control Fields
@@ -1074,28 +968,20 @@ const onConfirmDeleteManual = async () => {
 }
 
 // Watch for scans during deletion mode
-watch(lastScan, async (newScan) => {
-  if (!showDeleteDialog.value || !recordToDelete.value || !newScan) return
+// Delete confirmation via typed input (keyboard scanner emulator)
+const onDeleteScanEnter = async () => {
+  if (!showDeleteDialog.value || !recordToDelete.value) return
 
-  if (newScan.barcode === recordToDelete.value.batch_record_id) {
+  if (deleteInput.value === recordToDelete.value.batch_record_id) {
     await executeDeletion(recordToDelete.value)
   } else {
     $q.notify({ 
       type: 'negative', 
-      message: `Invalid Barcode! Expected: ${recordToDelete.value.batch_record_id}`,
+      message: `Invalid code! Expected: ${recordToDelete.value.batch_record_id}`,
       position: 'top',
       timeout: 3000
     })
   }
-})
-
-const simulateScannerConfirm = () => {
-    if (!recordToDelete.value) return
-    publishMQTT('scanner/sim/scan', {
-        node_id: 'simulator',
-        barcode: recordToDelete.value.batch_record_id,
-        timestamp: new Date().toISOString()
-    })
 }
 
 const unlockPackageSize = () => {
@@ -1606,11 +1492,11 @@ const onSelectBatch = (index: number) => {
             <div class="text-h6">Weighting Scale</div>
             <q-space />
             <q-badge 
-              :color="isBrokerConnected ? 'green' : 'red'" 
-              :label="isBrokerConnected ? 'MQTT Connected' : 'MQTT Disconnected'"
+              color="blue-grey" 
+              label="Scales"
               class="q-px-md"
             >
-              <q-tooltip>{{ isBrokerConnected ? 'Broker connected and ready' : 'Connecting to MQTT broker...' }}</q-tooltip>
+              <q-tooltip>Scale display</q-tooltip>
             </q-badge>
           </q-card-section>
 
@@ -1739,11 +1625,11 @@ const onSelectBatch = (index: number) => {
                 <div class="row q-col-gutter-md items-center">
                     <!-- Title -->
                     <div class="col-auto">
-                        <div class="text-h6">Package Batching Prepare for:</div>
+                        <div class="text-h6">Package Prepare for:</div>
                     </div>
                     
                     <!-- Batch Planning ID -->
-                    <div class="col-12 col-md-4">
+                    <div class="col">
                         <q-input
                         outlined
                         :model-value="selectedBatch ? selectedBatch.batch_id : ''"
@@ -1754,27 +1640,24 @@ const onSelectBatch = (index: number) => {
                         />
                     </div>
 
-                    <!-- From Label -->
+                    <!-- From Intake Lot ID Label -->
                     <div class="col-auto">
-                        <div class="text-h6">From</div>
+                        <div class="text-h6">From Intake Lot ID</div>
                     </div>
 
                     <!-- Selected Intake Lot ID -->
-                    <div class="col-12 col-md-4">
+                    <div class="col">
                         <q-input
+                        ref="intakeLotInputRef"
                         outlined
                         v-model="selectedIntakeLotId"
                         dense
                         bg-color="white"
                         placeholder="Scan Intake Lot ID"
                         clearable
-                        >
-                          <template v-slot:append>
-                            <q-btn round dense flat icon="qr_code_scanner" @click="simulateScan">
-                                 <q-tooltip>Simulate Scan (FIFO)</q-tooltip>
-                            </q-btn>
-                          </template>
-                        </q-input>
+                        autofocus
+                        @keyup.enter="onIntakeLotScanEnter"
+                        />
                     </div>
                 </div>
             </q-card-section>
@@ -1936,21 +1819,22 @@ const onSelectBatch = (index: number) => {
                 <div class="text-subtitle2 text-weight-bold">PreBatch List (Current Batch)</div>
                 <q-space />
                 
-                <!-- Scanner Simulator (Only shows when waiting for confirmation) -->
-                <q-btn 
+                
+                <!-- Delete Confirmation Scanner Input -->
+                <q-input 
                     v-if="recordToDelete"
-                    label="Simulator: Scan Label" 
-                    icon="qr_code_scanner" 
-                    color="orange-9" 
-                    unelevated 
-                    dense 
-                    no-caps 
-                    class="q-px-sm anim-pulse"
-                    size="sm"
-                    @click="simulateScannerConfirm"
+                    v-model="deleteInput"
+                    outlined
+                    dense
+                    placeholder="Scan label barcode to confirm"
+                    @keyup.enter="onDeleteScanEnter"
+                    class="q-ml-sm"
+                    style="min-width: 250px;"
                 >
-                    <q-tooltip>Simulate scanning the barcode to confirm deletion</q-tooltip>
-                </q-btn>
+                    <template v-slot:prepend>
+                        <q-icon name="circle" color="positive" />
+                    </template>
+                </q-input>
             </q-card-section>
             
             <q-card-section class="q-pa-none">
@@ -2096,17 +1980,21 @@ const onSelectBatch = (index: number) => {
             </q-card-section>
 
             <q-card-actions align="right" class="q-pa-md bg-grey-1">
-                <!-- Simulator Button Inside Dialog -->
-                <q-btn 
+                <!-- Delete Confirmation Scanner Input -->
+                <q-input 
                     v-if="recordToDelete"
-                    label="Simulator: Scan Label" 
-                    icon="qr_code_scanner" 
-                    color="orange-9" 
-                    outline
-                    no-caps 
+                    v-model="deleteInput"
+                    outlined
+                    dense
+                    placeholder="Scan label barcode to confirm"
+                    @keyup.enter="onDeleteScanEnter"
                     class="q-mr-sm"
-                    @click="simulateScannerConfirm"
-                />
+                    style="min-width: 250px;"
+                >
+                    <template v-slot:prepend>
+                        <q-icon name="circle" color="positive" />
+                    </template>
+                </q-input>
                 <q-btn label="Go Back" flat color="grey-7" v-close-popup />
                 <q-btn 
                     label="Confirm Deletion" 
