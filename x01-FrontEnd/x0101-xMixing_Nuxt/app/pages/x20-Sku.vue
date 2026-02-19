@@ -95,6 +95,7 @@ interface Ingredient {
 }
 
 const $q = useQuasar()
+const { t } = useI18n()
 
 // --- Master Data ---
 const skuMasters = ref<SkuMaster[]>([])
@@ -223,27 +224,27 @@ const editAction = (action: SkuAction) => {
 }
 
 const saveAction = async () => {
-  if (!actionForm.value.action_code || !actionForm.value.action_description) return $q.notify({ type: 'warning', message: 'Fill all fields' })
+  if (!actionForm.value.action_code || !actionForm.value.action_description) return $q.notify({ type: 'warning', message: t('sku.fillAllFields') })
   isSavingAction.value = true
   try {
     const method = isActionEdit.value ? 'PUT' : 'POST'
     const url = isActionEdit.value ? `${appConfig.apiBaseUrl}/sku-actions/${actionForm.value.action_code}` : `${appConfig.apiBaseUrl}/sku-actions/`
     await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(actionForm.value) })
-    $q.notify({ type: 'positive', message: 'Action saved' })
+    $q.notify({ type: 'positive', message: t('sku.actionSaved') })
     await fetchActions()
     if (isActionEdit.value) showActionDialog.value = false
     else actionForm.value = { action_code: '', action_description: '' }
-  } catch (e) { $q.notify({ type: 'negative', message: 'Save failed' }) }
+  } catch (e) { $q.notify({ type: 'negative', message: t('sku.saveFailed') }) }
   finally { isSavingAction.value = false }
 }
 
 const deleteAction = (action: SkuAction) => {
-  $q.dialog({ title: 'Confirm', message: `Delete action ${action.action_code}?`, cancel: true }).onOk(async () => {
+  $q.dialog({ title: t('common.confirm'), message: t('sku.deleteActionMsg', { code: action.action_code }), cancel: true }).onOk(async () => {
     try {
       await fetch(`${appConfig.apiBaseUrl}/sku-actions/${action.action_code}`, { method: 'DELETE' })
-      $q.notify({ type: 'positive', message: 'Action deleted' })
+      $q.notify({ type: 'positive', message: t('sku.actionDeleted') })
       await fetchActions()
-    } catch (e) { $q.notify({ type: 'negative', message: 'Delete failed' }) }
+    } catch (e) { $q.notify({ type: 'negative', message: t('sku.deleteFailed') }) }
   })
 }
 
@@ -274,25 +275,25 @@ const editPhase = (phase: SkuPhase) => {
 }
 
 const savePhase = async () => {
-  if (!phaseForm.value.phase_id || !phaseForm.value.phase_description) return $q.notify({ type: 'warning', message: 'Fill all fields' })
+  if (!phaseForm.value.phase_id || !phaseForm.value.phase_description) return $q.notify({ type: 'warning', message: t('sku.fillAllFields') })
   try {
     const method = editingPhase.value ? 'PUT' : 'POST'
     const url = editingPhase.value ? `${appConfig.apiBaseUrl}/sku-phases/${phaseForm.value.phase_id}` : `${appConfig.apiBaseUrl}/sku-phases/`
     await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(phaseForm.value) })
-    $q.notify({ type: 'positive', message: 'Phase saved' })
+    $q.notify({ type: 'positive', message: t('sku.phaseSaved') })
     await fetchPhases()
     if (editingPhase.value) showPhaseDialog.value = false
     else phaseForm.value = { phase_id: null, phase_code: '', phase_description: '' }
-  } catch (e) { $q.notify({ type: 'negative', message: 'Save failed' }) }
+  } catch (e) { $q.notify({ type: 'negative', message: t('sku.saveFailed') }) }
 }
 
 const deletePhase = (phase: SkuPhase) => {
-  $q.dialog({ title: 'Confirm', message: `Delete phase ${phase.phase_description}?`, cancel: true }).onOk(async () => {
+  $q.dialog({ title: t('common.confirm'), message: t('sku.deletePhaseConfirm', { name: phase.phase_description }), cancel: true }).onOk(async () => {
     try {
       await fetch(`${appConfig.apiBaseUrl}/sku-phases/${phase.phase_id}`, { method: 'DELETE' })
-      $q.notify({ type: 'positive', message: 'Phase deleted' })
+      $q.notify({ type: 'positive', message: t('sku.phaseDeletedMsg') })
       await fetchPhases()
-    } catch (e) { $q.notify({ type: 'negative', message: 'Delete failed' }) }
+    } catch (e) { $q.notify({ type: 'negative', message: t('sku.deleteFailed') }) }
   })
 }
 
@@ -351,7 +352,7 @@ const filteredSkuPhases = computed(() => {
 const resetFilters = () => {
   searchFilter.value = ''
   showAllIncludingInactive.value = false
-  $q.notify({ type: 'info', message: 'Filters reset' })
+  $q.notify({ type: 'info', message: t('sku.filtersReset') })
 }
 
 const importCSV = () => {
@@ -373,14 +374,14 @@ const onFileSelected = async (event: Event) => {
     })
     
     if (response.ok) {
-      $q.notify({ type: 'positive', message: 'SKUs imported successfully' })
+      $q.notify({ type: 'positive', message: t('sku.importSuccess') })
       await fetchSkuMasters()
     } else {
       const error = await response.json()
-      $q.notify({ type: 'negative', message: error.detail || 'Import failed' })
+      $q.notify({ type: 'negative', message: error.detail || t('sku.importFailed') })
     }
   } catch (e) {
-    $q.notify({ type: 'negative', message: 'Import failed' })
+    $q.notify({ type: 'negative', message: t('sku.importFailed') })
   } finally {
     if (target) target.value = ''
   }
@@ -396,7 +397,7 @@ const fetchSkuMasters = async () => {
     const data = await fetch(`${appConfig.apiBaseUrl}/api/v_sku_master_detail`).then(res => res.json())
     skuMasters.value = data
   } catch (err) {
-    $q.notify({ type: 'negative', message: 'Failed to fetch SKU list' })
+    $q.notify({ type: 'negative', message: t('sku.fetchFailed') })
   } finally { isLoading.value = false }
 }
 
@@ -405,7 +406,7 @@ const fetchSkuSteps = async (skuId: string) => {
   try {
     skuStepsMap.value[skuId] = await fetch(`${appConfig.apiBaseUrl}/api/v_sku_step_detail?sku_id=${skuId}`).then(res => res.json())
   } catch (err) {
-    $q.notify({ type: 'negative', message: 'Failed to fetch steps' })
+    $q.notify({ type: 'negative', message: t('sku.fetchStepsFailed') })
   }
 }
 
@@ -484,9 +485,9 @@ const exportToExcel = async () => {
       document.body.appendChild(a)
       a.click()
       a.remove()
-      $q.notify({ type: 'positive', message: 'Export successful', icon: 'download' })
+      $q.notify({ type: 'positive', message: t('sku.exportSuccess'), icon: 'download' })
     }
-  } catch (err) { $q.notify({ type: 'negative', message: 'Export failed' }) }
+  } catch (err) { $q.notify({ type: 'negative', message: t('sku.exportFailed') }) }
 }
 
 
@@ -597,10 +598,10 @@ const saveStep = async () => {
     const isNew = !stepForm.value.step_id
     const url = isNew ? `${appConfig.apiBaseUrl}/sku-steps/` : `${appConfig.apiBaseUrl}/sku-steps/${stepForm.value.step_id}`
     await fetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(stepForm.value) })
-    $q.notify({ type: 'positive', message: `Step ${isNew ? 'created' : 'updated'}` })
+    $q.notify({ type: 'positive', message: `${t('sku.steps')} ${isNew ? t('sku.stepCreated') : t('sku.stepUpdated')}` })
     delete skuStepsMap.value[stepForm.value.sku_id]; await fetchSkuSteps(stepForm.value.sku_id)
     closeStepDialog()
-  } catch (e: any) { $q.notify({ type: 'negative', message: 'Save failed' }) }
+  } catch (e: any) { $q.notify({ type: 'negative', message: t('sku.saveFailed') }) }
   finally { isSaving.value = false }
 }
 
@@ -612,12 +613,12 @@ const copyStep = (step: SkuStep) => {
 }
 
 const deleteStep = (step: SkuStep) => {
-  $q.dialog({ title: 'Confirm Delete', message: `Delete step ${step.phase_number}.${step.sub_step}?`, cancel: true }).onOk(async () => {
+  $q.dialog({ title: t('sku.confirmDelete'), message: t('sku.deleteStep', { id: `${step.phase_number}.${step.sub_step}` }), cancel: true }).onOk(async () => {
     try {
       await fetch(`${appConfig.apiBaseUrl}/sku-steps/${step.step_id}`, { method: 'DELETE' })
-      $q.notify({ type: 'positive', message: 'Step deleted' })
+      $q.notify({ type: 'positive', message: t('sku.stepDeleted') })
       delete skuStepsMap.value[step.sku_id]; await fetchSkuSteps(step.sku_id)
-    } catch (e) { $q.notify({ type: 'negative', message: 'Delete failed' }) }
+    } catch (e) { $q.notify({ type: 'negative', message: t('sku.deleteFailed') }) }
   })
 }
 
@@ -626,13 +627,13 @@ const deletePhaseSteps = (skuId: string, phaseNumber: string) => {
   const stepsInPhase = steps.filter(s => s.phase_number === phaseNumber)
   
   if (stepsInPhase.length === 0) {
-    $q.notify({ type: 'warning', message: 'No steps to delete in this phase' })
+    $q.notify({ type: 'warning', message: t('sku.noStepsInPhase') })
     return
   }
   
   $q.dialog({
-    title: 'Confirm Delete Phase',
-    message: `Delete all ${stepsInPhase.length} step(s) in phase ${phaseNumber}?`,
+    title: t('sku.confirmDeletePhase'),
+    message: t('sku.deletePhaseMsg', { count: String(stepsInPhase.length), phase: phaseNumber }),
     cancel: true,
     persistent: true
   }).onOk(async () => {
@@ -641,11 +642,11 @@ const deletePhaseSteps = (skuId: string, phaseNumber: string) => {
       for (const step of stepsInPhase) {
         await fetch(`${appConfig.apiBaseUrl}/sku-steps/${step.step_id}`, { method: 'DELETE' })
       }
-      $q.notify({ type: 'positive', message: `Phase ${phaseNumber} deleted (${stepsInPhase.length} steps)` })
+      $q.notify({ type: 'positive', message: t('sku.phaseDeleted', { phase: phaseNumber, count: String(stepsInPhase.length) }) })
       delete skuStepsMap.value[skuId]
       await fetchSkuSteps(skuId)
     } catch (e) {
-      $q.notify({ type: 'negative', message: 'Delete failed' })
+      $q.notify({ type: 'negative', message: t('sku.deleteFailed') })
     }
   })
 }
@@ -705,13 +706,13 @@ const createNewSku = () => {
 
 const editSku = (skuId: string) => {
   const sku = skuMasters.value.find(s => s.sku_id === skuId)
-  if (!sku) return $q.notify({ type: 'negative', message: 'SKU not found' })
+  if (!sku) return $q.notify({ type: 'negative', message: t('sku.skuNotFound') })
   skuForm.value = { sku_id: sku.sku_id, sku_name: sku.sku_name, std_batch_size: sku.std_batch_size || 0, uom: sku.uom || 'kg', status: sku.status || 'Active' }
   isEditMode.value = true; editingSkuId.value = sku.id; showSkuDialog.value = true
 }
 
 const saveNewSku = async () => {
-  if (!skuForm.value.sku_id || !skuForm.value.sku_name) return $q.notify({ type: 'warning', message: 'Fill mandatory fields' })
+  if (!skuForm.value.sku_id || !skuForm.value.sku_name) return $q.notify({ type: 'warning', message: t('sku.fillMandatory') })
   isCreatingSku.value = true
   try {
     const isEdit = isEditMode.value && editingSkuId.value
@@ -728,20 +729,20 @@ const saveNewSku = async () => {
         status: skuForm.value.status 
       }) 
     })
-    $q.notify({ type: 'positive', message: `SKU ${isEdit ? 'updated' : 'created'}` })
+    $q.notify({ type: 'positive', message: isEdit ? t('sku.skuUpdated') : t('sku.skuCreated') })
     showSkuDialog.value = false
     await fetchSkuMasters()
-  } catch (e) { $q.notify({ type: 'negative', message: 'Save failed' }) }
+  } catch (e) { $q.notify({ type: 'negative', message: t('sku.saveFailed') }) }
   finally { isCreatingSku.value = false }
 }
 
 const deleteSku = (sku: SkuMaster) => {
-  $q.dialog({ title: 'Confirm Delete', message: `Mark SKU "${sku.sku_id}" as deleted?`, cancel: true }).onOk(async () => {
+  $q.dialog({ title: t('sku.confirmDelete'), message: t('sku.markDeleted', { id: sku.sku_id }), cancel: true }).onOk(async () => {
     try {
       await fetch(`${appConfig.apiBaseUrl}/skus/${sku.id}`, { method: 'DELETE' })
-      $q.notify({ type: 'positive', message: 'SKU deleted' })
+      $q.notify({ type: 'positive', message: t('sku.skuDeleted') })
       await fetchSkuMasters()
-    } catch (e) { $q.notify({ type: 'negative', message: 'Delete failed' }) }
+    } catch (e) { $q.notify({ type: 'negative', message: t('sku.deleteFailed') }) }
   })
 }
 
@@ -756,7 +757,7 @@ const copySku = (sku: SkuMaster) => {
 
 const saveDuplicateSku = async () => {
   if (!duplicateForm.value.new_sku_id || !duplicateForm.value.new_sku_name) {
-    return $q.notify({ type: 'warning', message: 'Please fill all mandatory fields' })
+    return $q.notify({ type: 'warning', message: t('sku.fillMandatory') })
   }
   
   isDuplicating.value = true
@@ -768,15 +769,15 @@ const saveDuplicateSku = async () => {
     })
     
     if (response.ok) {
-      $q.notify({ type: 'positive', message: 'SKU duplicated successfully' })
+      $q.notify({ type: 'positive', message: t('sku.duplicateSuccess') })
       showDuplicateDialog.value = false
       await fetchSkuMasters()
     } else {
       const error = await response.json()
-      $q.notify({ type: 'negative', message: error.detail || 'Duplication failed' })
+      $q.notify({ type: 'negative', message: error.detail || t('sku.saveFailed') })
     }
   } catch (e) {
-    $q.notify({ type: 'negative', message: 'Network error or server down' })
+    $q.notify({ type: 'negative', message: t('sku.networkError') })
   } finally {
     isDuplicating.value = false
   }
@@ -786,30 +787,30 @@ const saveDuplicateSku = async () => {
 // TABLE CONFIGURATION & LIFECYCLE
 // ============================================================================
 
-const masterColumns: QTableColumn[] = [
-  { name: 'sku_id', label: 'SKU ID', field: 'sku_id', align: 'left' as const, sortable: true },
-  { name: 'sku_name', label: 'SKU Name', field: 'sku_name', align: 'left' as const, sortable: true },
-  { name: 'std_batch', label: 'Std Batch', field: 'std_batch_size', align: 'right' as const, sortable: true },
-  { name: 'phases', label: 'Phases', field: 'total_phases', align: 'center' as const, sortable: true },
-  { name: 'steps', label: 'Steps', field: 'total_sub_steps', align: 'center' as const, sortable: true },
-  { name: 'status', label: 'Status', field: 'status', align: 'center' as const, sortable: true },
-  { name: 'updated_at', label: 'Updated', field: 'updated_at', align: 'center' as const, sortable: true },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' as const, style: 'width: 140px' }
-]
+const masterColumns = computed<QTableColumn[]>(() => [
+  { name: 'sku_id', label: t('sku.skuId'), field: 'sku_id', align: 'left' as const, sortable: true },
+  { name: 'sku_name', label: t('sku.skuName'), field: 'sku_name', align: 'left' as const, sortable: true },
+  { name: 'std_batch', label: t('sku.stdBatch'), field: 'std_batch_size', align: 'right' as const, sortable: true },
+  { name: 'phases', label: t('sku.phases'), field: 'total_phases', align: 'center' as const, sortable: true },
+  { name: 'steps', label: t('sku.steps'), field: 'total_sub_steps', align: 'center' as const, sortable: true },
+  { name: 'status', label: t('common.status'), field: 'status', align: 'center' as const, sortable: true },
+  { name: 'updated_at', label: t('sku.updated'), field: 'updated_at', align: 'center' as const, sortable: true },
+  { name: 'actions', label: t('common.actions'), field: 'actions', align: 'center' as const, style: 'width: 140px' }
+])
 
-const stepColumns: QTableColumn[] = [
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'center', style: 'width: 90px' },
-  { name: 'sub_step', label: 'Sub', field: 'sub_step', align: 'center', sortable: true, style: 'width: 55px' },
-  { name: 'action_code', label: 'Action', field: 'action_code', align: 'center', sortable: true, style: 'width: 70px' },
-  { name: 'action_description', label: 'Description', field: 'action_description', align: 'left', sortable: true, style: 'width: 160px' },
-  { name: 'ingredient_name', label: 'Ingredient', field: 'ingredient_name', align: 'left', sortable: true, style: 'width: auto' },
-  { name: 'require', label: 'Vol', field: 'require', align: 'right', style: 'width: 65px' },
-  { name: 'uom', label: 'UOM', field: 'uom', align: 'center', style: 'width: 55px' },
-  { name: 'temperature', label: 'Temp', field: 'temperature', align: 'right', style: 'width: 60px' },
-  { name: 'agitator_rpm', label: 'Agitator', field: 'agitator_rpm', align: 'right', style: 'width: 70px' },
-  { name: 'step_time', label: 'Time', field: (row: any) => row.step_time ? (row.step_time / 60).toFixed(1) : '', align: 'right', style: 'width: 55px' },
-  { name: 'qc_flags', label: 'QC/Rec', field: 'qc_temp', align: 'center', style: 'width: 70px' }
-]
+const stepColumns = computed<QTableColumn[]>(() => [
+  { name: 'actions', label: t('common.actions'), field: 'actions', align: 'center', style: 'width: 90px' },
+  { name: 'sub_step', label: t('sku.subStep'), field: 'sub_step', align: 'center', sortable: true, style: 'width: 55px' },
+  { name: 'action_code', label: t('sku.actionCode'), field: 'action_code', align: 'center', sortable: true, style: 'width: 70px' },
+  { name: 'action_description', label: t('common.description'), field: 'action_description', align: 'left', sortable: true, style: 'width: 160px' },
+  { name: 'ingredient_name', label: t('sku.ingredientComponent'), field: 'ingredient_name', align: 'left', sortable: true, style: 'width: auto' },
+  { name: 'require', label: t('sku.volumeAmount'), field: 'require', align: 'right', style: 'width: 65px' },
+  { name: 'uom', label: t('sku.uom'), field: 'uom', align: 'center', style: 'width: 55px' },
+  { name: 'temperature', label: t('sku.prepareTemp'), field: 'temperature', align: 'right', style: 'width: 60px' },
+  { name: 'agitator_rpm', label: t('sku.agitatorRpm'), field: 'agitator_rpm', align: 'right', style: 'width: 70px' },
+  { name: 'step_time', label: t('sku.timeMinutes'), field: (row: any) => row.step_time ? (row.step_time / 60).toFixed(1) : '', align: 'right', style: 'width: 55px' },
+  { name: 'qc_flags', label: t('sku.qcRecords'), field: 'qc_temp', align: 'center', style: 'width: 70px' }
+])
 
 const refreshAll = async () => {
   await Promise.all([
@@ -831,9 +832,9 @@ onMounted(refreshAll)
       <div class="row justify-between items-center">
         <div class="row items-center q-gutter-sm">
           <q-icon name="inventory_2" size="sm" />
-          <div class="text-h6 text-weight-bolder">SKU Masters</div>
+          <div class="text-h6 text-weight-bolder">{{ t('sku.title') }}</div>
         </div>
-        <div class="text-caption text-blue-2">Manage SKU masters and process steps</div>
+        <div class="text-caption text-blue-2">{{ t('sku.subtitle') }}</div>
       </div>
     </div>
     <!-- Header with Action Bar -->
@@ -849,7 +850,7 @@ onMounted(refreshAll)
           round
           flat
         >
-          <q-tooltip>New SKU</q-tooltip>
+          <q-tooltip>{{ t('sku.newSku') }}</q-tooltip>
         </q-btn>
         <q-btn 
           color="primary" 
@@ -858,7 +859,7 @@ onMounted(refreshAll)
           round
           flat
         >
-          <q-tooltip>Refresh</q-tooltip>
+          <q-tooltip>{{ t('common.refresh') }}</q-tooltip>
         </q-btn>
         <q-btn 
           color="primary" 
@@ -867,7 +868,7 @@ onMounted(refreshAll)
           round
           flat
         >
-          <q-tooltip>Reset Filters</q-tooltip>
+          <q-tooltip>{{ t('sku.resetFilters') }}</q-tooltip>
         </q-btn>
         <q-btn 
           color="accent" 
@@ -876,7 +877,7 @@ onMounted(refreshAll)
           round
           flat
         >
-          <q-tooltip>{{ showFilters ? 'Hide Filters' : 'Show Filters' }}</q-tooltip>
+          <q-tooltip>{{ showFilters ? t('sku.hideFilters') : t('sku.showFilters') }}</q-tooltip>
         </q-btn>
         <q-btn 
           color="secondary" 
@@ -885,7 +886,7 @@ onMounted(refreshAll)
           round
           flat
         >
-          <q-tooltip>Export Excel</q-tooltip>
+          <q-tooltip>{{ t('sku.exportExcel') }}</q-tooltip>
         </q-btn>
         <q-btn 
           color="accent" 
@@ -894,7 +895,7 @@ onMounted(refreshAll)
           round
           flat
         >
-          <q-tooltip>Import CSV</q-tooltip>
+          <q-tooltip>{{ t('sku.importCsv') }}</q-tooltip>
         </q-btn>
         <!-- Hidden File Input -->
         <input
@@ -911,16 +912,16 @@ onMounted(refreshAll)
           round
           flat
         >
-          <q-tooltip>Actions</q-tooltip>
+          <q-tooltip>{{ t('sku.manageActions') }}</q-tooltip>
         </q-btn>
         <q-checkbox 
           v-model="showAllIncludingInactive" 
-          label="Show All (including Inactive)" 
+          :label="t('sku.showAllInactive')" 
           dense
         />
         <q-input 
           v-model="searchFilter" 
-          placeholder="Search SKU..." 
+          :placeholder="t('sku.searchSku')" 
           dense 
           outlined
           style="min-width: 300px"
@@ -988,7 +989,7 @@ onMounted(refreshAll)
                   icon="content_copy" 
                   @click.stop="copySku(props.row)"
                 >
-                  <q-tooltip>Duplicate SKU</q-tooltip>
+                  <q-tooltip>{{ t('sku.duplicateSku') }}</q-tooltip>
                 </q-btn>
                 <q-btn 
                   size="sm" 
@@ -998,7 +999,7 @@ onMounted(refreshAll)
                   icon="edit" 
                   @click.stop="editSku(props.row.sku_id)"
                 >
-                  <q-tooltip>Edit SKU</q-tooltip>
+                  <q-tooltip>{{ t('sku.editSKU') }}</q-tooltip>
                 </q-btn>
                 <q-btn 
                   size="sm" 
@@ -1008,7 +1009,7 @@ onMounted(refreshAll)
                   icon="delete" 
                   @click.stop="deleteSku(props.row)"
                 >
-                  <q-tooltip>Delete SKU</q-tooltip>
+                  <q-tooltip>{{ t('sku.deleteSku') }}</q-tooltip>
                 </q-btn>
               </div>
             </template>
@@ -1026,7 +1027,7 @@ onMounted(refreshAll)
       <template v-slot:no-data>
         <div class="full-width row flex-center text-grey-6 q-gutter-sm q-pa-lg">
           <q-icon size="2em" name="inventory_2" />
-          <span>No SKUs found</span>
+          <span>{{ t('sku.noSkuFound') }}</span>
         </div>
       </template>
     </q-table>
@@ -1037,7 +1038,7 @@ onMounted(refreshAll)
         <div class="row items-center q-mb-md">
           <div class="text-h6 text-primary row items-center">
             <q-icon name="format_list_numbered" size="md" class="q-mr-sm" />
-            Process Steps for {{ selectedSkuId }} 
+            {{ t('sku.processSteps') }} {{ selectedSkuId }} 
             <span class="text-subtitle1 text-grey-7 q-ml-md" v-if="selectedSkuData">
               - {{ selectedSkuData?.sku_name }}
             </span>
@@ -1054,7 +1055,7 @@ onMounted(refreshAll)
               color="primary" 
               @click="openPhaseDialog"
             >
-              <q-tooltip>Phase Management</q-tooltip>
+              <q-tooltip>{{ t('sku.phaseManagement') }}</q-tooltip>
             </q-btn>
             
             <q-btn 
@@ -1065,7 +1066,7 @@ onMounted(refreshAll)
               color="grey-7" 
               @click="fetchSkuSteps(selectedSkuId)"
             >
-              <q-tooltip>Refresh Steps</q-tooltip>
+              <q-tooltip>{{ t('sku.refreshSteps') }}</q-tooltip>
             </q-btn>
             
             <q-btn 
@@ -1076,7 +1077,7 @@ onMounted(refreshAll)
               color="primary" 
               @click="addStep(selectedSkuId)"
             >
-              <q-tooltip>Add New Phase</q-tooltip>
+              <q-tooltip>{{ t('sku.addNewPhase') }}</q-tooltip>
             </q-btn>
 
             <q-separator vertical inset class="q-mx-xs" />
@@ -1089,7 +1090,7 @@ onMounted(refreshAll)
               color="teal" 
               @click="expandAllPhases"
             >
-              <q-tooltip>Expand All</q-tooltip>
+              <q-tooltip>{{ t('sku.expandAll') }}</q-tooltip>
             </q-btn>
             <q-btn 
               flat 
@@ -1099,7 +1100,7 @@ onMounted(refreshAll)
               color="teal" 
               @click="collapseAllPhases"
             >
-              <q-tooltip>Collapse All</q-tooltip>
+              <q-tooltip>{{ t('sku.collapseAll') }}</q-tooltip>
             </q-btn>
           </div>
         </div>
@@ -1139,7 +1140,7 @@ onMounted(refreshAll)
                   color="primary" 
                   @click.stop="addStepToPhase(selectedSkuId!, group.phaseNum)"
                 >
-                  <q-tooltip>Add Step to Phase</q-tooltip>
+                  <q-tooltip>{{ t('sku.addStepToPhase') }}</q-tooltip>
                 </q-btn>
                 <q-btn 
                   flat
@@ -1150,7 +1151,7 @@ onMounted(refreshAll)
                   color="negative" 
                   @click.stop="deletePhaseSteps(selectedSkuId!, group.phaseNum)"
                 >
-                  <q-tooltip>Delete Entire Phase</q-tooltip>
+                  <q-tooltip>{{ t('sku.deleteEntirePhase') }}</q-tooltip>
                 </q-btn>
               </div>
             </div>
@@ -1173,13 +1174,13 @@ onMounted(refreshAll)
                   <q-td :props="stepProps" class="text-center">
                     <div class="row no-wrap items-center q-gutter-xs">
                       <q-btn color="primary" icon="edit" size="xs" flat round @click.stop="openStepDialog(stepProps.row)">
-                        <q-tooltip>Edit</q-tooltip>
+                        <q-tooltip>{{ t('common.edit') }}</q-tooltip>
                       </q-btn>
                       <q-btn color="info" icon="content_copy" size="xs" flat round @click.stop="copyStep(stepProps.row)">
-                        <q-tooltip>Copy</q-tooltip>
+                        <q-tooltip>{{ t('common.copy') }}</q-tooltip>
                       </q-btn>
                       <q-btn color="negative" icon="delete" size="xs" flat round @click.stop="deleteStep(stepProps.row)">
-                        <q-tooltip>Delete</q-tooltip>
+                        <q-tooltip>{{ t('common.delete') }}</q-tooltip>
                       </q-btn>
                     </div>
                   </q-td>
@@ -1221,16 +1222,16 @@ onMounted(refreshAll)
 
         <div v-else class="text-center text-grey-6 q-pa-xl">
           <q-icon name="list_alt" size="4em" class="q-mb-md" />
-          <div class="text-h6">No Process Steps Defined</div>
-          <div class="text-subtitle2">Click the plus icon above to add your first phase</div>
+          <div class="text-h6">{{ t('sku.noStepsDefined') }}</div>
+          <div class="text-subtitle2">{{ t('sku.noStepsDesc') }}</div>
         </div>
       </template>
 
       <!-- Placeholder when no SKU selected -->
       <div v-else class="text-center text-grey-5 q-pa-xl">
         <q-icon name="touch_app" size="4em" class="q-mb-md" />
-        <div class="text-h6">Select a SKU</div>
-        <div class="text-subtitle2">Click on a SKU row above to view its process steps</div>
+        <div class="text-h6">{{ t('sku.selectSku') }}</div>
+        <div class="text-subtitle2">{{ t('sku.selectSkuDesc') }}</div>
       </div>
     </div>
 
@@ -1240,7 +1241,7 @@ onMounted(refreshAll)
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             <q-icon :name="!editingStep ? 'add_circle' : 'edit'" color="positive" class="q-mr-sm" />
-            {{ !editingStep ? 'Add New Step' : 'Edit Step ' + (stepForm.phase_number + '.' + stepForm.sub_step) }}
+            {{ !editingStep ? t('sku.addNewStep') : t('sku.editStep') + ' ' + (stepForm.phase_number + '.' + stepForm.sub_step) }}
           </div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup @click="closeStepDialog" />
@@ -1251,7 +1252,7 @@ onMounted(refreshAll)
             
             <!-- SECTION 1: Step Identification -->
             <div class="col-12">
-              <div class="text-subtitle2 text-primary q-mb-xs text-uppercase text-bold">Step Identification</div>
+              <div class="text-subtitle2 text-primary q-mb-xs text-uppercase text-bold">{{ t('sku.stepIdentification') }}</div>
               <q-separator class="q-mb-sm" />
             </div>
             
@@ -1259,7 +1260,7 @@ onMounted(refreshAll)
             <div class="col-12 col-md-4">
               <q-input
                 v-model="stepForm.phase_number"
-                label="Phase Number"
+                :label="t('sku.phaseNumber')"
                 outlined
                 dense
                 placeholder="p0010"
@@ -1273,7 +1274,7 @@ onMounted(refreshAll)
                 :options="skuPhases.map(p => ({ label: `${p.phase_code} - ${p.phase_description}`, value: p.phase_code }))"
                 emit-value
                 map-options
-                label="Phase Link (Code)"
+                :label="t('sku.phaseLink')"
                 outlined
                 dense
                 hint="Relates to Master Phase Code"
@@ -1287,7 +1288,7 @@ onMounted(refreshAll)
                     color="primary"
                     @click.stop="openPhaseDialog"
                   >
-                    <q-tooltip>Manage Phases</q-tooltip>
+                    <q-tooltip>{{ t('sku.managePhases') }}</q-tooltip>
                   </q-btn>
                 </template>
               </q-select>
@@ -1296,7 +1297,7 @@ onMounted(refreshAll)
             <div class="col-12 col-md-4">
               <q-input 
                 v-model.number="stepForm.sub_step" 
-                label="Sub Step" 
+                :label="t('sku.subStep')" 
                 type="number"
                 outlined 
                 dense
@@ -1308,7 +1309,7 @@ onMounted(refreshAll)
             <div class="col-12">
               <q-input 
                 v-model="stepForm.action" 
-                label="Phase Description" 
+                :label="t('sku.phaseDesc')" 
                 outlined 
                 dense
                 hint="Optional description for this phase"
@@ -1317,7 +1318,7 @@ onMounted(refreshAll)
              
              <!-- SECTION 2: Action & Component -->
             <div class="col-12">
-               <div class="text-subtitle2 text-primary q-mb-xs text-uppercase text-bold q-mt-sm">Action & Component</div>
+               <div class="text-subtitle2 text-primary q-mb-xs text-uppercase text-bold q-mt-sm">{{ t('sku.actionComponent') }}</div>
                <q-separator class="q-mb-sm" />
             </div>
 
@@ -1325,7 +1326,7 @@ onMounted(refreshAll)
                     <q-select
                       v-model="stepForm.action_code"
                       :options="skuActions.map(a => ({ label: `${a.action_code} - ${a.action_description}`, value: a.action_code }))"
-                      label="Action Code"
+                      :label="t('sku.actionCode')"
                       outlined
                       dense
                       emit-value
@@ -1342,7 +1343,7 @@ onMounted(refreshAll)
                           color="primary"
                           @click.stop="openActionDialog"
                         >
-                          <q-tooltip>Manage Actions</q-tooltip>
+                          <q-tooltip>{{ t('sku.manageActions') }}</q-tooltip>
                         </q-btn>
                       </template>
                     </q-select>
@@ -1350,7 +1351,7 @@ onMounted(refreshAll)
                 <div class="col-8">
                   <q-input 
                     v-model="stepForm.action_description" 
-                    label="Action Description" 
+                    :label="t('sku.actionDesc')" 
                     outlined 
                     dense
                     readonly
@@ -1363,7 +1364,7 @@ onMounted(refreshAll)
               <q-select
                 v-model="stepForm.re_code"
                 :options="ingredientOptions"
-                label="Ingredient / Component"
+                :label="t('sku.ingredientComponent')"
                 outlined
                 dense
                 emit-value
@@ -1375,7 +1376,7 @@ onMounted(refreshAll)
                 @update:model-value="onIngredientChange"
               >
                 <template v-slot:no-option>
-                  <q-item><q-item-section class="text-grey">No results</q-item-section></q-item>
+                  <q-item><q-item-section class="text-grey">{{ t('sku.noResults') }}</q-item-section></q-item>
                 </template>
               </q-select>
             </div>
@@ -1384,7 +1385,7 @@ onMounted(refreshAll)
               <q-select
                 v-model="stepForm.destination"
                 :options="skuDestinations.map(d => ({ label: d.destination_code, value: d.destination_code }))"
-                label="Destination"
+                :label="t('sku.destination')"
                 outlined
                 dense
                 emit-value
@@ -1395,14 +1396,14 @@ onMounted(refreshAll)
 
             <!-- SECTION 3: Process Requirements -->
             <div class="col-12">
-               <div class="text-subtitle2 text-primary q-mb-xs text-uppercase text-bold q-mt-sm">Process Requirements</div>
+               <div class="text-subtitle2 text-primary q-mb-xs text-uppercase text-bold q-mt-sm">{{ t('sku.processRequirements') }}</div>
                <q-separator class="q-mb-sm" />
             </div>
 
             <div class="col-6 col-sm-4">
               <q-input 
                 v-model.number="stepForm.require" 
-                label="Volume / Amount" 
+                :label="t('sku.volumeAmount')" 
                 type="number"
                 outlined 
                 dense
@@ -1413,7 +1414,7 @@ onMounted(refreshAll)
              <div class="col-6 col-sm-2">
               <q-input 
                 v-model="stepForm.uom" 
-                label="UOM" 
+                :label="t('sku.uom')" 
                 outlined 
                 dense
               />
@@ -1422,7 +1423,7 @@ onMounted(refreshAll)
             <div class="col-6 col-sm-3">
               <q-input 
                 v-model.number="stepForm.low_tol" 
-                label="Low Tol" 
+                :label="t('sku.lowTol')" 
                 type="number"
                 outlined 
                 dense
@@ -1433,7 +1434,7 @@ onMounted(refreshAll)
             <div class="col-6 col-sm-3">
               <q-input 
                 v-model.number="stepForm.high_tol" 
-                label="High Tol" 
+                :label="t('sku.highTol')" 
                 type="number"
                 outlined 
                 dense
@@ -1444,7 +1445,7 @@ onMounted(refreshAll)
             <div class="col-12">
                <q-input 
                 v-model="stepForm.step_condition" 
-                label="Condition" 
+                :label="t('sku.condition')" 
                 outlined 
                 dense
               />
@@ -1452,14 +1453,14 @@ onMounted(refreshAll)
 
             <!-- SECTION 4: Mechanical Settings -->
             <div class="col-12">
-               <div class="text-subtitle2 text-primary q-mb-xs text-uppercase text-bold q-mt-sm">Equipment Settings</div>
+               <div class="text-subtitle2 text-primary q-mb-xs text-uppercase text-bold q-mt-sm">{{ t('sku.equipmentSettings') }}</div>
                <q-separator class="q-mb-sm" />
             </div>
 
             <div class="col-6 col-sm-3">
               <q-input 
                 v-model.number="stepForm.agitator_rpm" 
-                label="Agitator RPM" 
+                :label="t('sku.agitatorRpm')" 
                 type="number"
                 outlined 
                 dense
@@ -1469,7 +1470,7 @@ onMounted(refreshAll)
             <div class="col-6 col-sm-3">
               <q-input 
                 v-model.number="stepForm.high_shear_rpm" 
-                label="High Shear RPM" 
+                :label="t('sku.highShearRpm')" 
                 type="number"
                 outlined 
                 dense
@@ -1479,7 +1480,7 @@ onMounted(refreshAll)
              <div class="col-6 col-sm-3">
               <q-input 
                 v-model.number="stepForm.step_time" 
-                label="Time (Seconds)" 
+                :label="t('sku.timeSeconds')" 
                 type="number"
                 outlined 
                 dense
@@ -1490,7 +1491,7 @@ onMounted(refreshAll)
              <div class="col-6 col-sm-3">
               <q-input 
                  :model-value="stepForm.step_time ? (stepForm.step_time / 60).toFixed(2) : 0"
-                 label="Time (Minutes)"
+                 :label="t('sku.timeMinutes')"
                  readonly
                  outlined
                  dense
@@ -1501,14 +1502,14 @@ onMounted(refreshAll)
 
              <!-- SECTION 5: Temperature -->
             <div class="col-12">
-               <div class="text-subtitle2 text-primary q-mb-xs text-uppercase text-bold q-mt-sm">Temperature Control</div>
+               <div class="text-subtitle2 text-primary q-mb-xs text-uppercase text-bold q-mt-sm">{{ t('sku.tempControl') }}</div>
                <q-separator class="q-mb-sm" />
             </div>
             
              <div class="col-12 col-sm-4">
               <q-input 
                 v-model.number="stepForm.temperature" 
-                label="Prepare Temp (°C)" 
+                :label="t('sku.prepareTemp')" 
                 type="number"
                 outlined 
                 dense
@@ -1519,7 +1520,7 @@ onMounted(refreshAll)
              <div class="col-6 col-sm-4">
               <q-input 
                 v-model.number="stepForm.temp_low" 
-                label="Offset Low" 
+                :label="t('sku.offsetLow')" 
                 type="number"
                 outlined 
                 dense
@@ -1530,7 +1531,7 @@ onMounted(refreshAll)
              <div class="col-6 col-sm-4">
               <q-input 
                 v-model.number="stepForm.temp_high" 
-                label="Offset High" 
+                :label="t('sku.offsetHigh')" 
                 type="number"
                 outlined 
                 dense
@@ -1540,25 +1541,25 @@ onMounted(refreshAll)
 
             <!-- SECTION 6: QC & Records -->
             <div class="col-12">
-              <div class="text-subtitle2 text-primary q-mb-xs text-uppercase text-bold q-mt-sm">QC & Records</div>
+              <div class="text-subtitle2 text-primary q-mb-xs text-uppercase text-bold q-mt-sm">{{ t('sku.qcRecords') }}</div>
               <q-separator class="q-mb-sm" />
             </div>
 
             <div class="col-12 row q-col-gutter-sm">
                <!-- Checkboxes row -->
                <div class="col-12 row items-center q-gutter-x-md">
-                   <q-checkbox v-model="stepForm.qc_temp" label="QC-Temp" dense />
-                   <q-checkbox v-model="stepForm.record_steam_pressure" label="Record Steam Pressure" dense />
-                   <q-checkbox v-model="stepForm.record_ctw" label="Record CTW" dense />
-                   <q-checkbox v-model="stepForm.operation_brix_record" label="Op Brix Record" dense />
-                   <q-checkbox v-model="stepForm.operation_ph_record" label="Op PH Record" dense />
+                   <q-checkbox v-model="stepForm.qc_temp" :label="t('sku.qcTemp')" dense />
+                   <q-checkbox v-model="stepForm.record_steam_pressure" :label="t('sku.recordSteam')" dense />
+                   <q-checkbox v-model="stepForm.record_ctw" :label="t('sku.recordCtw')" dense />
+                   <q-checkbox v-model="stepForm.operation_brix_record" :label="t('sku.opBrixRecord')" dense />
+                   <q-checkbox v-model="stepForm.operation_ph_record" :label="t('sku.opPhRecord')" dense />
                </div>
                
                <div class="col-12 row q-col-gutter-md q-mt-xs">
                    <div class="col-6">
                       <q-input 
                         v-model="stepForm.brix_sp" 
-                        label="Brix SP" 
+                        :label="t('sku.brixSp')" 
                         outlined 
                         dense
                       />
@@ -1566,7 +1567,7 @@ onMounted(refreshAll)
                    <div class="col-6">
                       <q-input 
                         v-model="stepForm.ph_sp" 
-                        label="pH SP" 
+                        :label="t('sku.phSp')" 
                         outlined 
                         dense
                       />
@@ -1580,10 +1581,10 @@ onMounted(refreshAll)
         <q-separator />
 
         <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="Cancel" color="grey-7" @click="closeStepDialog" />
+          <q-btn flat :label="t('common.cancel')" color="grey-7" @click="closeStepDialog" />
           <q-btn 
             unelevated 
-            label="Save Step" 
+            :label="t('sku.saveStep')" 
             color="primary" 
             @click="saveStep"
             :loading="isSaving"
@@ -1599,7 +1600,7 @@ onMounted(refreshAll)
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             <q-icon :name="isEditMode ? 'edit' : 'add_circle'" color="positive" class="q-mr-sm" />
-            {{ isEditMode ? 'Edit SKU' : 'Create New SKU' }}
+            {{ isEditMode ? t('sku.editSKU') : t('sku.createNew') }}
           </div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
@@ -1609,41 +1610,41 @@ onMounted(refreshAll)
           <div class="column q-gutter-y-lg q-pt-md">
             <q-input
               v-model="skuForm.sku_id"
-              label="SKU ID *"
+              :label="t('sku.skuId') + ' *'"
               outlined
               dense
-              :rules="[val => !!val || 'SKU ID is required']"
-              hint="Unique identifier for the SKU"
+              :rules="[val => !!val || t('sku.skuIdRequired')]"
+              :hint="t('sku.uniqueIdHint')"
             />
 
             <q-input
               v-model="skuForm.sku_name"
-              label="SKU Name *"
+              :label="t('sku.skuName') + ' *'"
               outlined
               dense
-              :rules="[val => !!val || 'SKU Name is required']"
-              hint="Descriptive name for the SKU"
+              :rules="[val => !!val || t('sku.skuNameRequired')]"
+              :hint="t('sku.descNameHint')"
             />
 
             <div class="row q-col-gutter-x-md">
               <div class="col-6">
                 <q-input
                   v-model.number="skuForm.std_batch_size"
-                  label="Standard Batch Size"
+                  :label="t('sku.stdBatchSize')"
                   type="number"
                   outlined
                   dense
-                  hint="Default batch size"
+                  :hint="t('sku.defaultBatchSize')"
                 />
               </div>
               <div class="col-6">
                 <q-select
                   v-model="skuForm.uom"
                   :options="['kg', 'L', 'unit']"
-                  label="UOM"
+                  :label="t('sku.uom')"
                   outlined
                   dense
-                  hint="Unit of measure"
+                  :hint="t('sku.unitOfMeasure')"
                 />
               </div>
             </div>
@@ -1651,7 +1652,7 @@ onMounted(refreshAll)
             <q-select
               v-model="skuForm.status"
               :options="['Active', 'Inactive']"
-              label="Status"
+              :label="t('common.status')"
               outlined
               dense
             />
@@ -1660,14 +1661,13 @@ onMounted(refreshAll)
 
         <q-card-actions align="right" class="q-pa-md q-gutter-sm">
           <q-btn
-            label="CANCEL"
-            color="grey-7"
+            :label="t('common.cancel')"            color="grey-7"
             flat
             v-close-popup
             class="q-px-md"
           />
           <q-btn
-            :label="isEditMode ? 'SAVE CHANGES' : 'CREATE SKU'"
+            :label="isEditMode ? t('sku.saveChanges') : t('sku.createSku')"
             color="positive"
             unelevated
             @click="saveNewSku"
@@ -1685,7 +1685,7 @@ onMounted(refreshAll)
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             <q-icon name="content_copy" color="accent" class="q-mr-sm" />
-            Duplicate SKU: {{ duplicateForm.source_sku_id }}
+            {{ t('sku.duplicateSku') }}: {{ duplicateForm.source_sku_id }}
           </div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
@@ -1693,41 +1693,40 @@ onMounted(refreshAll)
 
         <q-card-section class="q-pt-md">
           <div class="text-subtitle2 text-grey-7 q-mb-md">
-            This will copy all production steps and settings from the source SKU to the new one.
+            {{ t('sku.duplicateDesc') }}
           </div>
           
           <div class="q-gutter-y-md">
             <q-input
               v-model="duplicateForm.new_sku_id"
-              label="New SKU ID *"
+              :label="t('sku.newSkuId')"
               outlined
               dense
               autofocus
-              :rules="[val => !!val || 'New SKU ID is required']"
-              hint="Unique identifier for the new SKU"
+              :rules="[val => !!val || t('sku.newSkuIdRequired')]"
+              :hint="t('sku.uniqueId')"
             />
 
             <q-input
               v-model="duplicateForm.new_sku_name"
-              label="New SKU Name *"
+              :label="t('sku.newSkuName')"
               outlined
               dense
-              :rules="[val => !!val || 'New SKU Name is required']"
-              hint="Descriptive name for the new SKU"
+              :rules="[val => !!val || t('sku.newSkuNameRequired')]"
+              :hint="t('sku.descName')"
             />
           </div>
         </q-card-section>
 
         <q-card-actions align="right" class="q-pa-md q-gutter-sm">
           <q-btn
-            label="CANCEL"
-            color="grey-7"
+            :label="t('common.cancel')"            color="grey-7"
             flat
             v-close-popup
             class="q-px-md"
           />
           <q-btn
-            label="DUPLICATE SKU"
+            :label="t('sku.duplicateSkuBtn')"
             color="accent"
             unelevated
             @click="saveDuplicateSku"
@@ -1748,7 +1747,7 @@ onMounted(refreshAll)
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             <q-icon name="settings" color="positive" class="q-mr-sm" />
-            Manage Actions
+            {{ t('sku.manageActions') }}
           </div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
@@ -1768,8 +1767,8 @@ onMounted(refreshAll)
            </div>
            
            <div class="row q-mb-lg justify-end q-gutter-sm">
-             <q-btn v-if="isActionEdit" label="CANCEL EDIT" flat color="grey-7" @click="openActionDialog" />
-             <q-btn :label="isActionEdit ? 'UPDATE ACTION' : 'ADD ACTION'" color="positive" unelevated :loading="isSavingAction" @click="saveAction" />
+             <q-btn v-if="isActionEdit" :label="t('sku.cancelEdit')" flat color="grey-7" @click="openActionDialog" />
+             <q-btn :label="isActionEdit ? t('sku.updateAction') : t('sku.addAction')" color="positive" unelevated :loading="isSavingAction" @click="saveAction" />
            </div>
 
            <q-separator class="q-mb-md" />
@@ -1815,7 +1814,7 @@ onMounted(refreshAll)
         </q-card-section>
 
         <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="CLOSE" color="grey-7" v-close-popup />
+          <q-btn flat :label="t('common.close')" color="grey-7" v-close-popup />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -1826,7 +1825,7 @@ onMounted(refreshAll)
         <q-card-section class="row items-center q-pb-none">
           <div class="text-h6">
             <q-icon name="layers" color="positive" class="q-mr-sm" />
-            Manage Phases
+            {{ t('sku.managePhases') }}
           </div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
@@ -1846,23 +1845,23 @@ onMounted(refreshAll)
            </div>
            
            <div class="row q-mb-lg justify-end q-gutter-sm">
-             <q-btn v-if="editingPhase" label="CANCEL EDIT" flat color="grey-7" @click="openPhaseDialog" />
-             <q-btn :label="editingPhase ? 'UPDATE PHASE' : 'ADD PHASE'" color="positive" unelevated @click="savePhase" />
+             <q-btn v-if="editingPhase" :label="t('sku.cancelEdit')" flat color="grey-7" @click="openPhaseDialog" />
+             <q-btn :label="editingPhase ? t('sku.updatePhase') : t('sku.addPhase')" color="positive" unelevated @click="savePhase" />
            </div>
 
            <q-separator class="q-mb-md" />
            
            <div class="row items-center q-mb-sm">
-             <div class="text-subtitle2 text-grey-8 uppercase text-bold">Existing Phases</div>
+             <div class="text-subtitle2 text-grey-8 uppercase text-bold">{{ t('sku.existingPhases') }}</div>
              <q-space />
              <q-btn flat round dense icon="refresh" color="primary" @click="fetchPhases" :loading="isLoading" size="sm">
-               <q-tooltip>Refresh Phases</q-tooltip>
+               <q-tooltip>{{ t('sku.refreshPhases') }}</q-tooltip>
              </q-btn>
            </div>
 
            <q-input 
              v-model="phaseSearch" 
-             placeholder="Filter phases..." 
+             :placeholder="t('sku.filterPhases')"
              dense 
              outlined 
              class="q-mb-sm"
@@ -1893,7 +1892,7 @@ onMounted(refreshAll)
         </q-card-section>
 
         <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="CLOSE" color="grey-7" v-close-popup />
+          <q-btn flat :label="t('common.close')" color="grey-7" v-close-popup />
         </q-card-actions>
       </q-card>
     </q-dialog>

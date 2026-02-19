@@ -41,6 +41,7 @@ interface IngredientIntake {
 
 const $q = useQuasar()
 const { getAuthHeader, user } = useAuth()
+const { t } = useI18n()
 
 // Scanner input ref (keyboard emulator mode)
 const ingredientCodeRef = ref<any>(null)
@@ -83,113 +84,25 @@ const focusScannerInput = () => {
   })
 }
 
-const columns: QTableColumn[] = [
+const columns = computed<QTableColumn[]>(() => [
   { name: 'id', align: 'center', label: 'ID', field: 'id', sortable: true },
-  {
-    name: 'intake_lot_id',
-    align: 'center',
-    label: 'Intake Lot ID',
-    field: 'intake_lot_id',
-    sortable: true,
-  },
-  {
-    name: 'warehouse_location',
-    align: 'center',
-    label: 'From Warehouse',
-    field: 'warehouse_location',
-    sortable: true,
-  },
-  {
-    name: 'lot_id',
-    align: 'center',
-    label: 'Lot ID',
-    field: 'lot_id',
-    sortable: true,
-  },
-  {
-    name: 'mat_sap_code',
-    align: 'center',
-    label: 'MAT.SAP Code',
-    field: 'mat_sap_code',
-    sortable: true,
-  },
-  {
-    name: 're_code',
-    align: 'center',
-    label: 'Re-Code',
-    field: 're_code',
-    sortable: true,
-  },
-  {
-    name: 'material_description',
-    align: 'left',
-    label: 'Description',
-    field: 'material_description',
-    sortable: true,
-  },
-  {
-    name: 'uom',
-    align: 'center',
-    label: 'UOM',
-    field: 'uom',
-    sortable: true,
-  },
-  {
-    name: 'intake_vol',
-    align: 'center',
-    label: 'Intake Vol (kg)',
-    field: 'intake_vol',
-    sortable: true,
-  },
-  {
-    name: 'remain_vol',
-    align: 'center',
-    label: 'Remain Vol (kg)',
-    field: 'remain_vol',
-    sortable: true,
-    classes: 'text-negative text-weight-bold', // Red color
-  },
-
-  {
-    name: 'intake_package_vol',
-    align: 'center',
-    label: 'Pkg Vol',
-    field: 'intake_package_vol',
-    sortable: true,
-  },
-  {
-    name: 'package_intake',
-    align: 'center',
-    label: 'Pkgs',
-    field: 'package_intake',
-    sortable: true,
-  },
-  {
-    name: 'expire_date',
-    align: 'center',
-    label: 'Expire Date',
-    field: 'expire_date',
-    sortable: true,
-    format: (val: string) => (val ? val.split('T')[0] : '') || '',
-  },
-  {
-    name: 'po_number',
-    align: 'center',
-    label: 'PO No.',
-    field: 'po_number',
-    sortable: true,
-  },
-  {
-    name: 'manufacturing_date',
-    align: 'center',
-    label: 'Mfg Date',
-    field: 'manufacturing_date',
-    sortable: true,
-    format: (val: string) => (val ? val.split('T')[0] : '') || '',
-  },
-  { name: 'status', align: 'center', label: 'Status', field: 'status', sortable: true },
-  { name: 'xActions', align: 'center', label: 'Actions', field: 'xActions' },
-]
+  { name: 'intake_lot_id', align: 'center', label: t('ingredient.intakeLotId'), field: 'intake_lot_id', sortable: true },
+  { name: 'warehouse_location', align: 'center', label: t('ingredient.warehouse'), field: 'warehouse_location', sortable: true },
+  { name: 'lot_id', align: 'center', label: t('ingredient.lotId'), field: 'lot_id', sortable: true },
+  { name: 'mat_sap_code', align: 'center', label: t('ingredient.matSapCode'), field: 'mat_sap_code', sortable: true },
+  { name: 're_code', align: 'center', label: t('ingredient.reCode'), field: 're_code', sortable: true },
+  { name: 'material_description', align: 'left', label: t('ingredient.materialDesc'), field: 'material_description', sortable: true },
+  { name: 'uom', align: 'center', label: t('ingredient.uom'), field: 'uom', sortable: true },
+  { name: 'intake_vol', align: 'center', label: t('ingredient.intakeVolume'), field: 'intake_vol', sortable: true },
+  { name: 'remain_vol', align: 'center', label: t('ingredient.remainVolume'), field: 'remain_vol', sortable: true, classes: 'text-negative text-weight-bold' },
+  { name: 'intake_package_vol', align: 'center', label: t('ingredient.pkgVol'), field: 'intake_package_vol', sortable: true },
+  { name: 'package_intake', align: 'center', label: t('ingredient.pkgs'), field: 'package_intake', sortable: true },
+  { name: 'expire_date', align: 'center', label: t('ingredient.expiryDate'), field: 'expire_date', sortable: true, format: (val: string) => (val ? val.split('T')[0] : '') || '' },
+  { name: 'po_number', align: 'center', label: t('ingredient.poNo'), field: 'po_number', sortable: true },
+  { name: 'manufacturing_date', align: 'center', label: t('ingredient.mfgDate'), field: 'manufacturing_date', sortable: true, format: (val: string) => (val ? val.split('T')[0] : '') || '' },
+  { name: 'status', align: 'center', label: t('common.status'), field: 'status', sortable: true },
+  { name: 'xActions', align: 'center', label: t('common.actions'), field: 'xActions' },
+])
 
 const showDetailDialog = ref(false)
 const selectedRecord = ref<IngredientIntake | null>(null)
@@ -323,7 +236,7 @@ const onSave = async () => {
   if (missingFields.length > 0) {
     $q.notify({
       type: 'negative',
-      message: `Please enter data: ${missingFields.join(', ')}`,
+      message: `${t('ingredient.enterData')}: ${missingFields.join(', ')}`,
       position: 'top',
     })
     return
@@ -334,7 +247,7 @@ const onSave = async () => {
   if (isNaN(rVol) || rVol <= 0) {
     $q.notify({
       type: 'negative',
-      message: 'Intake Volume must be a positive number',
+      message: t('ingredient.volPositive'),
       position: 'top',
     })
     return
@@ -345,7 +258,7 @@ const onSave = async () => {
     if (isNaN(pVol) || pVol <= 0) {
       $q.notify({
         type: 'negative',
-        message: 'Package Volume must be a positive number',
+        message: t('ingredient.pkgPositive'),
         position: 'top',
       })
       return
@@ -353,10 +266,10 @@ const onSave = async () => {
   }
 
   $q.dialog({
-    title: 'Confirm Save',
+    title: t('ingredient.confirmSave'),
     message: isEditing.value
-      ? 'Are you sure you want to update this intake record?'
-      : 'Are you sure you want to save this ingredient intake?',
+      ? t('ingredient.confirmSaveUpdate')
+      : t('ingredient.confirmSaveNew'),
     cancel: true,
     persistent: true,
   }).onOk(async () => {
@@ -409,8 +322,8 @@ const onSave = async () => {
         $q.notify({
           type: 'positive',
           message: isEditing.value
-            ? 'Ingredient intake updated successfully'
-            : 'Ingredient intake saved successfully',
+            ? t('ingredient.updatedSuccess')
+            : t('ingredient.savedSuccess'),
           position: 'top',
           icon: 'check_circle',
         })
@@ -426,7 +339,7 @@ const onSave = async () => {
         const error = await response.json()
         $q.notify({
           type: 'negative',
-          message: `Error: ${error.detail || 'Save failed'}`,
+          message: `${t('common.error')}: ${error.detail || t('ingredient.saveFailed')}`,
           position: 'top',
         })
       }
@@ -434,7 +347,7 @@ const onSave = async () => {
       console.error('Save error:', error)
       $q.notify({
         type: 'negative',
-        message: 'Network error: Failed to save receipt',
+        message: t('ingredient.networkError'),
         position: 'top',
       })
     } finally {
@@ -474,14 +387,14 @@ const onEdit = (row: IngredientIntake) => {
 // Reject Intake (Successively replaces Cancel/Delete)
 const onRejectIntake = async (row: IngredientIntake) => {
   $q.dialog({
-    title: 'Confirm Rejection',
-    message: `Are you sure you want to reject intake record ${row.intake_lot_id}?`,
+    title: t('ingredient.confirmReject'),
+    message: `${t('ingredient.rejectPrompt')} ${row.intake_lot_id}?`,
     cancel: true,
     persistent: true,
     prompt: {
       model: '',
       type: 'text',
-      label: 'Reason for rejection (optional)',
+      label: t('ingredient.rejectReason'),
       outlined: true,
     },
   }).onOk(async (remarks: string) => {
@@ -497,15 +410,15 @@ const onRejectIntake = async (row: IngredientIntake) => {
         }),
       })
       if (response.ok) {
-        $q.notify({ type: 'warning', message: 'Record rejected' })
+        $q.notify({ type: 'warning', message: t('ingredient.rejected') })
         fetchReceipts()
       } else {
         const err = await response.json()
-        $q.notify({ type: 'negative', message: `Reject failed: ${err.detail || 'Unknown error'}` })
+        $q.notify({ type: 'negative', message: `${t('ingredient.rejectFailed')}: ${err.detail || 'Unknown error'}` })
       }
     } catch (error) {
       console.error('Reject error:', error)
-      $q.notify({ type: 'negative', message: 'Network error while rejecting' })
+      $q.notify({ type: 'negative', message: t('ingredient.networkRejectError') })
     }
   })
 }
@@ -638,7 +551,7 @@ const updateRecordStatus = async (row: IngredientIntake, newStatus: string) => {
     if (response.ok) {
       $q.notify({
         type: 'positive',
-        message: `Status updated to ${newStatus}`,
+        message: `${t('ingredient.statusUpdated')} ${newStatus}`,
         timeout: 1000,
       })
       if (selectedRecord.value && selectedRecord.value.id === row.id) {
@@ -652,7 +565,7 @@ const updateRecordStatus = async (row: IngredientIntake, newStatus: string) => {
     console.error('Error updating status:', error)
     $q.notify({
       type: 'negative',
-      message: 'Failed to update status',
+      message: t('ingredient.statusUpdateFailed'),
     })
   }
 }
@@ -965,7 +878,7 @@ function wrapCsvValue(val: any, formatFn?: (v: any, r?: any) => string, row?: an
 
 const exportTable = () => {
   // naive encoding to csv format
-  const columnsToExport = columns.filter(col => col.name !== 'xActions')
+  const columnsToExport = columns.value.filter((col: QTableColumn) => col.name !== 'xActions')
   
   // Columns that should be forced as strings in Excel to preserve format (e.g. 00123)
   const stringCols = ['mat_sap_code', 're_code', 'lot_id', 'intake_lot_id', 'ingredient_id', 'po_number']
@@ -993,7 +906,7 @@ const exportTable = () => {
 
   if (status !== true) {
     $q.notify({
-      message: 'Browser denied file download...',
+      message: t('ingredient.downloadDenied'),
       color: 'negative',
       icon: 'warning',
     })
@@ -1017,7 +930,7 @@ const onFileSelected = async (event: Event) => {
       formData.append('file', selectedFile)
 
       try {
-        $q.loading.show({ message: 'Importing data...' })
+        $q.loading.show({ message: t('ingredient.importingData') })
         
         const response = await fetch(`${appConfig.apiBaseUrl}/ingredient-intake-lists/bulk-import`, {
           method: 'POST',
@@ -1072,9 +985,9 @@ const onFileSelected = async (event: Event) => {
       <div class="row justify-between items-center">
         <div class="row items-center q-gutter-sm">
           <q-icon name="local_shipping" size="sm" />
-          <div class="text-h6 text-weight-bolder">Ingredient Intake</div>
+          <div class="text-h6 text-weight-bolder">{{ t('ingredient.title') }}</div>
         </div>
-        <div class="text-caption text-blue-2">Receive → Label → Stock</div>
+        <div class="text-caption text-blue-2">{{ t('ingredient.subtitle') }}</div>
       </div>
     </div>
     <!-- Ingredient Intake Form -->
@@ -1089,7 +1002,7 @@ const onFileSelected = async (event: Event) => {
                   ref="ingredientCodeRef"
                   outlined
                   v-model="ingredientId"
-                  label="Scan/Type Ingredient Code *"
+                  :label="t('ingredient.ingredientCode')"
                   @keyup.enter="onScannerEnter"
                   autofocus
                 >
@@ -1112,14 +1025,14 @@ const onFileSelected = async (event: Event) => {
                 <q-input
                   outlined
                   v-model="xMatSapCode"
-                  label="MAT.SAP Code"
+                  :label="t('ingredient.matSapCode')"
                   readonly
                   bg-color="grey-2"
                 />
               </div>
               <div class="col-12 col-md-4">
                  <!-- Re-Code with Settings Icon Wrapper -->
-                <q-input outlined v-model="xReCode" label="Re-Code" readonly bg-color="grey-2" />
+                <q-input outlined v-model="xReCode" :label="t('ingredient.reCode')" readonly bg-color="grey-2" />
               </div>
             </div>
 
@@ -1129,7 +1042,7 @@ const onFileSelected = async (event: Event) => {
                      <q-input
                         outlined
                         v-model="xIngredientName"
-                        label="Ingredient Name"
+                        :label="t('ingredient.ingredientName')"
                         readonly
                         bg-color="grey-2"
                         >
@@ -1154,7 +1067,7 @@ const onFileSelected = async (event: Event) => {
                   outlined
                   v-model="warehouseLocation"
                   :options="['WH-001', 'WH-002', 'WH-003', 'WH-Cooling', 'Re Claim from Process']"
-                  label="Intake Warehouse Location *"
+                  :label="t('ingredient.warehouseLocation')"
                   dropdown-icon="arrow_drop_down"
                 >
                   <template v-slot:after>
@@ -1170,20 +1083,20 @@ const onFileSelected = async (event: Event) => {
                 </q-select>
               </div>
               <div class="col-12 col-md-4">
-                <q-input outlined v-model="lotNumber" label="Lot Number *" />
+                <q-input outlined v-model="lotNumber" :label="t('ingredient.lotNumber')" />
               </div>
               <div class="col-12 col-md-4">
-                <q-input outlined v-model="poNumber" label="PO Number" />
+                <q-input outlined v-model="poNumber" :label="t('ingredient.poNumber')" />
               </div>
             </div>
 
             <!-- New Row: Mfg Date, Expire Date -->
             <div class="row q-col-gutter-md q-mt-sm">
               <div class="col-12 col-md-4">
-                <q-input outlined v-model="manufacturingDate" label="Manufacturing Date" type="date" stack-label />
+                <q-input outlined v-model="manufacturingDate" :label="t('ingredient.manufacturingDate')" type="date" stack-label />
               </div>
               <div class="col-12 col-md-4">
-                <q-input outlined v-model="expireDate" label="Expire Date *" type="date" stack-label />
+                <q-input outlined v-model="expireDate" :label="t('ingredient.expiryDate') + ' *'" type="date" stack-label />
               </div>
             </div>
 
@@ -1192,43 +1105,43 @@ const onFileSelected = async (event: Event) => {
                 <q-input
                   outlined
                   v-model="intakeLotId"
-                  label="Ingredient Intake ID"
+                  :label="t('ingredient.intakeId')"
                   readonly
                   bg-color="grey-2"
-                  hint="Auto-generated ID"
+                  :hint="t('ingredient.autoGenId')"
                 />
               </div>
               <div class="col-12 col-md-4">
-                <q-input outlined v-model="intakeVol" label="Intake Vol (kg) *" />
+                <q-input outlined v-model="intakeVol" :label="t('ingredient.intakeVolume')" />
               </div>
 
               <!-- Remain Vol input removed -->
               <div class="col-12 col-md-3">
-                <q-input outlined v-model="packageVol" label="Package Vol (kg)" />
+                <q-input outlined v-model="packageVol" :label="t('ingredient.packageVol')" />
               </div>
               <div class="col-12 col-md-2">
                 <q-input
                   outlined
                   v-model="numberOfPackages"
-                  label="Num of Packages"
+                  :label="t('ingredient.numPackages')"
                   readonly
                   bg-color="grey-2"
                   input-class="text-right"
-                  hint="Auto-calculated"
+                  :hint="t('ingredient.autoCalc')"
                 />
               </div>
             </div>
 
             <div class="q-mt-md">
               <q-btn
-                :label="isEditing ? 'Update Intake' : 'Save Intake'"
+                :label="isEditing ? t('ingredient.updateIntake') : t('ingredient.saveIntake')"
                 color="info"
                 class="q-mr-md"
                 style="min-width: 130px"
                 @click="onSave"
                 :loading="isSaving"
               />
-              <q-btn label="Clear" color="grey" outline style="min-width: 130px" @click="onClear" />
+              <q-btn :label="t('ingredient.clear')" color="grey" outline style="min-width: 130px" @click="onClear" />
             </div>
           </q-form>
         </q-card>
@@ -1237,7 +1150,7 @@ const onFileSelected = async (event: Event) => {
 
     <!-- Ingredient Intake Table -->
     <div class="row items-center justify-between q-mb-sm">
-      <div class="text-h6">Ingredient Intake List</div>
+      <div class="text-h6">{{ t('ingredient.intakeList') }}</div>
       <div class="row items-center q-gutter-sm">
         <q-btn
           icon="refresh"
@@ -1247,7 +1160,7 @@ const onFileSelected = async (event: Event) => {
           dense
           @click="() => fetchReceipts()"
         >
-          <q-tooltip>Refresh</q-tooltip>
+          <q-tooltip>{{ t('common.refresh') }}</q-tooltip>
         </q-btn>
         <q-btn
           icon="filter_alt_off"
@@ -1257,7 +1170,7 @@ const onFileSelected = async (event: Event) => {
           dense
           @click="resetFilters"
         >
-          <q-tooltip>Reset Filters</q-tooltip>
+          <q-tooltip>{{ t('ingredient.resetFilters') }}</q-tooltip>
         </q-btn>
         <q-btn
           icon="filter_alt"
@@ -1267,7 +1180,7 @@ const onFileSelected = async (event: Event) => {
           dense
           @click="showFilters = !showFilters"
         >
-          <q-tooltip>{{ showFilters ? 'Hide Filters' : 'Show Filters' }}</q-tooltip>
+          <q-tooltip>{{ showFilters ? t('ingredient.hideFilters') : t('ingredient.showFilters') }}</q-tooltip>
         </q-btn>
         <q-btn
           icon="file_download"
@@ -1277,7 +1190,7 @@ const onFileSelected = async (event: Event) => {
           dense
           @click="exportTable"
         >
-          <q-tooltip>Export Excel</q-tooltip>
+          <q-tooltip>{{ t('ingredient.exportExcel') }}</q-tooltip>
         </q-btn>
         <q-btn
           icon="file_upload"
@@ -1287,7 +1200,7 @@ const onFileSelected = async (event: Event) => {
           dense
           @click="importTable"
         >
-          <q-tooltip>Import CSV</q-tooltip>
+          <q-tooltip>{{ t('ingredient.importCsv') }}</q-tooltip>
         </q-btn>
         <!-- Hidden File Input -->
         <input
@@ -1299,7 +1212,7 @@ const onFileSelected = async (event: Event) => {
         />
         <q-checkbox
           v-model="showAll"
-          label="Show All (including Rejected/Cancelled)"
+          :label="t('ingredient.showAll')"
           dense
         />
       </div>
@@ -1376,7 +1289,7 @@ const onFileSelected = async (event: Event) => {
                   class="q-mr-xs"
                   @click="printLabel(props.row)"
                 >
-                  <q-tooltip>Print Label</q-tooltip>
+                  <q-tooltip>{{ t('ingredient.printLabel') }}</q-tooltip>
                 </q-btn>
                 <q-btn
                   icon="settings"
@@ -1387,7 +1300,7 @@ const onFileSelected = async (event: Event) => {
                   size="sm"
                   @click="openDetailDialog(props.row)"
                 >
-                  <q-tooltip>Information & History Modify</q-tooltip>
+                  <q-tooltip>{{ t('ingredient.infoHistory') }}</q-tooltip>
                 </q-btn>
               </q-td>
             </template>
@@ -1400,13 +1313,13 @@ const onFileSelected = async (event: Event) => {
     <q-dialog v-model="showIngredientDialog">
       <q-card style="min-width: 400px">
         <q-card-section class="bg-info text-white">
-          <div class="text-h6">Enter Ingredient Code</div>
+          <div class="text-h6">{{ t('ingredient.enterCode') }}</div>
         </q-card-section>
 
         <q-card-section class="q-pt-md">
           <q-input
             v-model="tempIngredientId"
-            label="Ingredient ID"
+            :label="t('ingredient.ingredientId')"
             outlined
             autofocus
             @keyup.enter="confirmIngredientCode"
@@ -1425,9 +1338,9 @@ const onFileSelected = async (event: Event) => {
         </q-card-section>
 
         <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="Cancel" color="grey" @click="cancelIngredientDialog" />
+          <q-btn flat :label="t('common.cancel')" color="grey" @click="cancelIngredientDialog" />
           <q-btn
-            label="Confirm"
+            :label="t('common.confirm')"
             color="info"
             @click="confirmIngredientCode"
             :disable="!tempIngredientId"
@@ -1440,52 +1353,52 @@ const onFileSelected = async (event: Event) => {
     <q-dialog v-model="showDetailDialog">
       <q-card style="min-width: 500px" class="q-pa-md">
         <q-card-section class="bg-info text-white row items-center">
-          <div class="text-h6">Intake Detail - {{ selectedRecord?.intake_lot_id }}</div>
+          <div class="text-h6">{{ t('ingredient.detailTitle') }} - {{ selectedRecord?.intake_lot_id }}</div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
 
         <q-card-section class="q-pt-md">
           <div class="row q-col-gutter-sm">
-            <div class="col-6 text-weight-bold">Intake Lot ID:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.intakeLotId') }}:</div>
             <div class="col-6">{{ selectedRecord?.intake_lot_id }}</div>
 
-            <div class="col-6 text-weight-bold">Lot ID:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.lotId') }}:</div>
             <div class="col-6">{{ selectedRecord?.lot_id }}</div>
 
-            <div class="col-6 text-weight-bold">MAT.SAP Code:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.matSapCode') }}:</div>
             <div class="col-6">{{ selectedRecord?.mat_sap_code }}</div>
 
-            <div class="col-6 text-weight-bold">Re-Code:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.reCode') }}:</div>
             <div class="col-6">{{ selectedRecord?.re_code || '-' }}</div>
 
-            <div class="col-6 text-weight-bold">Warehouse:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.warehouse') }}:</div>
             <div class="col-6">{{ selectedRecord?.warehouse_location }}</div>
 
-            <div class="col-6 text-weight-bold">PO Number:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.poNo') }}:</div>
             <div class="col-6">{{ selectedRecord?.po_number || '-' }}</div>
 
-            <div class="col-6 text-weight-bold">Mfg Date:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.mfgDate') }}:</div>
             <div class="col-6">{{ selectedRecord?.manufacturing_date?.split('T')[0] || '-' }}</div>
 
-            <div class="col-6 text-weight-bold">Intake Volume:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.intakeVolume') }}:</div>
             <div class="col-6">{{ selectedRecord?.intake_vol }} kg</div>
 
-            <div class="col-6 text-weight-bold">Remain Volume:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.remainVolume') }}:</div>
             <div class="col-6 text-negative text-weight-bolder">
               {{ selectedRecord?.remain_vol }} kg
             </div>
 
-            <div class="col-6 text-weight-bold">Package Vol:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.pkgVol') }}:</div>
             <div class="col-6">{{ selectedRecord?.intake_package_vol || '-' }} kg</div>
 
-            <div class="col-6 text-weight-bold">Packages:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.packages') }}:</div>
             <div class="col-6">{{ selectedRecord?.package_intake || '-' }}</div>
 
-            <div class="col-6 text-weight-bold">Expire Date:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.expiryDate') }}:</div>
             <div class="col-6">{{ selectedRecord?.expire_date?.split('T')[0] }}</div>
 
-            <div class="col-6 text-weight-bold">Status:</div>
+            <div class="col-6 text-weight-bold">{{ t('common.status') }}:</div>
             <div class="col-6">
               <q-chip
                 :color="getStatusColor(selectedRecord?.status || '')"
@@ -1524,18 +1437,18 @@ const onFileSelected = async (event: Event) => {
 
             <q-separator class="col-12 q-my-sm" />
 
-            <div class="col-6 text-weight-bold">Intake By:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.intakeBy') }}:</div>
             <div class="col-6">{{ selectedRecord?.intake_by }}</div>
 
-            <div class="col-6 text-weight-bold">Intake At:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.intakeAt') }}:</div>
             <div class="col-6">
               {{ selectedRecord ? new Date(selectedRecord.intake_at).toLocaleString() : '' }}
             </div>
 
-            <div class="col-6 text-weight-bold">Last Edited By:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.lastEditedBy') }}:</div>
             <div class="col-6">{{ selectedRecord?.edit_by || '-' }}</div>
 
-            <div class="col-6 text-weight-bold">Last Edited At:</div>
+            <div class="col-6 text-weight-bold">{{ t('ingredient.lastEditedAt') }}:</div>
             <div class="col-6">
               {{
                 selectedRecord?.edit_at ? new Date(selectedRecord.edit_at).toLocaleString() : '-'
@@ -1548,13 +1461,13 @@ const onFileSelected = async (event: Event) => {
           <div class="q-mt-lg">
             <div class="text-subtitle1 text-weight-bold q-mb-sm row items-center">
               <q-icon name="history" color="primary" class="q-mr-xs" />
-              History of Changes
+              {{ t('ingredient.historyChanges') }}
             </div>
             <div
               v-if="!selectedRecord?.history || selectedRecord.history.length === 0"
               class="text-grey-7 q-pl-sm"
             >
-              No history found
+              {{ t('ingredient.noHistory') }}
             </div>
             <q-list v-else bordered separator dense class="rounded-borders">
               <q-item v-for="h in [...selectedRecord.history].reverse()" :key="h.id">
@@ -1583,12 +1496,12 @@ const onFileSelected = async (event: Event) => {
         <q-card-actions align="right">
           <q-btn
             flat
-            label="Print Label"
+            :label="t('ingredient.printLabel')"
             color="secondary"
             icon="print"
             @click="printLabel(selectedRecord!)"
           />
-          <q-btn flat label="Close" color="primary" v-close-popup />
+          <q-btn flat :label="t('common.close')" color="primary" v-close-popup />
         </q-card-actions>
       </q-card>
     </q-dialog>

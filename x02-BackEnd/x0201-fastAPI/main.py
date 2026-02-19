@@ -39,7 +39,8 @@ from routers import (
     plants_router,
     monitoring_router,
     views_router,
-    warehouses_router
+    warehouses_router,
+    translations_router
 )
 
 # =============================================================================
@@ -87,7 +88,7 @@ app.add_middleware(
 all_routers = [
     auth_router, users_router, ingredients_router, skus_router,
     production_router, plants_router, monitoring_router,
-    views_router, warehouses_router
+    views_router, warehouses_router, translations_router
 ]
 
 for router in all_routers:
