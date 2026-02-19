@@ -7,6 +7,7 @@ import { useLabelPrinter } from '../composables/useLabelPrinter'
 const $q = useQuasar()
 const { getAuthHeader, user } = useAuth()
 const { generateLabelSvg } = useLabelPrinter()
+const { t } = useI18n()
 
 // --- State ---
 const boxId = ref('')
@@ -33,6 +34,9 @@ const previewLabelSvg = ref('')
 const previewBagLabels = ref<{svg: string, batch_record_id: string, re_code: string}[]>([])
 const selectedSimBatch = ref<any>(null)
 
+// Bags from OTHER batches (for wrong-box simulation)
+const otherBatchBagLabels = ref<{svg: string, batch_record_id: string, re_code: string, source_batch: string}[]>([])
+
 // Feedback overlay
 const feedback = ref<{ show: boolean, type: 'success' | 'error' | 'warning', message: string, title: string }>({
     show: false,
@@ -40,6 +44,34 @@ const feedback = ref<{ show: boolean, type: 'success' | 'error' | 'warning', mes
     message: '',
     title: ''
 })
+
+// Wrong Box full-screen alert overlay
+const wrongBoxAlert = ref<{ show: boolean, bagCode: string, expectedBox: string }>({ show: false, bagCode: '', expectedBox: '' })
+
+// Sound Settings
+const showSoundSettings = ref(false)
+const successSoundPreset = ref(localStorage.getItem('recheck_success_sound') || 'beep')
+const errorSoundPreset = ref(localStorage.getItem('recheck_error_sound') || 'siren')
+
+const successSoundOptions = [
+    { value: 'beep', labelKey: 'sound.shortBeep', icon: 'music_note' },
+    { value: 'double_beep', labelKey: 'sound.doubleBeep', icon: 'music_note' },
+    { value: 'chime', labelKey: 'sound.chime', icon: 'notifications' },
+    { value: 'ding', labelKey: 'sound.ding', icon: 'campaign' },
+]
+const errorSoundOptions = [
+    { value: 'buzzer', labelKey: 'sound.buzzer', icon: 'volume_up' },
+    { value: 'siren', labelKey: 'sound.siren', icon: 'warning' },
+    { value: 'horn', labelKey: 'sound.horn', icon: 'volume_up' },
+    { value: 'alarm', labelKey: 'sound.alarm', icon: 'crisis_alert' },
+]
+
+const saveSoundSettings = () => {
+    localStorage.setItem('recheck_success_sound', successSoundPreset.value)
+    localStorage.setItem('recheck_error_sound', errorSoundPreset.value)
+    showSoundSettings.value = false
+    $q.notify({ type: 'positive', message: t('sound.saved'), position: 'top' })
+}
 
 // --- Computed ---
 const scannedCount = computed(() => {
@@ -169,8 +201,18 @@ const verifyBag = async (bagBarcode: string) => {
         // Refresh box details
         await fetchBoxDetails(boxId.value)
     } catch (error: any) {
-        showFeedback('error', error.data?.detail || 'Verification failed', 'ERROR')
-        playSound('error')
+        const detail = error.data?.detail || 'Verification failed'
+        // Detect "wrong box" type errors
+        if (detail.includes('does not belong') || detail.includes('not found')) {
+            // WRONG BOX! Show alarming full-screen alert
+            wrongBoxAlert.value = { show: true, bagCode: bagBarcode, expectedBox: boxId.value }
+            playSound('wrong_box')
+            showFeedback('error', `BAG [${bagBarcode}] does NOT belong to this box!`, '⚠ WRONG BOX ⚠')
+            setTimeout(() => { wrongBoxAlert.value.show = false }, 3500)
+        } else {
+            showFeedback('error', detail, 'ERROR')
+            playSound('error')
+        }
     } finally {
         loading.value = false
         bagScanInput.value = ''
@@ -292,6 +334,43 @@ const onSimSelectBatch = async (batch: any) => {
             }
         }
         previewBagLabels.value = bagLabels
+        
+        // Generate bag labels from OTHER batches (for wrong-box simulation)
+        const otherLabels: {svg: string, batch_record_id: string, re_code: string, source_batch: string}[] = []
+        const otherBatches = allBatches.value.filter(b => b.batch_id !== batch.batch_id).slice(0, 3)
+        for (const otherBatch of otherBatches) {
+            try {
+                const otherRecords = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-recs/by-batch/${otherBatch.batch_id}`, {
+                    headers: getAuthHeader() as Record<string, string>
+                })
+                // Take up to 2 bags from each other batch
+                for (const record of otherRecords.slice(0, 2)) {
+                    const bagMapping = {
+                        RecipeName: otherBatch.sku_name || otherBatch.sku_id || '-',
+                        BaseQuantity: otherBatch.batch_size || 0,
+                        ItemNumber: '-',
+                        RefCode: record.re_code || '-',
+                        OrderCode: otherBatch.plan_id || '-',
+                        BatchSize: otherBatch.batch_size || 0,
+                        Weight: `${(record.net_volume || 0).toFixed(3)} / ${(record.total_volume || 0).toFixed(3)}`,
+                        Packages: `${record.package_no || 1} / ${record.total_packages || 1}`,
+                        LotID: record.intake_lot_id || '-',
+                        QRCode: `${otherBatch.plan_id},${record.batch_record_id},${record.re_code},${record.net_volume}`,
+                        SmallQRCode: `${otherBatch.plan_id},${record.batch_record_id},${record.re_code},${record.net_volume}`
+                    }
+                    const svg = await generateLabelSvg('prebatch-label', bagMapping as any)
+                    if (svg) {
+                        otherLabels.push({
+                            svg,
+                            batch_record_id: record.batch_record_id,
+                            re_code: record.re_code,
+                            source_batch: otherBatch.batch_id
+                        })
+                    }
+                }
+            } catch { /* skip if error */ }
+        }
+        otherBatchBagLabels.value = otherLabels
     } catch (err) {
         console.error('Error generating labels:', err)
         $q.notify({ type: 'negative', message: 'Error loading batch labels' })
@@ -320,6 +399,14 @@ const onClickBagLabel = (bag: {batch_record_id: string, re_code: string}) => {
     parseAndHandleScan(qrData, 'bag')
 }
 
+// Simulate scanning a bag from the WRONG batch (wrong box)
+const onClickWrongBagLabel = (bag: {batch_record_id: string, re_code: string, source_batch: string}) => {
+    // The bag_barcode is the real batch_record_id from another batch
+    // This will be rejected by the backend because it doesn't belong to current box
+    showScannerDialog.value = false
+    verifyBag(bag.batch_record_id)
+}
+
 const onBoxScanSubmit = () => {
     const val = boxScanInput.value.trim()
     if (val) {
@@ -343,26 +430,68 @@ const showFeedback = (type: 'success' | 'error' | 'warning', message: string, ti
     setTimeout(() => { feedback.value.show = false }, 3500)
 }
 
-const playSound = (type: 'success' | 'error') => {
+// --- Sound Engine ---
+const playSoundPreset = (preset: string) => {
     try {
-        const context = new (window.AudioContext || (window as any).webkitAudioContext)()
-        const osc = context.createOscillator()
-        const gain = context.createGain()
-        osc.connect(gain)
-        gain.connect(context.destination)
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+        const t = ctx.currentTime
         
-        if (type === 'success') {
-            osc.frequency.setValueAtTime(880, context.currentTime)
-            gain.gain.setValueAtTime(0.08, context.currentTime)
-            gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.15)
-        } else {
-            osc.frequency.setValueAtTime(220, context.currentTime)
-            gain.gain.setValueAtTime(0.15, context.currentTime)
-            gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.3)
+        const tone = (freq: number, start: number, dur: number, vol: number, wave: OscillatorType = 'sine') => {
+            const osc = ctx.createOscillator()
+            const gain = ctx.createGain()
+            osc.type = wave
+            osc.connect(gain)
+            gain.connect(ctx.destination)
+            osc.frequency.setValueAtTime(freq, t + start)
+            gain.gain.setValueAtTime(vol, t + start)
+            gain.gain.exponentialRampToValueAtTime(0.01, t + start + dur)
+            osc.start(t + start)
+            osc.stop(t + start + dur)
         }
-        osc.start()
-        osc.stop(context.currentTime + 0.3)
+
+        switch (preset) {
+            // === SUCCESS SOUNDS ===
+            case 'beep':
+                tone(880, 0, 0.2, 0.12)
+                break
+            case 'double_beep':
+                tone(880, 0, 0.12, 0.12)
+                tone(1100, 0.15, 0.12, 0.12)
+                break
+            case 'chime':
+                tone(523, 0, 0.15, 0.1)
+                tone(659, 0.12, 0.15, 0.1)
+                tone(784, 0.24, 0.25, 0.12)
+                break
+            case 'ding':
+                tone(1200, 0, 0.4, 0.1)
+                tone(1200, 0, 0.4, 0.06, 'triangle')
+                break
+
+            // === ERROR SOUNDS ===
+            case 'buzzer':
+                for (let i = 0; i < 3; i++) tone(400 - i * 80, i * 0.18, 0.15, 0.18, 'square')
+                break
+            case 'siren':
+                for (let i = 0; i < 6; i++) tone(i % 2 === 0 ? 800 : 400, i * 0.2, 0.18, 0.25, 'sawtooth')
+                break
+            case 'horn':
+                tone(200, 0, 0.6, 0.25, 'sawtooth')
+                tone(201, 0, 0.6, 0.15, 'square')
+                break
+            case 'alarm':
+                for (let i = 0; i < 8; i++) tone(i % 2 === 0 ? 600 : 900, i * 0.12, 0.1, 0.2, 'square')
+                break
+        }
     } catch {}
+}
+
+const playSound = (type: 'success' | 'error' | 'wrong_box') => {
+    if (type === 'success') {
+        playSoundPreset(successSoundPreset.value)
+    } else {
+        playSoundPreset(errorSoundPreset.value)
+    }
 }
 
 const getStatusIcon = (status: number) => {
@@ -396,9 +525,14 @@ onMounted(() => {
       <div class="row justify-between items-center">
         <div class="row items-center q-gutter-sm">
           <q-icon name="fact_check" size="sm" />
-          <div class="text-h6 text-weight-bolder">Batch Packing Re-Check</div>
+          <div class="text-h6 text-weight-bolder">{{ t('recheck.title') }}</div>
         </div>
-        <div class="text-caption text-blue-2">Scan → Verify → Release</div>
+        <div class="row items-center q-gutter-sm">
+          <div class="text-caption text-blue-2">{{ t('recheck.subtitle') }}</div>
+          <q-btn flat round dense icon="volume_up" color="white" @click="showSoundSettings = true">
+            <q-tooltip>{{ t('sound.title') }}</q-tooltip>
+          </q-btn>
+        </div>
       </div>
     </div>
 
@@ -407,7 +541,7 @@ onMounted(() => {
       <q-card-section class="q-py-sm bg-blue-grey-1">
         <div class="row items-center q-gutter-sm">
           <q-icon name="inbox" color="blue-9" />
-          <span class="text-subtitle2 text-weight-bold text-blue-9">SCAN PACKING BOX</span>
+          <span class="text-subtitle2 text-weight-bold text-blue-9">{{ t('recheck.scanPackingBox') }}</span>
         </div>
       </q-card-section>
       <q-card-section class="q-py-sm">
@@ -416,7 +550,7 @@ onMounted(() => {
             <q-input
               v-model="boxScanInput"
               outlined dense
-              placeholder="Scan or type Packing Box ID / QR Code"
+              :placeholder="t('recheck.scanBoxPlaceholder')"
               @keyup.enter="onBoxScanSubmit"
               autofocus
               bg-color="white"
@@ -426,16 +560,16 @@ onMounted(() => {
               </template>
               <template v-slot:append>
                 <q-btn icon="document_scanner" flat round dense color="blue-9" @click="openScannerSimulator('box')">
-                  <q-tooltip>Open Scanner Simulator</q-tooltip>
+                  <q-tooltip>{{ t('recheck.openSimulator') }}</q-tooltip>
                 </q-btn>
               </template>
             </q-input>
           </div>
           <div class="col-auto">
-            <q-btn unelevated color="blue-9" icon="search" label="Load Box" @click="onBoxScanSubmit" :loading="loading && !boxDetails" />
+            <q-btn unelevated color="blue-9" icon="search" :label="t('recheck.loadBox')" @click="onBoxScanSubmit" :loading="loading && !boxDetails" />
           </div>
           <div class="col-auto" v-if="boxDetails">
-            <q-btn flat icon="close" label="Reset" color="grey-7" @click="resetBox" />
+            <q-btn flat icon="close" :label="t('common.reset')" color="grey-7" @click="resetBox" />
           </div>
         </div>
       </q-card-section>
@@ -470,21 +604,21 @@ onMounted(() => {
             <div v-if="allVerified">
               <q-btn
                 color="positive" size="md"
-                label="RELEASE TO PRODUCTION"
+                :label="t('recheck.releaseToProduction')"
                 icon="rocket_launch"
                 unelevated
                 class="text-weight-bold pulse-btn"
                 @click="releaseBatch"
                 :loading="loading"
               />
-              <div class="text-caption text-positive q-mt-xs">All bags verified ✓</div>
+              <div class="text-caption text-positive q-mt-xs">{{ t('recheck.allBagsVerified') }}</div>
             </div>
             <div v-else class="text-right">
               <div class="text-h6 text-blue-2">
-                <q-icon name="hourglass_empty" /> {{ totalCount - scannedCount }} Remaining
+                <q-icon name="hourglass_empty" /> {{ totalCount - scannedCount }} {{ t('recheck.remaining') }}
               </div>
               <div v-if="errorCount > 0" class="text-caption text-red-3">
-                {{ errorCount }} error(s) detected
+                {{ errorCount }} {{ t('recheck.errorsDetected') }}
               </div>
             </div>
           </div>
@@ -502,8 +636,8 @@ onMounted(() => {
         <q-card-section class="q-py-sm bg-blue-grey-1">
           <div class="row items-center q-gutter-sm">
             <q-icon name="qr_code_scanner" color="blue-9" />
-            <span class="text-subtitle2 text-weight-bold text-blue-9">SCAN PACKING BAG</span>
-            <q-badge color="primary" :label="`${scannedCount} / ${totalCount} Verified`" />
+            <span class="text-subtitle2 text-weight-bold text-blue-9">{{ t('recheck.scanPackingBag') }}</span>
+            <q-badge color="primary" :label="`${scannedCount} / ${totalCount} ${t('recheck.verified')}`" />
           </div>
         </q-card-section>
         <q-card-section class="q-py-sm">
@@ -512,7 +646,7 @@ onMounted(() => {
               <q-input
                 v-model="bagScanInput"
                 outlined dense
-                placeholder="Scan Packing Bag QR Code to verify..."
+                :placeholder="t('recheck.scanBagPlaceholder')"
                 @keyup.enter="onBagScanSubmit"
                 ref="bagScanRef"
                 bg-color="white"
@@ -522,13 +656,13 @@ onMounted(() => {
                 </template>
                 <template v-slot:append>
                   <q-btn icon="document_scanner" flat round dense color="primary" @click="openScannerSimulator('bag')">
-                    <q-tooltip>Open Bag Scanner Simulator</q-tooltip>
+                    <q-tooltip>{{ t('recheck.openSimulator') }}</q-tooltip>
                   </q-btn>
                 </template>
               </q-input>
             </div>
             <div class="col-auto">
-              <q-btn unelevated color="primary" icon="check" label="Verify" @click="onBagScanSubmit" :loading="loading" />
+              <q-btn unelevated color="primary" icon="check" :label="t('common.confirm')" @click="onBagScanSubmit" :loading="loading" />
             </div>
           </div>
         </q-card-section>
@@ -539,7 +673,7 @@ onMounted(() => {
         <div class="q-pa-sm bg-primary text-white text-subtitle2 text-weight-bold row items-center justify-between">
           <div class="row items-center">
             <q-icon name="inventory_2" class="q-mr-sm" />
-            <span>Packing Bags in Box</span>
+            <span>{{ t('recheck.bagsInBox') }}</span>
           </div>
           <q-badge color="white" text-color="primary" :label="`${scannedCount} / ${totalCount} OK`" />
         </div>
@@ -547,13 +681,13 @@ onMounted(() => {
         <q-markup-table flat dense separator="cell">
           <thead class="bg-blue-grey-2 text-blue-grey-9">
             <tr>
-              <th class="text-center" style="width: 50px">Status</th>
-              <th class="text-left">Ingredient (Re-Code)</th>
-              <th class="text-left">Bag Barcode</th>
-              <th class="text-right">Target (kg)</th>
-              <th class="text-right">Actual (kg)</th>
-              <th class="text-right">Diff</th>
-              <th class="text-left">Verified By</th>
+              <th class="text-center" style="width: 50px">{{ t('common.status') }}</th>
+              <th class="text-left">{{ t('recheck.ingredient') }}</th>
+              <th class="text-left">{{ t('recheck.bagBarcode') }}</th>
+              <th class="text-right">{{ t('recheck.target') }}</th>
+              <th class="text-right">{{ t('recheck.actual') }}</th>
+              <th class="text-right">{{ t('recheck.diff') }}</th>
+              <th class="text-left">{{ t('recheck.verifiedBy') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -595,11 +729,11 @@ onMounted(() => {
     <!-- ===== EMPTY STATE ===== -->
     <div v-else class="text-center q-pa-xl">
       <q-icon name="outbox" size="120px" color="blue-grey-3" />
-      <div class="text-h5 text-grey-6 text-weight-light q-mt-md">Scan a Packing Box to begin</div>
-      <div class="text-body2 text-grey-5 q-mb-lg">Load a box to verify its bag contents before releasing to production</div>
+      <div class="text-h5 text-grey-6 text-weight-light q-mt-md">{{ t('recheck.scanToBegin') }}</div>
+      <div class="text-body2 text-grey-5 q-mb-lg">{{ t('recheck.loadBoxToVerify') }}</div>
       <q-btn
         icon="document_scanner"
-        label="Open Scanner Simulator"
+        :label="t('recheck.openSimulator')"
         unelevated color="blue-9"
         @click="openScannerSimulator('box')"
       />
@@ -611,8 +745,8 @@ onMounted(() => {
         <q-bar class="bg-blue-9 text-white">
           <q-icon name="document_scanner" />
           <div class="text-weight-bold q-ml-sm">
-            SCANNER SIMULATOR —
-            {{ scannerMode === 'box' ? 'Click Box Label to Load Box' : 'Click Bag Label to Verify Bag' }}
+            {{ t('recheck.simulatorTitle') }} —
+            {{ scannerMode === 'box' ? t('recheck.clickBoxToLoad') : t('recheck.clickBagToVerify') }}
           </div>
           <q-space />
           <q-btn dense flat icon="close" v-close-popup />
@@ -621,7 +755,7 @@ onMounted(() => {
         <q-card-section class="row q-col-gutter-md" style="height: calc(100vh - 50px); overflow: auto;">
           <!-- Left: Batch Selector -->
           <div class="col-12 col-md-3">
-            <div class="text-overline text-blue-3 q-mb-sm">SELECT BATCH</div>
+            <div class="text-overline text-blue-3 q-mb-sm">{{ t('recheck.selectBatch') }}</div>
             <q-list dark separator dense class="rounded-borders" style="background: rgba(255,255,255,0.05)">
               <q-item
                 v-for="batch in allBatches"
@@ -647,7 +781,7 @@ onMounted(() => {
             <div v-if="selectedSimBatch && !scannerLoading">
               <!-- Box Label -->
               <div class="text-overline text-blue-3 q-mb-sm">
-                📦 BOX LABEL {{ scannerMode === 'box' ? '— Click to load this box' : '' }}
+                📦 {{ t('recheck.boxLabel') }} {{ scannerMode === 'box' ? '— ' + t('recheck.clickBoxToLoad') : '' }}
               </div>
               <div
                 class="label-preview box-label-preview q-mb-lg"
@@ -656,11 +790,12 @@ onMounted(() => {
                 v-html="previewLabelSvg"
               />
 
-              <!-- Bag Labels -->
+              <!-- Bags inside box (correct + wrong mixed together) -->
               <div class="text-overline text-blue-3 q-mb-sm">
-                🏷️ BAG LABELS {{ scannerMode === 'bag' ? '— Click any bag to verify it' : '' }}
+                🏷️ {{ t('recheck.bagsInBoxLabel') }} {{ scannerMode === 'bag' ? '— ' + t('recheck.clickToScan') : '' }}
               </div>
               <div class="row q-col-gutter-sm">
+                <!-- Correct bags from this batch -->
                 <div
                   v-for="bag in previewBagLabels"
                   :key="bag.batch_record_id"
@@ -682,15 +817,103 @@ onMounted(() => {
                   </div>
                   <div class="text-caption text-center text-grey-4 q-mt-xs">{{ bag.re_code }}</div>
                 </div>
+
+                <!-- WRONG bags mixed in (from other batches — simulating wrong placement) -->
+                <div
+                  v-for="bag in (scannerMode === 'bag' ? otherBatchBagLabels : [])"
+                  :key="'wrong-' + bag.batch_record_id"
+                  class="col-6 col-md-4 col-lg-3"
+                >
+                  <div
+                    class="label-preview bag-label-preview wrong-bag-preview cursor-pointer"
+                    @click="onClickWrongBagLabel(bag)"
+                  >
+                    <div v-html="bag.svg" />
+                    <div class="wrong-bag-badge">
+                      <q-icon name="warning" size="16px" />
+                      {{ t('recheck.wrongBatch') }}
+                    </div>
+                  </div>
+                  <div class="text-caption text-center text-red-4 q-mt-xs">
+                    {{ bag.re_code }}
+                  </div>
+                </div>
               </div>
             </div>
 
             <div v-else-if="!scannerLoading" class="text-center q-pa-xl text-grey-5">
               <q-icon name="touch_app" size="80px" />
-              <div class="text-h6 q-mt-md">Select a batch from the left</div>
+              <div class="text-h6 q-mt-md">{{ t('recheck.selectBatchPrompt') }}</div>
             </div>
           </div>
         </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- ===== SOUND SETTINGS DIALOG ===== -->
+    <q-dialog v-model="showSoundSettings">
+      <q-card style="min-width: 420px" class="bg-grey-9 text-white">
+        <q-bar class="bg-blue-9">
+          <q-icon name="volume_up" />
+          <div class="text-weight-bold q-ml-sm">{{ t('sound.title') }}</div>
+          <q-space />
+          <q-btn dense flat icon="close" v-close-popup />
+        </q-bar>
+
+        <q-card-section>
+          <div class="text-overline text-green-4 q-mb-sm">✅ {{ t('sound.correctScan') }}</div>
+          <q-list dark dense separator class="rounded-borders" style="background: rgba(255,255,255,0.05)">
+            <q-item
+              v-for="opt in successSoundOptions"
+              :key="opt.value"
+              tag="label"
+              class="q-py-sm"
+            >
+              <q-item-section side>
+                <q-radio v-model="successSoundPreset" :val="opt.value" color="green" dark />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label class="text-white">{{ t(opt.labelKey) }}</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-btn flat round dense icon="play_arrow" color="green" @click.stop="playSoundPreset(opt.value)">
+                  <q-tooltip>{{ t('sound.preview') }}</q-tooltip>
+                </q-btn>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+
+        <q-separator dark />
+
+        <q-card-section>
+          <div class="text-overline text-red-4 q-mb-sm">❌ {{ t('sound.wrongScan') }}</div>
+          <q-list dark dense separator class="rounded-borders" style="background: rgba(255,255,255,0.05)">
+            <q-item
+              v-for="opt in errorSoundOptions"
+              :key="opt.value"
+              tag="label"
+              class="q-py-sm"
+            >
+              <q-item-section side>
+                <q-radio v-model="errorSoundPreset" :val="opt.value" color="red" dark />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label class="text-white">{{ t(opt.labelKey) }}</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-btn flat round dense icon="play_arrow" color="red" @click.stop="playSoundPreset(opt.value)">
+                  <q-tooltip>{{ t('sound.preview') }}</q-tooltip>
+                </q-btn>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-pa-md">
+          <q-btn flat :label="t('common.cancel')" color="grey" v-close-popup />
+          <q-btn unelevated :label="t('common.save')" color="blue-9" icon="save" @click="saveSoundSettings" />
+        </q-card-actions>
       </q-card>
     </q-dialog>
 
@@ -709,6 +932,25 @@ onMounted(() => {
         </q-card-section>
       </q-card>
     </q-dialog>
+
+    <!-- ===== WRONG BOX FULL-SCREEN ALERT ===== -->
+    <Teleport to="body">
+      <div v-if="wrongBoxAlert.show" class="wrong-box-overlay" @click="wrongBoxAlert.show = false">
+        <div class="wrong-box-content">
+          <q-icon name="gpp_bad" size="120px" color="white" />
+          <div class="wrong-box-title">{{ t('wrongBox.title') }}</div>
+          <div class="wrong-box-title-thai">{{ t('wrongBox.titleThai') }}</div>
+          <div class="wrong-box-subtitle">{{ t('wrongBox.subtitle') }}</div>
+          <div class="wrong-box-detail">
+            {{ t('wrongBox.bag') }}: <strong>{{ wrongBoxAlert.bagCode }}</strong>
+          </div>
+          <div class="wrong-box-detail">
+            {{ t('wrongBox.currentBox') }}: <strong>{{ wrongBoxAlert.expectedBox }}</strong>
+          </div>
+          <div class="wrong-box-instruction">{{ t('wrongBox.removeImmediately') }}</div>
+        </div>
+      </div>
+    </Teleport>
 
   </q-page>
 </template>
@@ -767,5 +1009,95 @@ onMounted(() => {
 @keyframes pulse-glow {
   0%, 100% { box-shadow: 0 0 6px rgba(56, 142, 60, 0.4); }
   50%       { box-shadow: 0 0 18px rgba(56, 142, 60, 0.8); }
+}
+
+/* Wrong Bag label in simulator */
+.wrong-bag-preview {
+  border: 2px dashed #e53935 !important;
+  position: relative;
+  opacity: 0.85;
+}
+.wrong-bag-preview:hover {
+  border-color: #ff1744 !important;
+  box-shadow: 0 2px 16px rgba(229, 57, 53, 0.4);
+  transform: scale(1.02);
+  opacity: 1;
+}
+.wrong-bag-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: #e53935;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* WRONG BOX full-screen overlay */
+.wrong-box-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: wrongBoxFlash 0.4s ease-in-out infinite alternate;
+  cursor: pointer;
+}
+@keyframes wrongBoxFlash {
+  0%   { background: rgba(198, 40, 40, 0.92); }
+  100% { background: rgba(255, 23, 68, 0.97); }
+}
+.wrong-box-content {
+  text-align: center;
+  color: white;
+  animation: wrongBoxShake 0.15s ease-in-out infinite alternate;
+}
+@keyframes wrongBoxShake {
+  0%   { transform: translateX(-4px); }
+  100% { transform: translateX(4px); }
+}
+.wrong-box-title {
+  font-size: 64px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  margin-top: 12px;
+}
+.wrong-box-title-thai {
+  font-size: 48px;
+  font-weight: 800;
+  text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  margin-top: 4px;
+}
+.wrong-box-subtitle {
+  font-size: 24px;
+  font-weight: 500;
+  opacity: 0.9;
+  margin-top: 8px;
+}
+.wrong-box-detail {
+  font-size: 18px;
+  margin-top: 8px;
+  opacity: 0.85;
+}
+.wrong-box-instruction {
+  font-size: 28px;
+  font-weight: 800;
+  margin-top: 24px;
+  padding: 12px 32px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 8px;
+  border: 2px solid rgba(255,255,255,0.4);
+  animation: pulseInstruction 0.8s ease-in-out infinite alternate;
+}
+@keyframes pulseInstruction {
+  0%   { transform: scale(1); }
+  100% { transform: scale(1.05); }
 }
 </style>

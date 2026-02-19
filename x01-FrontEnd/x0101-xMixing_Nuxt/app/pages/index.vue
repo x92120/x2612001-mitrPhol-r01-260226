@@ -9,6 +9,7 @@ const router = useRouter()
 const route = useRoute()
 const $q = useQuasar()
 const { hasPermission, user, getAuthHeader } = useAuth()
+const { t } = useI18n()
 
 // Fetch dashboard statistics
 const activeSKUCount = ref('0')
@@ -90,7 +91,6 @@ const fetchDashboardStats = async () => {
     if (skuRes.ok) {
       const skus = await skuRes.json()
       activeSKUCount.value = skus.filter((s: any) => s.status === 'Active').length.toString()
-      if (stats.value[0]) stats.value[0].value = activeSKUCount.value
       
       // Process SKU activities
       skus.forEach((s: any) => {
@@ -112,7 +112,6 @@ const fetchDashboardStats = async () => {
     if (ingRes.ok) {
       const ingredients = await ingRes.json()
       ingredientStockCount.value = ingredients.filter((i: any) => i.status === 'Active').length.toString()
-      if (stats.value[1]) stats.value[1].value = ingredientStockCount.value
       
       // Process Ingredient activities
       ingredients.forEach((i: any) => {
@@ -136,7 +135,6 @@ const fetchDashboardStats = async () => {
       pendingBatchesCount.value = batches.filter((b: any) => 
         ['Pending', 'Planned', 'Created'].includes(b.status)
       ).length.toString()
-      if (stats.value[2]) stats.value[2].value = pendingBatchesCount.value
       
       // Process Batch activities
       batches.forEach((b: any) => {
@@ -162,7 +160,6 @@ const fetchDashboardStats = async () => {
       activeProductionsCount.value = productions.filter((p: any) => 
         ['In Progress', 'Running', 'Started'].includes(p.status)
       ).length.toString()
-      if (stats.value[3]) stats.value[3].value = activeProductionsCount.value
     }
     
     // Sort activities by timestamp desc and take top 10
@@ -181,7 +178,7 @@ onMounted(() => {
   if (route.query.error === 'no-permission') {
     $q.notify({
       type: 'negative',
-      message: 'Access Denied: You do not have permission to access that page',
+      message: t('home.accessDenied'),
       position: 'top',
       timeout: 3000
     })
@@ -195,42 +192,46 @@ onMounted(() => {
 })
 
 // Dashboard statistics
-const stats = ref([
+const stats = computed(() => [
   {
-    label: 'Total SKUs',
-    value: '0',
+    labelKey: 'home.totalSKUs',
+    label: t('home.totalSKUs'),
+    value: activeSKUCount.value,
     icon: 'book',
     color: 'blue',
     path: '/x20-Recipe',
     permission: 'sku_management',
-    description: 'Manage Product SKUs and Formulations'
+    description: t('home.manageSKU')
   },
   {
-    label: 'Ingredients Stock',
-    value: '0',
+    labelKey: 'home.ingredientsStock',
+    label: t('home.ingredientsStock'),
+    value: ingredientStockCount.value,
     icon: 'inventory_2',
     color: 'green',
     path: '/x10-IngredientIntake',
     permission: 'ingredient_receipt',
-    description: 'View current inventory levels'
+    description: t('home.viewInventory')
   },
   {
-    label: 'Pending Batches',
-    value: '0',
+    labelKey: 'home.pendingBatches',
+    label: t('home.pendingBatches'),
+    value: pendingBatchesCount.value,
     icon: 'production_quantity_limits',
     color: 'orange',
     path: '/x30-PreBatch',
     permission: 'prepare_batch',
-    description: 'Batches waiting for preparation'
+    description: t('home.batchesWaiting')
   },
   {
-    label: 'Active Productions',
-    value: '0',
+    labelKey: 'home.activeProductions',
+    label: t('home.activeProductions'),
+    value: activeProductionsCount.value,
     icon: 'timeline',
     color: 'purple',
     path: '/x40-ProductionPlan',
     permission: 'production_planning',
-    description: 'Monitor ongoing production runs'
+    description: t('home.monitorProduction')
   },
 ])
 
@@ -238,38 +239,38 @@ const stats = ref([
 const recentActivities = ref<any[]>([])
 
 // Quick access menu
-const quickAccessMenus = ref([
+const quickAccessMenus = computed(() => [
   {
-    label: 'Create SKU',
+    label: t('home.createSKU'),
     icon: 'create_new_folder',
     color: 'cyan-7',
     path: '/x20-Sku',
     permission: 'sku_management',
-    description: 'Create new product SKU definitions'
+    description: t('home.createSKUDesc')
   },
   {
-    label: 'Ingredient Intake',
+    label: t('home.ingredientIntake'),
     icon: 'add_box',
     color: 'light-blue-7',
     path: '/x10-IngredientIntake',
     permission: 'ingredient_receipt',
-    description: 'Register incoming raw material lots'
+    description: t('home.registerMaterial')
   },
   {
-    label: 'Plan Batch',
+    label: t('home.planBatch'),
     icon: 'event_note',
     color: 'warning',
     path: '/x30-ProductionPlan',
     permission: 'prepare_batch',
-    description: 'Schedule and prepare new batches'
+    description: t('home.scheduleBatch')
   },
   {
-    label: 'Start Production',
+    label: t('home.startProduction'),
     icon: 'play_arrow',
     color: 'light-green-7',
     path: '/x40-PreBatch',
     permission: 'production_planning',
-    description: 'Initiate production for planned batches'
+    description: t('home.initiateProduction')
   },
 ])
 
@@ -298,15 +299,15 @@ const canAccess = (permission: string) => {
                     </div>
                   </q-avatar>
                   <div>
-                    <div class="text-h4 text-weight-bold">Welcome, {{ user?.full_name || user?.username || 'Guest' }}</div>
-                    <div class="text-subtitle1 text-grey-3">{{ user?.role || 'Guest User' }} | {{ user?.department || 'Production' }}</div>
+                    <div class="text-h4 text-weight-bold">{{ t('home.welcome') }}, {{ user?.full_name || user?.username || t('home.guest') }}</div>
+                    <div class="text-subtitle1 text-grey-3">{{ user?.role || t('home.guestUser') }} | {{ user?.department || t('home.production') }}</div>
                   </div>
                 </div>
                 <div class="text-subtitle2 text-grey-2">
-                  Manage your batches, recipes, and production efficiently
+                  {{ t('home.manageDesc') }}
                 </div>
                 <div class="text-caption q-mt-md text-grey-4">
-                  Account Status: <span class="text-weight-bold text-green-3">Active</span> | System: Operational
+                  {{ t('home.accountStatus') }}: <span class="text-weight-bold text-green-3">{{ t('home.active') }}</span> | {{ t('home.systemOperational') }}
                 </div>
               </div>
               <div class="col-auto q-pl-md gt-xs">
@@ -330,9 +331,9 @@ const canAccess = (permission: string) => {
             <q-icon :name="stat.icon" class="text-white q-mb-md" size="2.5rem" />
             <div class="text-h6 text-weight-bold">{{ stat.value }}</div>
             <div class="text-caption text-grey-4">{{ stat.label }}</div>
-            <q-badge v-if="!canAccess(stat.permission)" color="grey-8" class="q-mt-sm">
+              <q-badge v-if="!canAccess(stat.permission)" color="grey-8" class="q-mt-sm">
               <q-icon name="lock" size="xs" class="q-mr-xs" />
-              No Access
+              {{ t('common.noAccess') }}
             </q-badge>
             <q-tooltip v-else content-class="bg-accent" content-style="font-size: 28px">
               {{ stat.description }}
@@ -345,7 +346,7 @@ const canAccess = (permission: string) => {
     <!-- Quick Access Section -->
     <div class="row q-mb-lg">
       <div class="col-12">
-        <div class="text-h5 q-mb-md text-weight-bold text-white">Quick Access</div>
+        <div class="text-h5 q-mb-md text-weight-bold text-white">{{ t('home.quickAccess') }}</div>
       </div>
       <div v-for="menu in quickAccessMenus" :key="menu.label" class="col-12 col-sm-6 col-md-3">
         <q-btn
@@ -359,7 +360,7 @@ const canAccess = (permission: string) => {
           @click="navigateTo(menu.path)"
         >
           <q-tooltip v-if="!canAccess(menu.permission)">
-            You don't have permission to access this feature
+            {{ t('home.noPermission') }}
           </q-tooltip>
           <q-tooltip v-else content-class="bg-accent" content-style="font-size: 28px">
             {{ menu.description }}
@@ -373,7 +374,7 @@ const canAccess = (permission: string) => {
       <div class="col-12">
         <q-card class="bg-dark text-white shadow-2">
           <q-card-section class="bg-primary">
-            <div class="text-h5 text-weight-bold">Recent Activities</div>
+            <div class="text-h5 text-weight-bold">{{ t('home.recentActivities') }}</div>
           </q-card-section>
           <q-separator color="grey-8" />
           <q-timeline layout="dense" color="secondary" class="q-pa-md">
@@ -394,7 +395,7 @@ const canAccess = (permission: string) => {
               </div>
             </q-timeline-entry>
             <div v-if="recentActivities.length === 0" class="text-center text-grey-5 q-pa-md">
-              No recent activities found
+              {{ t('home.noActivities') }}
             </div>
           </q-timeline>
         </q-card>
@@ -408,16 +409,16 @@ const canAccess = (permission: string) => {
           <q-card-section>
             <div class="row q-col-gutter-md">
               <div class="col-12 col-md-6">
-                <div class="text-subtitle2 text-weight-bold q-mb-sm">System Status</div>
+                <div class="text-subtitle2 text-weight-bold q-mb-sm">{{ t('home.systemStatus') }}</div>
                 <q-linear-progress :value="0.95" color="positive" class="q-mb-md" />
                 <div class="text-caption">
-                  Database: {{ systemStatus.dbStatus }} | Sync: {{ systemStatus.sync }} | Uptime: {{ systemStatus.uptime }}
+                  {{ t('home.database') }}: {{ systemStatus.dbStatus }} | {{ t('home.sync') }}: {{ systemStatus.sync }} | {{ t('home.uptime') }}: {{ systemStatus.uptime }}
                 </div>
               </div>
               <div class="col-12 col-md-6">
-                <div class="text-subtitle2 text-weight-bold q-mb-sm">Storage Usage</div>
+                <div class="text-subtitle2 text-weight-bold q-mb-sm">{{ t('home.storageUsage') }}</div>
                 <q-linear-progress :value="systemStatus.storagePercent" color="warning" class="q-mb-md" />
-                <div class="text-caption">Used: {{ systemStatus.storageUsed }} GB of {{ systemStatus.storageTotal }} GB | Last Backup: {{ systemStatus.lastBackup }}</div>
+                <div class="text-caption">{{ t('home.used') }}: {{ systemStatus.storageUsed }} GB {{ t('common.of') }} {{ systemStatus.storageTotal }} GB | {{ t('home.lastBackup') }}: {{ systemStatus.lastBackup }}</div>
               </div>
             </div>
           </q-card-section>

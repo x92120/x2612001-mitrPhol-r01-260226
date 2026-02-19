@@ -9,6 +9,7 @@ const router = useRouter()
 const route = useRoute()
 const $q = useQuasar()
 const { login: authLogin } = useAuth()
+const { t } = useI18n()
 
 const email = ref('')
 const password = ref('')
@@ -17,7 +18,7 @@ const isLoading = ref(false)
 
 const handleLogin = async () => {
   if (!email.value || !password.value) {
-    $q.notify({ type: 'negative', message: 'Please fill in all fields', position: 'top' })
+    $q.notify({ type: 'negative', message: t('login.fillFields'), position: 'top' })
     return
   }
 
@@ -42,7 +43,7 @@ const handleLogin = async () => {
 
       $q.notify({
         type: 'positive',
-        message: 'Login successful!',
+        message: t('login.loginSuccess'),
         position: 'top',
         timeout: 1000,
       })
@@ -54,7 +55,7 @@ const handleLogin = async () => {
       const errorData = await response.json().catch(() => ({}))
       $q.notify({
         type: 'negative',
-        message: errorData.detail || 'Invalid username or password',
+        message: errorData.detail || t('login.invalidCredentials'),
         position: 'top',
       })
     }
@@ -62,7 +63,7 @@ const handleLogin = async () => {
     console.error('❌ Login error:', error)
     $q.notify({
       type: 'negative',
-      message: `Cannot connect to server (${appConfig.apiBaseUrl}). Error: ${error.message}`,
+      message: `${t('login.cannotConnect')} (${appConfig.apiBaseUrl}). Error: ${error.message}`,
       position: 'top',
       timeout: 5000 
     })
@@ -100,7 +101,7 @@ const closeLogin = () => router.replace('/')
         <!-- Login Header -->
         <q-card-section class="text-center bg-primary text-white q-pt-md q-pb-lg">
           <img src="/images/logo-final.svg" style="height: 80px; margin-bottom: 20px;" />
-          <div class="text-h4 text-weight-bold">User Login</div>
+          <div class="text-h4 text-weight-bold">{{ t('login.title') }}</div>
         </q-card-section>
 
         <!-- Form Content -->
@@ -110,7 +111,7 @@ const closeLogin = () => router.replace('/')
             <q-input
               v-model="email"
               outlined
-              label="Username or Email"
+              :label="t('login.usernameOrEmail')"
               dense
               @keyup.enter="handleLogin"
             >
@@ -125,7 +126,7 @@ const closeLogin = () => router.replace('/')
             <q-input
               v-model="password"
               outlined
-              :label="'Password'"
+              :label="t('login.password')"
               :type="showPassword ? 'text' : 'password'"
               dense
               @keyup.enter="handleLogin"
@@ -146,7 +147,7 @@ const closeLogin = () => router.replace('/')
 
           <!-- Login Button -->
           <q-btn
-            label="Login"
+            :label="t('login.loginButton')"
             color="primary"
             size="lg"
             class="full-width text-white text-weight-bold"
@@ -157,12 +158,12 @@ const closeLogin = () => router.replace('/')
           <!-- Divider -->
           <div class="q-my-md text-center">
             <q-separator color="primary" class="q-my-md" />
-            <div class="text-caption">Don't have an account?</div>
+            <div class="text-caption">{{ t('login.noAccount') }}</div>
           </div>
 
           <!-- Register Link -->
           <q-btn
-            label="Create New Account"
+            :label="t('login.createAccount')"
             color="primary"
             outline
             size="lg"
@@ -172,13 +173,13 @@ const closeLogin = () => router.replace('/')
 
           <!-- Forgot Password -->
           <div class="text-center q-mt-md">
-            <q-btn label="Forgot Password?" flat size="sm" color="primary" />
+            <q-btn :label="t('login.forgotPassword')" flat size="sm" color="primary" />
           </div>
         </q-card-section>
 
         <!-- Footer -->
         <q-card-section class="text-center text-caption bg-primary text-white">
-          © 2026 xMixing. All rights reserved.
+          {{ t('login.copyright') }}
         </q-card-section>
       </q-card>
     </div>
