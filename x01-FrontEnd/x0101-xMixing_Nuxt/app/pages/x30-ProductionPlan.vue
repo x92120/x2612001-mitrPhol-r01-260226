@@ -5,6 +5,7 @@ import { RouterView } from 'vue-router'
 import { appConfig } from '~/appConfig/config'
 
 const $q = useQuasar()
+const { t } = useI18n()
 
 // --- State ---
 const skuId = ref('')
@@ -112,46 +113,46 @@ const onSkuNameSelect = (val: any) => {
 
 
 // Columns
-const columns: QTableColumn[] = [
-  { name: 'id', label: 'ID', field: 'id', align: 'left', sortable: true },
-  { name: 'plan_id', label: 'Plan ID', field: 'plan_id', align: 'left', sortable: true },
-  { name: 'sku_id', label: 'SKU-ID', field: 'sku_id', align: 'left', sortable: true },
-  { name: 'plant', label: 'Plant', field: 'plant', align: 'left', sortable: true },
+const columns = computed<QTableColumn[]>(() => [
+  { name: 'id', label: t('prodPlan.id'), field: 'id', align: 'left', sortable: true },
+  { name: 'plan_id', label: t('prodPlan.planId'), field: 'plan_id', align: 'left', sortable: true },
+  { name: 'sku_id', label: t('prodPlan.skuId'), field: 'sku_id', align: 'left', sortable: true },
+  { name: 'plant', label: t('prodPlan.plant'), field: 'plant', align: 'left', sortable: true },
   {
     name: 'total_volume',
-    label: 'Total Vol',
+    label: t('prodPlan.totalVol'),
     field: 'total_volume',
     align: 'right',
     sortable: true,
   },
   {
     name: 'total_plan_volume',
-    label: 'Total Plan Vol',
+    label: t('prodPlan.totalPlanVol'),
     field: 'total_plan_volume',
     align: 'right',
     sortable: true,
   },
-  { name: 'flavour_house', label: 'Flavour House', field: 'flavour_house', align: 'center' },
-  { name: 'spp', label: 'SPP', field: 'spp', align: 'center' },
-  { name: 'batch_prepare', label: 'Batch Prepare', field: 'batch_prepare', align: 'center' },
-  { name: 'ready_to_product', label: 'Ready to Prod', field: 'ready_to_product', align: 'center' },
-  { name: 'production', label: 'Production', field: 'production', align: 'center' },
-  { name: 'done', label: 'Done', field: 'done', align: 'center' },
-  { name: 'status', label: 'Status', field: 'status', align: 'center', sortable: true },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
-]
+  { name: 'flavour_house', label: t('prodPlan.flavourHouse'), field: 'flavour_house', align: 'center' },
+  { name: 'spp', label: t('prodPlan.spp'), field: 'spp', align: 'center' },
+  { name: 'batch_prepare', label: t('prodPlan.batchPrepare'), field: 'batch_prepare', align: 'center' },
+  { name: 'ready_to_product', label: t('prodPlan.readyToProd'), field: 'ready_to_product', align: 'center' },
+  { name: 'production', label: t('prodPlan.production'), field: 'production', align: 'center' },
+  { name: 'done', label: t('prodPlan.done'), field: 'done', align: 'center' },
+  { name: 'status', label: t('common.status'), field: 'status', align: 'center', sortable: true },
+  { name: 'actions', label: t('common.actions'), field: 'actions', align: 'center' },
+])
 
 // Batch Columns
-const batchColumns: QTableColumn[] = [
-  { name: 'batch_id', label: 'Batch ID', field: 'batch_id', align: 'left', sortable: true },
-  { name: 'batch_size', label: 'Batch Size', field: 'batch_size', align: 'right', sortable: true },
-  { name: 'flavour_house', label: 'Flavour House', field: 'flavour_house', align: 'center' },
-  { name: 'spp', label: 'SPP', field: 'spp', align: 'center' },
-  { name: 'batch_prepare', label: 'Batch Prepare', field: 'batch_prepare', align: 'center' },
-  { name: 'ready_to_product', label: 'Ready to Prod', field: 'ready_to_product', align: 'center' },
-  { name: 'production', label: 'Production', field: 'production', align: 'center' },
-  { name: 'done', label: 'Done', field: 'done', align: 'center' },
-]
+const batchColumns = computed<QTableColumn[]>(() => [
+  { name: 'batch_id', label: t('prodPlan.batchId'), field: 'batch_id', align: 'left', sortable: true },
+  { name: 'batch_size', label: t('prodPlan.batchSize'), field: 'batch_size', align: 'right', sortable: true },
+  { name: 'flavour_house', label: t('prodPlan.flavourHouse'), field: 'flavour_house', align: 'center' },
+  { name: 'spp', label: t('prodPlan.spp'), field: 'spp', align: 'center' },
+  { name: 'batch_prepare', label: t('prodPlan.batchPrepare'), field: 'batch_prepare', align: 'center' },
+  { name: 'ready_to_product', label: t('prodPlan.readyToProd'), field: 'ready_to_product', align: 'center' },
+  { name: 'production', label: t('prodPlan.production'), field: 'production', align: 'center' },
+  { name: 'done', label: t('prodPlan.done'), field: 'done', align: 'center' },
+])
 // Actions
 // Fetch SKUs
 const fetchSkus = async () => {
@@ -172,9 +173,20 @@ const fetchPlans = async () => {
 
 const isCreating = ref(false)
 
+const resetForm = () => {
+  skuId.value = ''
+  skuName.value = ''
+  plant.value = plantOptions.value.length > 0 ? (plantOptions.value[0]?.value || '') : ''
+  productionRequire.value = null
+  batchStandard.value = null
+  numberOfBatch.value = 0
+  startDate.value = new Date().toISOString().slice(0, 10)
+  finishDate.value = new Date().toISOString().slice(0, 10)
+}
+
 const onCreatePlan = async () => {
   if (!skuId.value || !plant.value || !productionRequire.value || !numberOfBatch.value) {
-    $q.notify({ type: 'warning', message: 'Please fill all required fields' })
+    $q.notify({ type: 'warning', message: t('prodPlan.fillAllFields') })
     return
   }
 
@@ -196,12 +208,12 @@ const onCreatePlan = async () => {
       body: payload,
     })
 
-    $q.notify({ type: 'positive', message: 'Plan created successfully' })
+    $q.notify({ type: 'positive', message: t('prodPlan.createdSuccess') })
     resetForm()
     fetchPlans()
   } catch (error: any) {
     console.error('Error creating plan:', error)
-    $q.notify({ type: 'negative', message: error.data?.detail || 'Failed to create plan' })
+    $q.notify({ type: 'negative', message: error.data?.detail || t('prodPlan.failedCreate') })
   } finally {
     isCreating.value = false
   }
@@ -211,12 +223,12 @@ const onCreatePlan = async () => {
 
 const onCancelPlan = async (plan: any) => {
   $q.dialog({
-    title: 'Cancel Production Plan',
-    message: 'Are you sure you want to cancel this plan? This will also cancel all associated batches.',
+    title: t('prodPlan.cancelConfirmTitle'),
+    message: t('prodPlan.cancelConfirmMessage'),
     prompt: {
       model: '',
       type: 'text',
-      label: 'Reason for cancellation (optional)',
+      label: t('prodPlan.cancelReasonLabel'),
       outlined: true
     },
     cancel: true,
@@ -230,11 +242,11 @@ const onCancelPlan = async (plan: any) => {
           changed_by: 'user'
         }
       })
-      $q.notify({ type: 'positive', message: 'Plan cancelled successfully' })
+      $q.notify({ type: 'positive', message: t('prodPlan.cancelSuccess') })
       fetchPlans()
     } catch (e) {
       console.error(e)
-      $q.notify({ type: 'negative', message: 'Network error while cancelling plan' })
+      $q.notify({ type: 'negative', message: t('prodPlan.networkErrorCancel') })
     }
   })
 }
@@ -255,17 +267,17 @@ const showHistory = async (plan: any) => {
             ${h.remarks ? `<em>${h.remarks}</em>` : ''}
           </div>`
         }).join('')
-      : '<p>No history available for this plan.</p>'
+      : `<p>${t('prodPlan.noHistory')}</p>`
     
     $q.dialog({
-      title: `History: ${plan.plan_id}`,
+      title: t('prodPlan.historyTitle', { id: plan.plan_id }),
       message: historyText,
       html: true,
       style: 'max-width: 600px'
     })
   } catch (e) {
     console.error('Error loading history:', e)
-    $q.notify({ type: 'negative', message: 'Failed to load history' })
+    $q.notify({ type: 'negative', message: t('common.error') })
   }
 }
 
@@ -300,36 +312,36 @@ const printPlan = (plan: any) => {
     </head>
     <body>
       <div style="page-break-after: always;">
-        <h1 style="text-align: center; color: #1976d2; border-bottom: 2px solid #1976d2; padding-bottom: 10px;">Production Plan Summary</h1>
+        <h1 style="text-align: center; color: #1976d2; border-bottom: 2px solid #1976d2; padding-bottom: 10px;">${t('prodPlan.summaryReportTitle')}</h1>
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-          <tr><th style="width: 40%; background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">Plan ID</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.plan_id}</td></tr>
-          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">SKU ID</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.sku_id}</td></tr>
-          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">SKU Name</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.sku_name || 'N/A'}</td></tr>
-          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">Plant</th><td style="border: 1px solid #ddd; padding: 12px;">${plantNames.value[plan.plant] || plan.plant}</td></tr>
-          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">Total Plan Volume</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.total_plan_volume || '0'} kg</td></tr>
-          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">Number of Batches</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.num_batches || 0}</td></tr>
-          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">Batch Size</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.batch_size || 'N/A'} kg</td></tr>
-          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">Period</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.start_date || 'N/A'} to ${plan.finish_date || 'N/A'}</td></tr>
-          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">Status</th><td style="border: 1px solid #ddd; padding: 12px;"><strong>${plan.status}</strong></td></tr>
+          <tr><th style="width: 40%; background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">${t('prodPlan.planId')}</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.plan_id}</td></tr>
+          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">${t('prodPlan.skuId')}</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.sku_id}</td></tr>
+          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">${t('prodPlan.skuName')}</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.sku_name || '—'}</td></tr>
+          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">${t('prodPlan.plant')}</th><td style="border: 1px solid #ddd; padding: 12px;">${plantNames.value[plan.plant] || plan.plant}</td></tr>
+          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">${t('prodPlan.totalPlanVol')}</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.total_plan_volume || '0'} kg</td></tr>
+          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">${t('prodPlan.numBatches')}</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.num_batches || 0}</td></tr>
+          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">${t('prodPlan.batchSize')}</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.batch_size || '—'} kg</td></tr>
+          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">${t('prodPlan.startDate')} - ${t('prodPlan.finishDate')}</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.start_date || '—'} to ${plan.finish_date || '—'}</td></tr>
+          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">${t('common.status')}</th><td style="border: 1px solid #ddd; padding: 12px;"><strong>${plan.status}</strong></td></tr>
         </table>
         
         <div style="margin-top: 40px; background: #f9f9f9; padding: 20px; border-radius: 8px; border-left: 5px solid #1976d2;">
-          <h2 style="margin-top: 0; font-size: 16px;">Creation Details</h2>
+          <h2 style="margin-top: 0; font-size: 16px;">${t('prodPlan.creationDetails')}</h2>
           <p><strong>Created:</strong> ${new Date(plan.created_at).toLocaleString()}</p>
-          <p><strong>Created By:</strong> ${plan.created_by || 'N/A'}</p>
+          <p><strong>Created By:</strong> ${plan.created_by || '—'}</p>
           ${plan.updated_by ? '<p><strong>Last Updated By:</strong> ' + plan.updated_by + '</p>' : ''}
         </div>
       </div>
       
       <div>
-        <h2 style="color: #1976d2; border-bottom: 2px solid #1976d2; padding-bottom: 10px;">Batch Details</h2>
+        <h2 style="color: #1976d2; border-bottom: 2px solid #1976d2; padding-bottom: 10px;">${t('prodPlan.batchDetails')}</h2>
         <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
           <thead>
             <tr>
               <th style="border: 1px solid #ddd; padding: 8px; background: #f5f5f5;">#</th>
-              <th style="border: 1px solid #ddd; padding: 8px; background: #f5f5f5;">Batch ID</th>
-              <th style="border: 1px solid #ddd; padding: 8px; background: #f5f5f5;">Size (kg)</th>
-              <th style="border: 1px solid #ddd; padding: 8px; background: #f5f5f5;">Status</th>
+              <th style="border: 1px solid #ddd; padding: 8px; background: #f5f5f5;">${t('prodPlan.batchId')}</th>
+              <th style="border: 1px solid #ddd; padding: 8px; background: #f5f5f5;">${t('prodPlan.batchSize')} (kg)</th>
+              <th style="border: 1px solid #ddd; padding: 8px; background: #f5f5f5;">${t('common.status')}</th>
             </tr>
           </thead>
           <tbody>
@@ -363,30 +375,30 @@ const printAllPlans = () => {
       <tr>
         <td style="border: 1px solid #ddd; padding: 4px; font-size: 10px;">${index + 1}</td>
         <td style="border: 1px solid #ddd; padding: 4px; font-size: 10px;">${batch.batch_id}</td>
-        <td style="border: 1px solid #ddd; padding: 4px; font-size: 10px;">${batch.batch_size || 'N/A'}</td>
+        <td style="border: 1px solid #ddd; padding: 4px; font-size: 10px;">${batch.batch_size || '—'}</td>
         <td style="border: 1px solid #ddd; padding: 4px; font-size: 10px;">${batch.status}</td>
       </tr>
-    `).join('') || '<tr><td colspan="4" style="text-align: center; padding: 8px; font-size: 10px;">No batches</td></tr>'
+    `).join('') || `<tr><td colspan="4" style="text-align: center; padding: 8px; font-size: 10px;">${t('common.noData')}</td></tr>`
     
     return `
       <!-- Page 1: Plan Summary -->
       <div style="page-break-after: always; margin-bottom: 20px;">
         <h2 style="font-size: 16px; margin-bottom: 15px; color: #1976d2; border-bottom: 1px solid #1976d2; padding-bottom: 5px;">
-          ${plan.plan_id} - Summary
+          ${plan.plan_id} - ${t('common.details')}
         </h2>
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px;">
           <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2; width: 35%;">SKU</th><td style="border: 1px solid #ddd; padding: 8px;">${plan.sku_id} - ${plan.sku_name || ''}</td></tr>
-          <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">Plant</th><td style="border: 1px solid #ddd; padding: 8px;">${plantNames.value[plan.plant] || plan.plant}</td></tr>
-          <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">Total Plan Volume</th><td style="border: 1px solid #ddd; padding: 8px;">${plan.total_plan_volume || 'N/A'} kg</td></tr>
-          <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">Number of Batches</th><td style="border: 1px solid #ddd; padding: 8px;">${plan.num_batches || 0}</td></tr>
-          <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">Period</th><td style="border: 1px solid #ddd; padding: 8px;">${plan.start_date || 'N/A'} to ${plan.finish_date || 'N/A'}</td></tr>
-          <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">Status</th><td style="border: 1px solid #ddd; padding: 8px;"><strong>${plan.status}</strong></td></tr>
+          <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">${t('prodPlan.plant')}</th><td style="border: 1px solid #ddd; padding: 8px;">${plantNames.value[plan.plant] || plan.plant}</td></tr>
+          <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">${t('prodPlan.totalPlanVol')}</th><td style="border: 1px solid #ddd; padding: 8px;">${plan.total_plan_volume || '—'} kg</td></tr>
+          <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">${t('prodPlan.numBatches')}</th><td style="border: 1px solid #ddd; padding: 8px;">${plan.num_batches || 0}</td></tr>
+          <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">${t('prodPlan.startDate')} - ${t('prodPlan.finishDate')}</th><td style="border: 1px solid #ddd; padding: 8px;">${plan.start_date || '—'} to ${plan.finish_date || '—'}</td></tr>
+          <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">${t('common.status')}</th><td style="border: 1px solid #ddd; padding: 8px;"><strong>${plan.status}</strong></td></tr>
         </table>
         
         <div style="margin-top: 30px; background: #f9f9f9; padding: 15px; border-radius: 5px; border-left: 5px solid #1976d2;">
-          <h3 style="margin-top: 0; font-size: 12px;">Timeline</h3>
+          <h3 style="margin-top: 0; font-size: 12px;">${t('prodPlan.creationDetails')}</h3>
           <p style="margin: 5px 0;"><strong>Created:</strong> ${new Date(plan.created_at).toLocaleString()}</p>
-          <p style="margin: 5px 0;"><strong>Created By:</strong> ${plan.created_by || 'N/A'}</p>
+          <p style="margin: 5px 0;"><strong>Created By:</strong> ${plan.created_by || '—'}</p>
           ${plan.updated_by ? `<p style="margin: 5px 0;"><strong>Last Updated By:</strong> ${plan.updated_by}</p>` : ''}
         </div>
       </div>
@@ -394,15 +406,15 @@ const printAllPlans = () => {
       <!-- Page 2: Batch Details -->
       <div style="page-break-after: always; margin-bottom: 20px;">
         <h2 style="font-size: 16px; margin-bottom: 15px; color: #1976d2; border-bottom: 1px solid #1976d2; padding-bottom: 5px;">
-          ${plan.plan_id} - Batch Details
+          ${plan.plan_id} - ${t('prodPlan.batchDetails')}
         </h2>
         <table style="width: 100%; border-collapse: collapse;">
           <thead>
             <tr>
               <th style="border: 1px solid #ddd; padding: 6px; background: #f2f2f2; font-size: 11px;">#</th>
-              <th style="border: 1px solid #ddd; padding: 6px; background: #f2f2f2; font-size: 11px;">Batch ID</th>
-              <th style="border: 1px solid #ddd; padding: 6px; background: #f2f2f2; font-size: 11px;">Size (kg)</th>
-              <th style="border: 1px solid #ddd; padding: 6px; background: #f2f2f2; font-size: 11px;">Status</th>
+              <th style="border: 1px solid #ddd; padding: 6px; background: #f2f2f2; font-size: 11px;">${t('prodPlan.batchId')}</th>
+              <th style="border: 1px solid #ddd; padding: 6px; background: #f2f2f2; font-size: 11px;">${t('prodPlan.batchSize')} (kg)</th>
+              <th style="border: 1px solid #ddd; padding: 6px; background: #f2f2f2; font-size: 11px;">${t('common.status')}</th>
             </tr>
           </thead>
           <tbody>${batchesHTML}</tbody>
@@ -415,7 +427,7 @@ const printAllPlans = () => {
   const totalBatches = filteredPlans.value.reduce((sum: number, plan: any) => sum + (plan.batches?.length || 0), 0)
   const totalVolume = filteredPlans.value.reduce((sum: number, plan: any) => sum + (plan.total_plan_volume || 0), 0)
   
-  // Calculate status and plant breakdowns for the summary page
+  // Breakdown calculations remain same
   const statusCounts: Record<string, number> = {}
   const plantCounts: Record<string, number> = {}
   const plantVolumes: Record<string, number> = {}
@@ -438,11 +450,11 @@ const printAllPlans = () => {
   const summaryPage = `
     <div style="page-break-after: always; margin-bottom: 30px;">
       <h1 style="font-size: 24px; color: #1976d2; text-align: center; margin-bottom: 20px; border-bottom: 3px solid #1976d2; padding-bottom: 10px;">
-        Production Plans Summary Report
+        ${t('prodPlan.summaryReportTitle')}
       </h1>
       
       <div style="background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
-        <h2 style="margin: 0 0 15px 0; font-size: 18px;">Overall Statistics</h2>
+        <h2 style="margin: 0 0 15px 0; font-size: 18px;">${t('prodPlan.overallStats')}</h2>
         <div style="display: flex; justify-content: space-around; gap: 10px;">
           <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 5px; text-align: center; flex: 1;">
             <div style="font-size: 28px; font-weight: bold;">${totalPlans}</div>
@@ -460,21 +472,21 @@ const printAllPlans = () => {
       </div>
       
       <div style="margin-bottom: 20px;">
-        <h2 style="font-size: 14px; border-left: 4px solid #1976d2; padding-left: 8px; margin-bottom: 10px;">Status Breakdown</h2>
+        <h2 style="font-size: 14px; border-left: 4px solid #1976d2; padding-left: 8px; margin-bottom: 10px;">${t('prodPlan.statusBreakdown')}</h2>
         <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
           <thead>
-            <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f5f5f5; text-align: left;">Status</th><th style="border: 1px solid #ddd; padding: 8px; background: #f5f5f5; text-align: right;">Count</th></tr>
+            <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f5f5f5; text-align: left;">${t('common.status')}</th><th style="border: 1px solid #ddd; padding: 8px; background: #f5f5f5; text-align: right;">Count</th></tr>
           </thead>
           <tbody>${statusRows}</tbody>
         </table>
       </div>
       
       <div>
-        <h2 style="font-size: 14px; border-left: 4px solid #1976d2; padding-left: 8px; margin-bottom: 10px;">Plant Distribution</h2>
+        <h2 style="font-size: 14px; border-left: 4px solid #1976d2; padding-left: 8px; margin-bottom: 10px;">${t('prodPlan.plantDist')}</h2>
         <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
           <thead>
             <tr>
-              <th style="border: 1px solid #ddd; padding: 8px; background: #f5f5f5; text-align: left;">Plant</th>
+              <th style="border: 1px solid #ddd; padding: 8px; background: #f5f5f5; text-align: left;">${t('prodPlan.plant')}</th>
               <th style="border: 1px solid #ddd; padding: 8px; background: #f5f5f5; text-align: right;">Plans</th>
               <th style="border: 1px solid #ddd; padding: 8px; background: #f5f5f5; text-align: right;">Total Volume</th>
             </tr>
@@ -489,7 +501,7 @@ const printAllPlans = () => {
     <!DOCTYPE html>
     <html>
     <head>
-      <title>All Production Plans</title>
+      <title>${t('prodPlan.title')}</title>
       <style>
         @page { size: A4; margin: 15mm; }
         body { font-family: Arial, sans-serif; }
@@ -499,16 +511,14 @@ const printAllPlans = () => {
     </head>
     <body>
       ${summaryPage}
-      <h1 style="text-align: center; border-bottom: 1px solid #eee; padding-bottom: 10px;">Detailed Production Plans</h1>
+      <h1 style="text-align: center; border-bottom: 1px solid #eee; padding-bottom: 10px;">${t('prodPlan.title')}</h1>
       ${plansHTML}
-      ` + 
-      '<script>' +
-      '  window.onload = () => {' +
-      '    window.print();' +
-      '    window.onafterprint = () => window.close();' +
-      '  };' +
-      '<' + '/script>' +
-      `
+      <script>
+        window.onload = () => {
+          window.print();
+          window.onafterprint = () => window.close();
+        };
+      </scr` + `ipt>
     </body>
     </html>
   `
@@ -549,17 +559,6 @@ const onSkuNameFilter = (val: string, update: any) => {
   })
 }
 
-const resetForm = () => {
-  skuId.value = ''
-  skuName.value = ''
-  plant.value = plantOptions.value.length > 0 ? (plantOptions.value[0]?.value || '') : ''
-  productionRequire.value = null
-  batchStandard.value = null
-  numberOfBatch.value = 0
-  startDate.value = new Date().toISOString().slice(0, 10)
-  finishDate.value = new Date().toISOString().slice(0, 10)
-}
-
 // Styling Helper
 const getStatusColor = (status: string) => {
   if (status === 'Hold') return 'text-magenta'
@@ -583,9 +582,9 @@ onMounted(() => {
         <div class="row justify-between items-center">
           <div class="row items-center q-gutter-sm">
             <q-icon name="account_tree" size="sm" />
-            <div class="text-h6 text-weight-bolder">Production Plan List</div>
+            <div class="text-h6 text-weight-bolder">{{ t('prodPlan.title') }}</div>
           </div>
-          <div class="text-caption text-weight-bold text-blue-2">Version 0.3</div>
+          <div class="text-caption text-weight-bold text-blue-2">{{ t('prodPlan.version') }} 0.3</div>
         </div>
       </div>
 
@@ -594,10 +593,10 @@ onMounted(() => {
         <q-card-section class="q-pa-sm bg-primary text-white row items-center justify-between">
           <div class="text-subtitle2 text-weight-bold">
             <q-icon name="add_circle" class="q-mr-xs" />
-            Create New Production Plan
+            {{ t('prodPlan.createNew') }}
           </div>
           <q-btn
-            label="Generate Plan"
+            :label="t('prodPlan.generatePlan')"
             color="white"
             text-color="primary"
             unelevated
@@ -614,7 +613,7 @@ onMounted(() => {
           <!-- Form Row 1: SKU & Dates -->
           <div class="row q-col-gutter-md q-mb-md">
             <div class="col-12 col-md-3">
-              <div class="text-caption text-weight-bold q-mb-xs">SKU-ID</div>
+              <div class="text-caption text-weight-bold q-mb-xs">{{ t('prodPlan.skuId') }}</div>
               <q-select
                 outlined v-model="skuId" :options="filteredSkuIdOptions"
                 dense bg-color="white" use-input input-debounce="0"
@@ -623,7 +622,7 @@ onMounted(() => {
               />
             </div>
             <div class="col-12 col-md-5">
-              <div class="text-caption text-weight-bold q-mb-xs">SKU Name</div>
+              <div class="text-caption text-weight-bold q-mb-xs">{{ t('prodPlan.skuName') }}</div>
               <q-select
                 outlined v-model="skuName" :options="filteredSkuNameOptions"
                 dense bg-color="white" use-input input-debounce="0"
@@ -632,11 +631,11 @@ onMounted(() => {
               />
             </div>
             <div class="col-6 col-md-2">
-              <div class="text-caption text-weight-bold q-mb-xs">Start Date</div>
+              <div class="text-caption text-weight-bold q-mb-xs">{{ t('prodPlan.startDate') }}</div>
               <q-input outlined v-model="startDate" dense bg-color="white" type="date" />
             </div>
             <div class="col-6 col-md-2">
-              <div class="text-caption text-weight-bold q-mb-xs">Finish Date</div>
+              <div class="text-caption text-weight-bold q-mb-xs">{{ t('prodPlan.finishDate') }}</div>
               <q-input outlined v-model="finishDate" dense bg-color="white" type="date" />
             </div>
           </div>
@@ -644,7 +643,7 @@ onMounted(() => {
           <!-- Form Row 2: Plant, Volume & Batches -->
           <div class="row q-col-gutter-md">
             <div class="col-12 col-md-3">
-              <div class="text-caption text-weight-bold q-mb-xs">Plant</div>
+              <div class="text-caption text-weight-bold q-mb-xs">{{ t('prodPlan.plant') }}</div>
               <q-select
                 outlined v-model="plant" :options="plantOptions"
                 dense bg-color="white" emit-value map-options
@@ -655,19 +654,19 @@ onMounted(() => {
               </q-select>
             </div>
             <div class="col-6 col-md-2">
-              <div class="text-caption text-weight-bold q-mb-xs">Require Vol (kg)</div>
+              <div class="text-caption text-weight-bold q-mb-xs">{{ t('prodPlan.requireVol') }}</div>
               <q-input outlined v-model="productionRequire" type="number" dense bg-color="white" input-class="text-right" />
             </div>
             <div class="col-6 col-md-2">
-              <div class="text-caption text-weight-bold q-mb-xs">Batch Standard</div>
+              <div class="text-caption text-weight-bold q-mb-xs">{{ t('prodPlan.batchStandard') }}</div>
               <q-input outlined v-model="batchStandard" type="number" dense bg-color="white" input-class="text-right" />
             </div>
             <div class="col-6 col-md-2">
-              <div class="text-caption text-weight-bold q-mb-xs">Total Plan Vol</div>
+              <div class="text-caption text-weight-bold q-mb-xs">{{ t('prodPlan.totalPlanVol') }}</div>
               <q-input outlined :model-value="totalPlanVolume" readonly dense bg-color="grey-2" input-class="text-right text-weight-bold" />
             </div>
             <div class="col-6 col-md-1">
-              <div class="text-caption text-weight-bold q-mb-xs">No. of Batches</div>
+              <div class="text-caption text-weight-bold q-mb-xs">{{ t('prodPlan.numBatches') }}</div>
               <q-input outlined v-model="numberOfBatch" type="number" dense bg-color="white" @update:model-value="onManualBatchChange" input-class="text-center" />
             </div>
           </div>
@@ -676,13 +675,13 @@ onMounted(() => {
 
       <!-- Plans Master (Full Width Below) -->
       <div class="row items-center justify-between q-mb-xs">
-        <div class="text-subtitle2 text-weight-bold">Plans Master</div>
+        <div class="text-subtitle2 text-weight-bold">{{ t('prodPlan.plansMaster') }}</div>
         <div class="row items-center q-gutter-x-xs">
           <q-btn icon="refresh" flat round dense color="primary" @click="fetchPlans" size="sm" />
           <q-btn icon="print" flat round dense color="primary" @click="printAllPlans" size="sm">
-            <q-tooltip>Print All Plans</q-tooltip>
+            <q-tooltip>{{ t('prodPlan.printAllPlans') }}</q-tooltip>
           </q-btn>
-          <q-checkbox v-model="showAll" label="Show All" dense class="text-caption" />
+          <q-checkbox v-model="showAll" :label="t('prodPlan.showAll')" dense class="text-caption" />
         </div>
       </div>
 
@@ -756,16 +755,16 @@ onMounted(() => {
                             <q-list style="min-width: 150px">
                                 <q-item clickable @click="printPlan(props.row)">
                                     <q-item-section avatar><q-icon name="print" color="primary" /></q-item-section>
-                                    <q-item-section>Print Plan</q-item-section>
+                                    <q-item-section>{{ t('prodPlan.printPlan') }}</q-item-section>
                                 </q-item>
                                 <q-item clickable @click="showHistory(props.row)">
                                     <q-item-section avatar><q-icon name="history" color="primary" /></q-item-section>
-                                    <q-item-section>View History</q-item-section>
+                                    <q-item-section>{{ t('prodPlan.viewHistory') }}</q-item-section>
                                 </q-item>
                                 <q-separator />
                                 <q-item clickable @click="onCancelPlan(props.row)" :disable="props.row.status === 'Cancelled'">
                                     <q-item-section avatar><q-icon name="cancel" color="negative" /></q-item-section>
-                                    <q-item-section class="text-negative">Cancel Plan</q-item-section>
+                                    <q-item-section class="text-negative">{{ t('prodPlan.cancelPlan') }}</q-item-section>
                                 </q-item>
                             </q-list>
                         </q-menu>

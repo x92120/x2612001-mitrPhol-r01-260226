@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
 """
-Seed Translations Database
-==========================
-Reads the TypeScript dictionary file and imports all translations
+Bulk Import Translations
+========================
+Reads a JSON file (translations_import.json) and imports all translations
 into the SQLite database (translations.db).
 
 Usage:
     python seed_translations.py
 
-This script can be run multiple times safely — it uses UPSERT logic.
+JSON Format Example:
+{
+    "en": { "key.name": "Value" },
+    "th": { "key.name": "ค่า" }
+}
 """
 
 import sqlite3
 import os
-import re
+import json
 import sys
 
 # Path setup
@@ -23,60 +27,7 @@ I18N_DIR = os.path.join(
     "app", "i18n"
 )
 DB_PATH = os.path.join(I18N_DIR, "translations.db")
-DICTIONARY_PATH = os.path.join(I18N_DIR, "dictionary.ts")
-
-
-def parse_dictionary(filepath: str) -> dict:
-    """Parse the TypeScript dictionary file and extract translations."""
-    with open(filepath, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    translations = {"en": {}, "th": {}}
-
-    # Find each locale block
-    for locale in ["en", "th"]:
-        # Find the locale block: en: { ... } or th: { ... }
-        # We'll use a simple line-by-line parser
-        in_locale = False
-        brace_depth = 0
-
-        for line in content.split("\n"):
-            stripped = line.strip()
-
-            # Detect start of locale block
-            if not in_locale:
-                if re.match(rf"^\s*{locale}\s*:\s*\{{", line):
-                    in_locale = True
-                    brace_depth = 1
-                    continue
-            else:
-                # Track braces
-                brace_depth += stripped.count("{") - stripped.count("}")
-
-                if brace_depth <= 0:
-                    in_locale = False
-                    continue
-
-                # Parse key-value pairs like: 'common.save': 'Save',
-                match = re.match(r"""^\s*'([^']+)'\s*:\s*['"](.*)['"],?\s*$""", line)
-                if not match:
-                    # Try double quotes
-                    match = re.match(r"""^\s*"([^"]+)"\s*:\s*"(.*)",?\s*$""", line)
-                if not match:
-                    # Try mixed: 'key': "value"
-                    match = re.match(r"""^\s*'([^']+)'\s*:\s*"(.*)",?\s*$""", line)
-                if not match:
-                    # Try: "key": 'value'
-                    match = re.match(r"""^\s*"([^"]+)"\s*:\s*'(.*)',?\s*$""", line)
-
-                if match:
-                    key = match.group(1)
-                    value = match.group(2)
-                    # Unescape common sequences
-                    value = value.replace("\\'", "'").replace('\\"', '"')
-                    translations[locale][key] = value
-
-    return translations
+IMPORT_PATH = os.path.join(I18N_DIR, "translations_import.json")
 
 
 def seed_database(translations: dict):
@@ -98,15 +49,17 @@ def seed_database(translations: dict):
     """)
 
     total = 0
-    for locale, pairs in translations.items():
-        for key, value in pairs.items():
-            conn.execute("""
-                INSERT INTO translations (key, locale, value, updated_at)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(key, locale)
-                DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
-            """, (key, locale, value))
-            total += 1
+    for locale in ["en", "th"]:
+        if locale in translations:
+            pairs = translations[locale]
+            for key, value in pairs.items():
+                conn.execute("""
+                    INSERT INTO translations (key, locale, value, updated_at)
+                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(key, locale)
+                    DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+                """, (key, locale, value))
+                total += 1
 
     conn.commit()
 
@@ -120,23 +73,30 @@ def seed_database(translations: dict):
 
 def main():
     print("=" * 60)
-    print("  Seed Translations Database")
+    print("  Bulk Import Translations")
     print("=" * 60)
 
-    # Check dictionary file exists
-    dict_path = os.path.abspath(DICTIONARY_PATH)
-    if not os.path.exists(dict_path):
-        print(f"❌ Dictionary file not found: {dict_path}")
+    # Check import file exists
+    if not os.path.exists(IMPORT_PATH):
+        print(f"❌ Import file not found: {IMPORT_PATH}")
+        print(f"👉 Please create this file with your translations in JSON format.")
         sys.exit(1)
 
-    print(f"📖 Reading: {dict_path}")
-    translations = parse_dictionary(dict_path)
+    print(f"📖 Reading: {IMPORT_PATH}")
+    try:
+        with open(IMPORT_PATH, "r", encoding="utf-8") as f:
+            translations = json.load(f)
+    except Exception as e:
+        print(f"❌ Error parsing JSON: {e}")
+        sys.exit(1)
 
-    print(f"   EN keys found: {len(translations['en'])}")
-    print(f"   TH keys found: {len(translations['th'])}")
+    en_keys = len(translations.get("en", {}))
+    th_keys = len(translations.get("th", {}))
+    print(f"   EN keys found: {en_keys}")
+    print(f"   TH keys found: {th_keys}")
 
-    if not translations["en"] and not translations["th"]:
-        print("❌ No translations parsed! Check the dictionary file format.")
+    if en_keys == 0 and th_keys == 0:
+        print("❌ No translations found in JSON!")
         sys.exit(1)
 
     print(f"\n💾 Writing to: {os.path.abspath(DB_PATH)}")
@@ -147,7 +107,6 @@ def main():
     print(f"   EN in DB: {en_count}")
     print(f"   TH in DB: {th_count}")
     print(f"\n📂 Database file: {os.path.abspath(DB_PATH)}")
-    print(f"   Open with: DB Browser for SQLite, DBeaver, or sqlite3 CLI")
     print("=" * 60)
 
 

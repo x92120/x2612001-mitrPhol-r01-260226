@@ -45,7 +45,7 @@ const handleLogout = async () => {
 
         <!-- Language Toggle -->
         <q-btn flat round dense @click="toggleLocale" class="q-mr-sm">
-          <span style="font-size: 20px">{{ localeFlag }}</span>
+          <span style="font-size: 30px">{{ localeFlag }}</span>
           <q-tooltip>{{ localeName }}</q-tooltip>
         </q-btn>
 

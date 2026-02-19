@@ -5,7 +5,7 @@
  * 
  * Data source priority:
  *   1. SQLite database via API (fetched on init)
- *   2. Built-in static dictionary (offline fallback)
+ *   2. Key name (final fallback)
  * 
  * Usage:
  *   const { t, locale, toggleLocale, setLocale } = useI18n()
@@ -15,7 +15,7 @@
  *   {{ t('common.save') }}     → "Save" or "บันทึก"
  */
 
-import { dictionary, type Locale } from '~/i18n/dictionary'
+export type Locale = 'en' | 'th'
 import { appConfig } from '~/appConfig/config'
 
 // Shared reactive state across all components
@@ -57,12 +57,10 @@ export const useI18n = () => {
      * Priority: API dictionary → static dictionary → key itself
      */
     const t = (key: string, params?: Record<string, string | number>): string => {
-        // Try live dictionary first (from SQLite), then fall back to static
+        // Try live dictionary (from SQLite)
         let text =
             liveDictionary.value[locale.value]?.[key] ||
-            dictionary[locale.value]?.[key] ||
             liveDictionary.value['en']?.[key] ||
-            dictionary['en']?.[key] ||
             key
 
         // Simple parameter interpolation: {name} → value

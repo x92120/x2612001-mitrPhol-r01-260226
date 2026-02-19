@@ -9,6 +9,7 @@ import { useLabelPrinter } from '~/composables/useLabelPrinter'
 const $q = useQuasar()
 const { getAuthHeader, user } = useAuth()
 const { generateLabelSvg, printLabel } = useLabelPrinter()
+const { t } = useI18n()
 
 // --- State ---
 const selectedProductionPlan = ref('')
@@ -99,7 +100,7 @@ const fetchProductionPlans = async () => {
     console.error('Error fetching production plans:', error)
     $q.notify({
       type: 'negative',
-      message: 'Error loading production plans',
+      message: t('preBatch.errorLoadingPlans'),
       position: 'top'
     })
   } finally {
@@ -302,7 +303,7 @@ const updateRequireVolume = () => {
 }
 
 // --- Scales (static display, no MQTT) ---
-const scales = ref([
+const scales = computed(() => [
   {
     id: 1,
     label: 'Scale 1 (10 Kg +/- 0.01)',
@@ -341,13 +342,17 @@ const scales = ref([
   },
 ])
 
+const connectedScales = ref<Record<number, boolean>>({})
+
+const isScaleConnected = (id: number) => !!connectedScales.value[id]
+
 const toggleScaleConnection = (scaleId: number) => {
   const scale = scales.value.find((s) => s.id === scaleId)
   if (!scale) return
-  scale.connected = !scale.connected
+  connectedScales.value[scaleId] = !connectedScales.value[scaleId]
   $q.notify({
-    type: scale.connected ? 'positive' : 'info',
-    message: scale.connected ? `Connected ${scale.label}` : `Disconnected ${scale.label}`,
+    type: connectedScales.value[scaleId] ? 'positive' : 'info',
+    message: connectedScales.value[scaleId] ? `${t('preBatch.connected')} ${scale.label}` : `${t('preBatch.disconnected')} ${scale.label}`,
     position: 'top',
     timeout: 500
   })
@@ -470,25 +475,25 @@ const onViewHistory = (item: any) => {
     showHistoryDialog.value = true
 }
 
-const inventoryColumns: QTableColumn[] = [
-    { name: 'id', align: 'center', label: 'ID', field: 'id', sortable: true },
-    { name: 'intake_lot_id', align: 'left', label: 'Intake Lot ID', field: 'intake_lot_id', sortable: true },
-    { name: 'warehouse_location', align: 'center', label: 'From Warehouse', field: 'warehouse_location' },
-    { name: 'lot_id', align: 'left', label: 'Lot ID', field: 'lot_id' },
-    { name: 'mat_sap_code', align: 'left', label: 'MAT.SAP Code', field: 'mat_sap_code' },
-    { name: 're_code', align: 'center', label: 'Re-Code', field: 're_code' },
-    { name: 'material_description', align: 'left', label: 'Description', field: 'material_description' },
-    { name: 'uom', align: 'center', label: 'UOM', field: 'uom' },
-    { name: 'intake_vol', align: 'right', label: 'Intake Vol (kg)', field: 'intake_vol' },
-    { name: 'remain_vol', align: 'right', label: 'Remain Vol (kg)', field: 'remain_vol', classes: 'text-red text-weight-bold' },
-    { name: 'intake_package_vol', align: 'right', label: 'Pkg Vol', field: 'intake_package_vol' },
-    { name: 'package_intake', align: 'center', label: 'Pkgs', field: 'package_intake' },
-    { name: 'expire_date', align: 'center', label: 'Expire Date', field: 'expire_date', format: (val: any) => val ? val.split('T')[0] : '' },
-    { name: 'po_number', align: 'left', label: 'PO No.', field: 'po_number' },
-    { name: 'manufacturing_date', align: 'center', label: 'Mfg Date', field: 'manufacturing_date', format: (val: any) => val ? val.split('T')[0] : '' },
-    { name: 'status', align: 'center', label: 'Status', field: 'status' },
-    { name: 'actions', align: 'center', label: 'Actions', field: 'id' }
-]
+const inventoryColumns = computed<QTableColumn[]>(() => [
+    { name: 'id', align: 'center', label: t('common.id'), field: 'id', sortable: true },
+    { name: 'intake_lot_id', align: 'left', label: t('preBatch.intakeLotId'), field: 'intake_lot_id', sortable: true },
+    { name: 'warehouse_location', align: 'center', label: t('preBatch.fromWarehouse'), field: 'warehouse_location' },
+    { name: 'lot_id', align: 'left', label: t('ingredient.lotId'), field: 'lot_id' },
+    { name: 'mat_sap_code', align: 'left', label: t('ingredient.matSapCode'), field: 'mat_sap_code' },
+    { name: 're_code', align: 'center', label: t('ingredient.reCode'), field: 're_code' },
+    { name: 'material_description', align: 'left', label: t('common.description'), field: 'material_description' },
+    { name: 'uom', align: 'center', label: t('ingredient.uom'), field: 'uom' },
+    { name: 'intake_vol', align: 'right', label: t('ingredient.intakeVolume'), field: 'intake_vol' },
+    { name: 'remain_vol', align: 'right', label: t('ingredient.remainVolume'), field: 'remain_vol', classes: 'text-red text-weight-bold' },
+    { name: 'intake_package_vol', align: 'right', label: t('ingredient.pkgVol'), field: 'intake_package_vol' },
+    { name: 'package_intake', align: 'center', label: t('ingredient.pkgs'), field: 'package_intake' },
+    { name: 'expire_date', align: 'center', label: t('ingredient.expiryDate'), field: 'expire_date', format: (val: any) => val ? val.split('T')[0] : '' },
+    { name: 'po_number', align: 'left', label: t('ingredient.poNo'), field: 'po_number' },
+    { name: 'manufacturing_date', align: 'center', label: t('preBatch.mfgDate'), field: 'manufacturing_date', format: (val: any) => val ? val.split('T')[0] : '' },
+    { name: 'status', align: 'center', label: t('common.status'), field: 'status' },
+    { name: 'actions', align: 'center', label: t('common.actions'), field: 'id' }
+])
 
 const filteredInventory = computed(() => {
     // If no ingredient selected, maybe show empty?
@@ -1034,7 +1039,7 @@ const onIngredientSelect = () => {
                 
                 $q.notify({
                     type: 'positive', 
-                    message: `Auto-selected (FIFO): ${firstItem.intake_lot_id}`,
+                    message: t('preBatch.autoSelectedFifo', { id: firstItem.intake_lot_id }),
                     position: 'top',
                     timeout: 1000
                 })
@@ -1046,7 +1051,7 @@ const onIngredientSelect = () => {
             
             $q.notify({
                 type: 'warning', 
-                message: `No inventory available for ${selectedReCode.value}`,
+                message: t('preBatch.noInventoryFor', { id: selectedReCode.value }),
                 position: 'top',
                 timeout: 1000
             })
@@ -1066,7 +1071,7 @@ const onIngredientDoubleClick = (ingredient: any) => {
         
         $q.notify({
             type: 'positive',
-            message: `Initialized batching for ${ingredient.re_code}`,
+            message: t('preBatch.initBatching', { id: ingredient.re_code }),
             position: 'top',
             timeout: 500
         })
@@ -1114,7 +1119,7 @@ const finalizeBatchPreparation = async (batchId: number) => {
             body: { batch_prepare: true, status: 'Prepared' },
             headers: getAuthHeader() as Record<string, string>
         })
-        $q.notify({ type: 'positive', message: 'Batch preparation finalized', position: 'top' })
+        $q.notify({ type: 'positive', message: t('preBatch.prepFinalized'), position: 'top' })
         // Refresh all batch info to reflect status change
         await fetchBatchIds()
     } catch (e) {
@@ -1227,16 +1232,16 @@ const onPrintLabel = async () => {
       }
     }
 
-    $q.notify({ type: 'positive', message: 'Prebatch Record saved and Label Printed', position: 'top' })
+    $q.notify({ type: 'positive', message: t('preBatch.saveAndPrintSuccess'), position: 'top' })
     
     // Refresh prebatch logs
     await fetchPreBatchRecords()
     
     // Check if finished
     if (pkgNo >= totalPkgs) {
-        $q.notify({ type: 'info', message: 'All packages for this ingredient completed' })
+        $q.notify({ type: 'info', message: t('preBatch.allPkgsCompleted') })
         if (selectedBatch.value) {
-            await updatePrebatchRequireStatus(selectedBatch.value.batch_id, selectedReCode.value, 2)
+            await updatePrebatchItemStatus(selectedBatch.value.batch_id, selectedReCode.value, 2)
         }
     }
 
@@ -1321,9 +1326,9 @@ const onSelectBatch = (index: number) => {
       <div class="row justify-between items-center">
         <div class="row items-center q-gutter-sm">
           <q-icon name="science" size="sm" />
-          <div class="text-h6 text-weight-bolder">Batch Prepare</div>
+          <div class="text-h6 text-weight-bolder">{{ t('preBatch.title') }}</div>
         </div>
-        <div class="text-caption text-blue-2">Version 0.1</div>
+        <div class="text-caption text-blue-2">{{ t('prodPlan.version') }} 0.1</div>
       </div>
     </div>
 
@@ -1373,21 +1378,21 @@ const onSelectBatch = (index: number) => {
                               >
                                  <q-item-section>
                                    <q-item-label>{{ batch.batch_id }}</q-item-label>
-                                   <q-item-label caption style="font-size: 0.7rem;">Batch Size: {{ batch.batch_size }} kg</q-item-label>
+                                   <q-item-label caption style="font-size: 0.7rem;">{{ t('preBatch.batchSizeShort', { size: batch.batch_size }) }}</q-item-label>
                                  </q-item-section>
                                  <q-item-section side>
                                      <q-badge color="green" :label="batch.status" size="sm" />
                                  </q-item-section>
                               </q-item>
                               <q-item v-if="!plan.batches || plan.batches.length === 0" style="min-height: 32px;">
-                                  <q-item-section class="text-grey text-italic q-pl-lg" style="font-size: 0.7rem;">No Batches Created</q-item-section>
+                                  <q-item-section class="text-grey text-italic q-pl-lg" style="font-size: 0.7rem;">{{ t('preBatch.noBatchesCreated') }}</q-item-section>
                               </q-item>
                            </q-list>
                         </q-expansion-item>
                       </q-expansion-item>
                       
                       <div v-if="structuredSkuList.length === 0" class="text-center q-pa-md text-grey">
-                          No Active SKUs/Plans Found
+                          {{ t('preBatch.noActiveSkus') }}
                       </div>
                    </q-list>
                 </q-scroll-area>
@@ -1397,7 +1402,7 @@ const onSelectBatch = (index: number) => {
         <!-- NEW CARD: Warehouse Selection -->
         <q-card class="col-auto bg-white shadow-2">
             <q-card-section class="q-py-sm">
-                <div class="text-subtitle2 text-weight-bold q-mb-xs">Warehouse Location</div>
+                <div class="text-subtitle2 text-weight-bold q-mb-xs">{{ t('preBatch.warehouseLocation') }}</div>
                 <q-select
                     v-model="selectedWarehouse"
                     :options="warehouses"
@@ -1423,33 +1428,33 @@ const onSelectBatch = (index: number) => {
               <q-card-section class="bg-orange-8 text-white q-py-xs shadow-1">
                   <div class="row items-center justify-between no-wrap">
                       <div class="text-subtitle2 text-weight-bold">
-                          Require Ingredient
+                          {{ t('preBatch.requireIngredient') }}
                       </div>
                       <q-badge color="white" text-color="orange-9" class="text-weight-bold">
-                          {{ selectableIngredients.length }} Items
+                          {{ selectableIngredients.length }} {{ t('preBatch.items') }}
                       </q-badge>
                   </div>
                   <div class="text-caption text-orange-1 text-weight-bold ellipsis" style="font-size: 0.9rem;">
                       {{ selectedPlanDetails?.sku_id || 'Unknown SKU' }}
                   </div>
                   <div class="text-caption text-orange-2" style="font-size: 0.7rem;">
-                      Plan: {{ selectedProductionPlan }} <span v-if="isBatchSelected">(Batch: {{ selectedBatch?.batch_id.slice(-3) }})</span>
+                      {{ t('prodPlan.planId') }}: {{ selectedProductionPlan }} <span v-if="isBatchSelected">({{ t('prodPlan.batchId') }}: {{ selectedBatch?.batch_id.slice(-3) }})</span>
                   </div>
               </q-card-section>
             </template>
             <template v-else>
                <q-card-section class="bg-grey-3 text-grey-8 q-py-xs text-center">
-                   <div class="text-caption">Select a Plan above</div>
+                   <div class="text-caption">{{ t('preBatch.selectPlanAbove') }}</div>
                </q-card-section>
             </template>
             <div class="col relative-position" style="overflow-y: auto;">
                 <q-markup-table dense flat square separator="cell" sticky-header>
                     <thead class="bg-orange-1 text-orange-10">
                         <tr>
-                            <th class="text-left" style="font-size: 0.7rem;">Ingredient</th>
-                            <th class="text-center" style="font-size: 0.7rem;">WH</th>
-                            <th class="text-right" style="font-size: 0.7rem;">Req (kg)</th>
-                            <th class="text-center" style="font-size: 0.7rem;">Status</th>
+                            <th class="text-left" style="font-size: 0.7rem;">{{ t('preBatch.ingredient') }}</th>
+                            <th class="text-center" style="font-size: 0.7rem;">{{ t('preBatch.wh') }}</th>
+                            <th class="text-right" style="font-size: 0.7rem;">{{ t('preBatch.reqKg') }}</th>
+                            <th class="text-center" style="font-size: 0.7rem;">{{ t('common.status') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1468,20 +1473,20 @@ const onSelectBatch = (index: number) => {
                             <td class="text-right text-weight-bold" style="font-size: 0.75rem;">{{ ing.batch_require ? ing.batch_require.toFixed(3) : '0' }}</td>
                             <td class="text-center">
                                 <div v-if="ing.status === 2" class="row no-wrap items-center justify-center q-gutter-x-xs">
-                                    <q-badge color="green" label="Complete" size="sm" />
+                                    <q-badge color="green" :label="t('preBatch.complete')" size="sm" />
                                     <q-btn flat round dense icon="print" size="xs" color="blue-7" @click.stop="quickReprint(ing)">
-                                        <q-tooltip>Reprint last package for this ingredient</q-tooltip>
+                                        <q-tooltip>{{ t('preBatch.reprintTooltip') }}</q-tooltip>
                                     </q-btn>
                                 </div>
-                                <q-badge v-else-if="ing.status === 1" color="orange" label="onBatch" size="sm" />
+                                <q-badge v-else-if="ing.status === 1" color="orange" :label="t('preBatch.onBatch')" size="sm" />
                                 <q-badge v-else color="grey-6" label="Created" size="sm" />
                             </td>
                         </tr>
                         <tr v-if="selectableIngredients.length === 0">
                             <td colspan="4" class="text-center text-grey q-pa-md">
-                                <div v-if="selectedProductionPlan && isBatchSelected">No Ingredients Found</div>
-                                <div v-else-if="selectedProductionPlan">Select a Batch to view ingredients</div>
-                                <div v-else>Select a Plan to view ingredients</div>
+                                <div v-if="selectedProductionPlan && isBatchSelected">{{ t('preBatch.noIngredientsFound') }}</div>
+                                <div v-else-if="selectedProductionPlan">{{ t('preBatch.selectBatchToView') }}</div>
+                                <div v-else>{{ t('preBatch.selectPlanToView') }}</div>
                             </td>
                         </tr>
                     </tbody>
@@ -1495,7 +1500,7 @@ const onSelectBatch = (index: number) => {
         <!-- SCALES SECTION -->
         <q-card bordered flat class="q-mb-lg">
           <q-card-section class="q-pb-none row items-center">
-            <div class="text-h6">Weighting Scale</div>
+            <div class="text-h6">{{ t('preBatch.weightingScale') }}</div>
             <q-space />
             <q-badge 
               color="blue-grey" 
