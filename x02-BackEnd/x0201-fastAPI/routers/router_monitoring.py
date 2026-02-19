@@ -175,6 +175,30 @@ def get_server_status():
     disk = psutil.disk_usage('/')
     net = psutil.net_io_counters()
 
+    # Get local IP
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        local_ip = "127.0.0.1"
+
+    # Get CPU Model
+    import platform
+    cpu_model = platform.processor()
+    if not cpu_model:
+        try:
+            # Fallback for Linux
+            with open("/proc/cpuinfo", "r") as f:
+                for line in f:
+                    if "model name" in line:
+                        cpu_model = line.split(":")[1].strip()
+                        break
+        except Exception:
+            cpu_model = "Unknown"
+
     return {
         "cpu_percent": cpu_percent,
         "cpu_average": sum(cpu_percent) / len(cpu_percent) if cpu_percent else 0,
@@ -199,7 +223,11 @@ def get_server_status():
         },
         "boot_time": psutil.boot_time(),
         "os": f"{platform.system()} {platform.release()}",
-        "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        "hostname": socket.gethostname(),
+        "local_ip": local_ip,
+        "cpu_model": cpu_model,
+        "architecture": platform.machine()
     }
 
 

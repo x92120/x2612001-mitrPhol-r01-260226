@@ -11,6 +11,9 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 # Shared state
 current_config = {
     'baud': 9600,
+    'bytesize': serial.SEVENBITS,
+    'parity': serial.PARITY_NONE,
+    'stopbits': serial.STOPBITS_ONE,
     'port': None,
     'clean_mode': True
 }
@@ -148,8 +151,12 @@ def serial_thread_func():
         port = ports[0]
         try:
             baud = current_config['baud']
-            with serial.Serial(port, baud, timeout=1) as ser:
-                socketio.emit('serial_status', {'text': f'Connected to {port} @ {baud}', 'online': True})
+            with serial.Serial(port, baud, 
+                               bytesize=current_config['bytesize'],
+                               parity=current_config['parity'],
+                               stopbits=current_config['stopbits'],
+                               timeout=1) as ser:
+                socketio.emit('serial_status', {'text': f'Connected to {port} @ {baud} 7N1', 'online': True})
                 while True:
                     if current_config['baud'] != baud:
                         break # Re-trigger connection with new baud
@@ -161,18 +168,17 @@ def serial_thread_func():
                             payload = raw_data.decode('utf-8', errors='replace').strip()
                             
                             if current_config['clean_mode']:
-                                # 1. Extract alphanumeric data that looks like a code
-                                # If the data is "oUo<340dc3>sl:90>CE24H07.13.;6.,206582;99,14Nl,"
-                                # We try to find the actual code.
-                                # Let's strip the common "header" parts if they exist
-                                if '>' in payload:
-                                    parts = payload.split('>')
-                                    payload = parts[-1] if parts[-1] else parts[-2]
-                                
-                                # 2. Filter for only common barcode characters (Alphanumeric and simple punctuation)
-                                # This helps if the "real data" is buried in noise.
-                                payload = "".join(c for c in payload if c.isalnum() or c in ".-_")
-                                
+                                # Robust cleaning for the >>CODE128:X:BARCODE:Y format
+                                import re
+                                match = re.search(r'>>[^:]+:[^:]+:([^:]+)', payload)
+                                if match:
+                                    payload = match.group(1).strip()
+                                else:
+                                    # Fallback if pattern differs
+                                    if '>' in payload:
+                                        payload = payload.split('>')[-1]
+                                    payload = "".join(c for c in payload if c.isalnum() or c in ".-_")
+                            
                             socketio.emit('serial_scan', {'payload': payload, 'hex': hex_str})
                             print(f"[WEB] Serial Scan: {payload} | Raw: {hex_str}")
                         except Exception as e:
@@ -185,4 +191,4 @@ def serial_thread_func():
 if __name__ == '__main__':
     t = threading.Thread(target=serial_thread_func, daemon=True)
     t.start()
-    socketio.run(app, host='0.0.0.0', port=5000)
+    socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)

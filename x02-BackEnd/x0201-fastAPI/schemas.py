@@ -466,6 +466,10 @@ class ServerStatus(BaseModel):
     boot_time: float
     os: str
     python_version: str
+    hostname: str
+    local_ip: str
+    cpu_model: str
+    architecture: str
 
 class HostInfo(BaseModel):
     hostname: str

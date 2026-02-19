@@ -29,7 +29,7 @@ export default defineNuxtRouteMiddleware((to, from) => {
         '/x40-PreBatch': 'prepare_batch',
         '/x50-PackingList': 'production_list',
         '/x60-BatchRecheck': 'production_list',
-        '/x90-systemDashboard': 'admin',
+        '/x90-adminDashboard': 'admin',
     }
 
     const requiredPermission = permissionMap[to.path]

@@ -11,7 +11,7 @@ MQTT_PASS = "admin"
 BAUD = 9600
 
 # Find all matching USB serial ports
-PORTS = glob.glob("/dev/ttyACM*") + glob.glob("/dev/ttyUSB*") + glob.glob("/dev/cu.usbserial*")
+PORTS = glob.glob("/dev/ttyUSB*")
 if not PORTS:
     print("No serial ports discovered. Waiting...")
     time.sleep(5)

@@ -7,7 +7,7 @@ echo "📊 xMixing Application Status:"
 echo "------------------------------------------------"
 
 # Check MQTT Bridge
-if ps aux | grep -v grep | grep -q "mqtt_bridge.py"; then
+if ps aux | grep -v grep | grep -qE "scale_read.py|scanner_read.py"; then
     echo "🟢 MQTT Bridge: RUNNING"
 else
     echo "🔴 MQTT Bridge: STOPPED"
@@ -30,5 +30,5 @@ fi
 # Check Docker
 echo "------------------------------------------------"
 echo "🐳 Docker Infrastructure:"
-cd x09-LocalMqtt && docker-compose ps && cd ..
+cd x09-LocalMqtt && docker compose ps && cd ..
 echo "------------------------------------------------"

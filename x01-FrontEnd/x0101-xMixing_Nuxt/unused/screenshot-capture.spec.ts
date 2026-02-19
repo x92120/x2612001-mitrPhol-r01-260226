@@ -37,7 +37,7 @@ const AUTH_PAGES = [
     { name: '10-packing-list', path: '/x50-PackingList' },
     { name: '11-batch-recheck', path: '/x60-BatchRecheck' },
     { name: '12-user-config', path: '/x89-UserConfig' },
-    { name: '13-server-status', path: '/x90-ServerStatus' },
+    { name: '13-server-status', path: '/x90-adminDashboard' },
     { name: '14-about', path: '/x99-About' },
 ];
 
