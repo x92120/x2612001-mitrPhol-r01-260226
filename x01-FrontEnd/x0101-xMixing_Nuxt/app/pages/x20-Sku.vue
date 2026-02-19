@@ -825,19 +825,19 @@ onMounted(refreshAll)
 </script>
 
 <template>
-  <q-page padding class="sku-master-view">
+  <q-page class="q-pa-md bg-white">
+    <!-- Page Header -->
+    <div class="bg-blue-9 text-white q-pa-md rounded-borders q-mb-md shadow-2">
+      <div class="row justify-between items-center">
+        <div class="row items-center q-gutter-sm">
+          <q-icon name="inventory_2" size="sm" />
+          <div class="text-h6 text-weight-bolder">SKU Masters</div>
+        </div>
+        <div class="text-caption text-blue-2">Manage SKU masters and process steps</div>
+      </div>
+    </div>
     <!-- Header with Action Bar -->
     <div class="row q-mb-md items-center">
-      <div>
-        <div class="text-h5">
-          <q-icon name="inventory_2" size="sm" class="q-mr-sm" />
-          SKU Masters
-        </div>
-        <div class="text-caption text-grey-7">
-          Manage SKU masters and process steps
-        </div>
-      </div>
-      
       <q-space />
       
       <!-- Action Buttons -->

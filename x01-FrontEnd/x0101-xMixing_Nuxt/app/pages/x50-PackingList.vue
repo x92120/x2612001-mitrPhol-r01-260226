@@ -825,8 +825,11 @@ const onPreviewPackingBoxLabel = async () => {
     <!-- Header Section -->
     <div class="bg-blue-9 text-white q-pa-md rounded-borders q-mb-md shadow-2">
       <div class="row justify-between items-center">
-        <div class="text-h6 text-weight-bolder">Production Plan List</div>
-        <div class="text-caption text-weight-bold">Version {{ version }}</div>
+        <div class="row items-center q-gutter-sm">
+          <q-icon name="view_list" size="sm" />
+          <div class="text-h6 text-weight-bolder">Production Plan List</div>
+        </div>
+        <div class="text-caption text-weight-bold text-blue-2">Version {{ version }}</div>
       </div>
     </div>
 

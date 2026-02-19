@@ -264,6 +264,11 @@ class PreBatchRec(Base):
     total_request_volume = Column(Float)
     intake_lot_id = Column(String(50), index=True)
     
+    # Re-check fields
+    recheck_status = Column(Integer, default=0) # 0=Pending, 1=OK, 2=Error
+    recheck_at = Column(TIMESTAMP, nullable=True)
+    recheck_by = Column(String(50), nullable=True)
+    
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
     req = relationship("PreBatchReq", backref="recs")

@@ -250,6 +250,11 @@ class PreBatchRecBase(BaseModel):
     total_volume: Optional[float] = None
     total_request_volume: Optional[float] = None
     intake_lot_id: Optional[str] = Field(None, max_length=50)
+    
+    # Re-check fields
+    recheck_status: int = 0
+    recheck_at: Optional[datetime] = None
+    recheck_by: Optional[str] = None
 
 class PreBatchRecCreate(PreBatchRecBase):
     pass

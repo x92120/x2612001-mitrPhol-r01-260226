@@ -16,6 +16,12 @@ import models
 import schemas
 from database import get_db
 
+from pydantic import BaseModel
+class RecheckBagRequest(BaseModel):
+    box_id: str
+    bag_barcode: str
+    operator: str
+
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Production"])
 
@@ -221,3 +227,154 @@ def get_production_summary_stats(db: Session = Depends(get_db)):
         "records_today": records_today,
         "timestamp": datetime.now()
     }
+
+# =============================================================================
+# RE-CHECK / VERIFICATION LOGIC
+# =============================================================================
+
+@router.get("/prebatch-recs/recheck-box/{box_id}")
+def get_recheck_box_details(box_id: str, db: Session = Depends(get_db)):
+    """
+    Get all bags for a box/batch with target volumes and tolerances for re-check.
+    """
+    # 1. Find all bags actually weighed for this box
+    records = db.query(models.PreBatchRec).filter(
+        models.PreBatchRec.batch_record_id.like(f"{box_id}%")
+    ).all()
+
+    if not records:
+        # Maybe box_id is a partial or plan_id, try finding by plan_id
+        records = db.query(models.PreBatchRec).filter(
+            models.PreBatchRec.plan_id == box_id
+        ).all()
+
+    if not records:
+        raise HTTPException(status_code=404, detail="No packing bags found for this Box ID")
+
+    # Get Plan and SKU to find tolerances
+    plan_id = records[0].plan_id
+    plan = db.query(models.ProductionPlan).filter(models.ProductionPlan.plan_id == plan_id).first()
+    sku_id = plan.sku_id if plan else None
+
+    result_bags = []
+    for r in records:
+        # Get target from requirement
+        req = db.query(models.PreBatchReq).filter(models.PreBatchReq.id == r.req_id).first()
+        target_vol = req.required_volume if req else r.total_volume
+        
+        # Get tolerance from SKU steps
+        tolerance = 0.05 # Default 50g if not found
+        if sku_id:
+            step = db.query(models.SkuStep).filter(
+                models.SkuStep.sku_id == sku_id,
+                models.SkuStep.re_code == r.re_code
+            ).first()
+            if step:
+                # Use high_tol if available, else 1% of target
+                tolerance = step.high_tol if step.high_tol > 0 else (target_vol * 0.01)
+
+        result_bags.append({
+            "id": r.id,
+            "batch_record_id": r.batch_record_id,
+            "re_code": r.re_code,
+            "package_no": r.package_no,
+            "total_packages": r.total_packages,
+            "net_volume": r.net_volume,
+            "target_volume": target_vol,
+            "tolerance": tolerance,
+            "status": r.recheck_status,
+            "recheck_at": r.recheck_at,
+            "recheck_by": r.recheck_by,
+            "is_valid": abs((r.net_volume or 0) - (target_vol or 0)) <= tolerance
+        })
+
+    return {
+        "box_id": box_id,
+        "plan_id": plan_id,
+        "sku_id": sku_id,
+        "sku_name": plan.sku_name if plan else "Unknown",
+        "total_bags": len(records),
+        "bags": result_bags
+    }
+
+@router.post("/prebatch-recs/recheck-bag")
+def verify_bag_scan(data: RecheckBagRequest, db: Session = Depends(get_db)):
+    """
+    Verify a single bag scan against a box.
+    """
+    # 1. Find the bag
+    bag = db.query(models.PreBatchRec).filter(models.PreBatchRec.batch_record_id == data.bag_barcode).first()
+    if not bag:
+        raise HTTPException(status_code=404, detail=f"Bag barcode {data.bag_barcode} not found")
+
+    # 2. Verify it belongs to the box (prefix match)
+    if not bag.batch_record_id.startswith(data.box_id) and bag.plan_id != data.box_id:
+        raise HTTPException(status_code=400, detail="Bag does not belong to this Box")
+
+    # 3. Get target and tolerance
+    req = db.query(models.PreBatchReq).filter(models.PreBatchReq.id == bag.req_id).first()
+    target_vol = req.required_volume if req else bag.total_volume
+    
+    plan = db.query(models.ProductionPlan).filter(models.ProductionPlan.plan_id == bag.plan_id).first()
+    tolerance = 0.05
+    if plan:
+        step = db.query(models.SkuStep).filter(
+            models.SkuStep.sku_id == plan.sku_id,
+            models.SkuStep.re_code == bag.re_code
+        ).first()
+        if step:
+            tolerance = step.high_tol if step.high_tol > 0 else (target_vol * 0.01)
+
+    # 4. Perform check
+    is_ok = abs((bag.net_volume or 0) - (target_vol or 0)) <= tolerance
+
+    # 5. Update Status
+    bag.recheck_status = 1 if is_ok else 2
+    bag.recheck_at = datetime.now()
+    bag.recheck_by = data.operator
+    db.commit()
+
+    return {
+        "status": "OK" if is_ok else "ERROR",
+        "message": "Verify Success" if is_ok else "Weight Mismatch",
+        "bag": {
+            "re_code": bag.re_code,
+            "batch_record_id": bag.batch_record_id,
+            "actual": bag.net_volume,
+            "target": target_vol,
+            "tolerance": tolerance,
+            "diff": (bag.net_volume or 0) - (target_vol or 0)
+        }
+    }
+
+@router.patch("/production-batches/{batch_id}/release")
+def release_batch_to_production(batch_id: str, db: Session = Depends(get_db)):
+    """
+    Final approval for a box/batch. 
+    Only permits if all bags are re-checked OK.
+    """
+    batch = db.query(models.ProductionBatch).filter(models.ProductionBatch.batch_id == batch_id).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    bags = db.query(models.PreBatchRec).filter(
+        models.PreBatchRec.batch_record_id.like(f"{batch_id}%")
+    ).all()
+
+    if not bags:
+        raise HTTPException(status_code=400, detail="No bags found for this batch to verify")
+
+    all_ok = all(b.recheck_status == 1 for b in bags)
+    
+    if not all_ok:
+        pending_count = sum(1 for b in bags if b.recheck_status != 1)
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Re-check incomplete. {pending_count} bag(s) still pending or have errors."
+        )
+
+    batch.ready_to_product = True
+    batch.status = "Ready for Production"
+    db.commit()
+
+    return {"status": "success", "message": "Batch released to production"}

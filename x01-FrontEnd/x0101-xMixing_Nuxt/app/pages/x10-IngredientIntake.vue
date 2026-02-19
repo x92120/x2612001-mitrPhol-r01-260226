@@ -657,8 +657,10 @@ const updateRecordStatus = async (row: IngredientIntake, newStatus: string) => {
   }
 }
 
-// Print Label Function
-const printLabel = (record: IngredientIntake) => {
+// Print Label Function — offline-safe using local qrcode package
+const { generateQrDataUrl } = useQrCode()
+
+const printLabel = async (record: IngredientIntake) => {
   // Always recreate iframe to ensure window.onload fires correctly
   const existingIframe = document.getElementById('print-iframe')
   if (existingIframe) {
@@ -692,7 +694,11 @@ const printLabel = (record: IngredientIntake) => {
       expire_date: record.expire_date?.split('T')[0],
       intake_at: record.intake_at?.split('T')[0],
     }
-    const qrString = encodeURIComponent(JSON.stringify(qrData))
+    const qrString = JSON.stringify(qrData)
+
+    // Generate QR codes locally — no internet required
+    const qrLarge = await generateQrDataUrl(qrString, 150)
+    const qrSmall = await generateQrDataUrl(qrString, 100)
 
     labelsHtml += `
       <div class="label-container">
@@ -709,7 +715,6 @@ const printLabel = (record: IngredientIntake) => {
              
              <div class="field-item">
                <div class="label">Ingredient Code</div>
-               <!-- Swapped and resized emphasis -->
                <div class="value-huge text-primary">${record.re_code || '-'}</div>
                <div class="value small text-grey">${record.mat_sap_code}</div>
              </div>
@@ -738,7 +743,7 @@ const printLabel = (record: IngredientIntake) => {
           </div>
 
           <div class="qr-code-top">
-             <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrString}" />
+             <img src="${qrLarge}" />
           </div>
         </div>
 
@@ -763,7 +768,7 @@ const printLabel = (record: IngredientIntake) => {
            </div>
 
            <div class="qr-code-bottom">
-             <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${qrString}" />
+             <img src="${qrSmall}" />
           </div>
         </div>
 
@@ -1061,7 +1066,17 @@ const onFileSelected = async (event: Event) => {
 </script>
 
 <template>
-  <q-page class="q-pa-md" style="background-color: #f5f5f5">
+  <q-page class="q-pa-md bg-white">
+    <!-- Page Header -->
+    <div class="bg-blue-9 text-white q-pa-md rounded-borders q-mb-md shadow-2">
+      <div class="row justify-between items-center">
+        <div class="row items-center q-gutter-sm">
+          <q-icon name="local_shipping" size="sm" />
+          <div class="text-h6 text-weight-bolder">Ingredient Intake</div>
+        </div>
+        <div class="text-caption text-blue-2">Receive → Label → Stock</div>
+      </div>
+    </div>
     <!-- Ingredient Intake Form -->
     <div class="row q-mb-lg">
       <div class="col-12">

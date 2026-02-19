@@ -1316,9 +1316,15 @@ const onSelectBatch = (index: number) => {
 
 <template>
   <q-page class="q-pa-md bg-white">
-    <div class="row q-mb-sm justify-between items-center">
-      <div class="text-h6">Pre-Batch</div>
-      <div class="text-caption">Version 0.1</div>
+    <!-- Page Header -->
+    <div class="bg-blue-9 text-white q-pa-md rounded-borders q-mb-sm shadow-2">
+      <div class="row justify-between items-center">
+        <div class="row items-center q-gutter-sm">
+          <q-icon name="science" size="sm" />
+          <div class="text-h6 text-weight-bolder">Batch Prepare</div>
+        </div>
+        <div class="text-caption text-blue-2">Version 0.1</div>
+      </div>
     </div>
 
     <div class="row q-col-gutter-lg">

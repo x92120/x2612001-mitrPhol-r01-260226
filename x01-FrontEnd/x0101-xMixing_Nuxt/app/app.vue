@@ -46,37 +46,42 @@ const handleLogout = async () => {
         <q-btn label="Logout" flat icon="logout" v-if="user" @click="handleLogout" />
       </q-toolbar>
 
-      <q-tabs align="left">
-        <q-route-tab to="/" label="Home" />
+      <q-tabs align="left" dense>
+        <q-route-tab to="/" icon="home" label="Home" />
         <q-route-tab
           to="/x10-IngredientIntake"
+          icon="local_shipping"
           label="Ingredient Intake"
           v-if="hasPermission('ingredient_receipt')"
         />
-        <q-route-tab to="/x20-Sku" label="SKU" v-if="hasPermission('sku_management')" />
+        <q-route-tab to="/x20-Sku" icon="inventory_2" label="SKU" v-if="hasPermission('sku_management')" />
         <q-route-tab
           to="/x30-ProductionPlan"
+          icon="account_tree"
           label="Production Plan"
           v-if="hasPermission('production_planning')"
         />
         <q-route-tab
           to="/x40-PreBatch"
+          icon="science"
           label="Batch Prepare"
           v-if="hasPermission('prepare_batch')"
         />
         <q-route-tab
           to="/x50-PackingList"
+          icon="view_list"
           label="Packing List"
           v-if="hasPermission('production_list')"
         />
         <q-route-tab
           to="/x60-BatchRecheck"
-          label="BATCH RE CHECK"
+          icon="fact_check"
+          label="Batch Re-Check"
           v-if="hasPermission('production_list')"
         />
-        <q-route-tab to="/x89-UserConfig" label="User" v-if="hasPermission('admin')" />
-        <q-route-tab to="/x90-systemDashboard" label="System Dashboard" v-if="hasPermission('admin')" />
-        <q-route-tab to="/x99-About" label="About" />
+        <q-route-tab to="/x89-UserConfig" icon="manage_accounts" label="User" v-if="hasPermission('admin')" />
+        <q-route-tab to="/x90-systemDashboard" icon="dashboard" label="System Dashboard" v-if="hasPermission('admin')" />
+        <q-route-tab to="/x99-About" icon="info" label="About" />
       </q-tabs>
     </q-header>
 

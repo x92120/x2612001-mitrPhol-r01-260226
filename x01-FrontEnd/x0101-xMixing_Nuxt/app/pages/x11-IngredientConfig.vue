@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useQuasar, type QTableColumn } from 'quasar'
 import { appConfig } from '~/appConfig/config'
 import { useAuth } from '~/composables/useAuth'
+import { useQrCode } from '~/composables/useQrCode'
 
 interface Ingredient {
   id?: number
@@ -185,7 +186,9 @@ const openEditDialog = (row: Ingredient) => {
   showDialog.value = true
 }
 
-const printLabel = (row: Ingredient) => {
+const { generateQrDataUrl } = useQrCode()
+
+const printLabel = async (row: Ingredient) => {
   const existingIframe = document.getElementById('print-iframe')
   if (existingIframe) {
     document.body.removeChild(existingIframe)
@@ -208,7 +211,8 @@ const printLabel = (row: Ingredient) => {
     re: row.re_code,
     name: row.name
   }
-  const qrString = encodeURIComponent(JSON.stringify(qrData))
+  // Generate QR code locally — no internet required
+  const qrDataUrl = await generateQrDataUrl(JSON.stringify(qrData), 200)
 
   const html = `
     <html>
@@ -231,7 +235,7 @@ const printLabel = (row: Ingredient) => {
            <div class="sub">${row.name}</div>
            <div class="sub">MAT: ${row.mat_sap_code}</div>
            <div class="sub">Std Pkg: ${row.std_package_size} kg</div>
-           <img class="qr" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrString}" />
+           <img class="qr" src="${qrDataUrl}" />
         </div>
       </body>
     </html>
