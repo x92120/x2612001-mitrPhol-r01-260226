@@ -23,8 +23,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Translations"])
 
-# SQLite database path — sits next to this file for portability
-DB_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# SQLite database path — sits in the frontend i18n folder alongside dictionary.ts
+DB_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "..", "x01-FrontEnd", "x0101-xMixing_Nuxt", "app", "i18n"
+)
 DB_PATH = os.path.join(DB_DIR, "translations.db")
 
 

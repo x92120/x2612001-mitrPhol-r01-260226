@@ -18,11 +18,12 @@ import sys
 
 # Path setup
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(SCRIPT_DIR, "translations.db")
-DICTIONARY_PATH = os.path.join(
+I18N_DIR = os.path.join(
     SCRIPT_DIR, "..", "..", "x01-FrontEnd", "x0101-xMixing_Nuxt",
-    "app", "i18n", "dictionary.ts"
+    "app", "i18n"
 )
+DB_PATH = os.path.join(I18N_DIR, "translations.db")
+DICTIONARY_PATH = os.path.join(I18N_DIR, "dictionary.ts")
 
 
 def parse_dictionary(filepath: str) -> dict:
