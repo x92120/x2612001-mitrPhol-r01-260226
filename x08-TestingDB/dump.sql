@@ -1,4 +1,3 @@
-mariadb-dump: Error: 'Access denied; you need (at least one of) the PROCESS privilege(s) for this operation' when trying to dump tablespaces
 /*M!999999\- enable the sandbox mode */ 
 -- MariaDB dump 10.19-12.2.2-MariaDB, for debian-linux-gnu (aarch64)
 --

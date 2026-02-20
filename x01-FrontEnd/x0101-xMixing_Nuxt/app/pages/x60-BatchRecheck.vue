@@ -6,7 +6,7 @@ import { useLabelPrinter } from '../composables/useLabelPrinter'
 
 const $q = useQuasar()
 const { getAuthHeader, user } = useAuth()
-const { generateLabelSvg } = useLabelPrinter()
+const { generateLabelSvg, printLabel } = useLabelPrinter()
 const { t } = useI18n()
 
 // --- State ---
@@ -50,8 +50,8 @@ const wrongBoxAlert = ref<{ show: boolean, bagCode: string, expectedBox: string 
 
 // Sound Settings
 const showSoundSettings = ref(false)
-const successSoundPreset = ref(localStorage.getItem('recheck_success_sound') || 'beep')
-const errorSoundPreset = ref(localStorage.getItem('recheck_error_sound') || 'siren')
+const successSoundPreset = ref(typeof localStorage !== 'undefined' ? (localStorage.getItem('recheck_success_sound') || 'beep') : 'beep')
+const errorSoundPreset = ref(typeof localStorage !== 'undefined' ? (localStorage.getItem('recheck_error_sound') || 'siren') : 'siren')
 
 const successSoundOptions = [
     { value: 'beep', labelKey: 'sound.shortBeep', icon: 'music_note' },
@@ -780,8 +780,11 @@ onMounted(() => {
 
             <div v-if="selectedSimBatch && !scannerLoading">
               <!-- Box Label -->
-              <div class="text-overline text-blue-3 q-mb-sm">
-                📦 {{ t('recheck.boxLabel') }} {{ scannerMode === 'box' ? '— ' + t('recheck.clickBoxToLoad') : '' }}
+              <div class="row items-center q-mb-sm q-gutter-md">
+                <div class="text-overline text-blue-3">
+                  📦 {{ t('recheck.boxLabel') }} {{ scannerMode === 'box' ? '— ' + t('recheck.clickBoxToLoad') : '' }}
+                </div>
+                <q-btn v-if="previewLabelSvg" size="sm" color="blue-9" icon="print" label="Print Box" @click="printLabel(previewLabelSvg)" />
               </div>
               <div
                 class="label-preview box-label-preview q-mb-lg"
@@ -815,7 +818,10 @@ onMounted(() => {
                       <div class="text-positive text-weight-bold text-caption">VERIFIED</div>
                     </div>
                   </div>
-                  <div class="text-caption text-center text-grey-4 q-mt-xs">{{ bag.re_code }}</div>
+                  <div class="row items-center justify-between q-mt-xs">
+                    <div class="text-caption text-grey-4">{{ bag.re_code }}</div>
+                    <q-btn size="xs" color="blue-9" icon="print" label="Print" @click.stop="printLabel(bag.svg)" />
+                  </div>
                 </div>
 
                 <!-- WRONG bags mixed in (from other batches — simulating wrong placement) -->
@@ -834,8 +840,9 @@ onMounted(() => {
                       {{ t('recheck.wrongBatch') }}
                     </div>
                   </div>
-                  <div class="text-caption text-center text-red-4 q-mt-xs">
-                    {{ bag.re_code }}
+                  <div class="row items-center justify-between q-mt-xs">
+                    <div class="text-caption text-red-4">{{ bag.re_code }}</div>
+                    <q-btn size="xs" color="blue-9" icon="print" label="Print" @click.stop="printLabel(bag.svg)" />
                   </div>
                 </div>
               </div>

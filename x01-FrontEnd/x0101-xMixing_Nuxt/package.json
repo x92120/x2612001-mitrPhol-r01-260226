@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "build": "nuxt build",
-    "dev": "nuxt dev",
+    "dev": "nuxt dev --host xMixingProcessControl.xDev.co.th --port 80",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
+    "start": "nuxt dev --host xMixingProcessControl.xDev.co.th --port 80",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },

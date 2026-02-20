@@ -252,7 +252,7 @@ class PreBatchRecBase(BaseModel):
     intake_lot_id: Optional[str] = Field(None, max_length=50)
     
     # Re-check fields
-    recheck_status: int = 0
+    recheck_status: Optional[int] = 0
     recheck_at: Optional[datetime] = None
     recheck_by: Optional[str] = None
 
