@@ -1,0 +1,3556 @@
+{
+  "database": "xMixingControl",
+  "tables": {
+    "batches": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "batch_number",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "UNI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "production_order_id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "start_time",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "end_time",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "status",
+          "type": "enum('pending','mixing','completed','failed')",
+          "null": "YES",
+          "key": "",
+          "default": "pending",
+          "extra": ""
+        },
+        {
+          "name": "actual_quantity",
+          "type": "decimal(10,2)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ],
+      "row_count": 2,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "batch_number",
+          "column": "batch_number",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "production_order_id",
+          "column": "production_order_id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `batches` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `batch_number` varchar(50) NOT NULL,\n  `production_order_id` int(11) NOT NULL,\n  `start_time` datetime DEFAULT NULL,\n  `end_time` datetime DEFAULT NULL,\n  `status` enum('pending','mixing','completed','failed') DEFAULT 'pending',\n  `actual_quantity` decimal(10,2) DEFAULT NULL,\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `batch_number` (`batch_number`),\n  KEY `production_order_id` (`production_order_id`),\n  CONSTRAINT `batches_ibfk_1` FOREIGN KEY (`production_order_id`) REFERENCES `production_orders` (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "ingredient_intake_history": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "intake_list_id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "action",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "old_status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "new_status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "remarks",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "changed_by",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "changed_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        }
+      ],
+      "row_count": 2,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "intake_list_id",
+          "column": "intake_list_id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_ingredient_intake_history_id",
+          "column": "id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `ingredient_intake_history` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `intake_list_id` int(11) NOT NULL,\n  `action` varchar(50) NOT NULL,\n  `old_status` varchar(20) DEFAULT NULL,\n  `new_status` varchar(20) DEFAULT NULL,\n  `remarks` varchar(255) DEFAULT NULL,\n  `changed_by` varchar(50) NOT NULL,\n  `changed_at` timestamp NULL DEFAULT current_timestamp(),\n  PRIMARY KEY (`id`),\n  KEY `intake_list_id` (`intake_list_id`),\n  KEY `ix_ingredient_intake_history_id` (`id`),\n  CONSTRAINT `ingredient_intake_history_ibfk_1` FOREIGN KEY (`intake_list_id`) REFERENCES `ingredient_intake_lists` (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "ingredient_intake_lists": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "intake_lot_id",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "lot_id",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "warehouse_location",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "blind_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "mat_sap_code",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "re_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "material_description",
+          "type": "varchar(200)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "uom",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "intake_vol",
+          "type": "float",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "remain_vol",
+          "type": "float",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "intake_package_vol",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "package_intake",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "expire_date",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "intake_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "intake_by",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "edit_by",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "edit_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": "on update current_timestamp()"
+        },
+        {
+          "name": "po_number",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "manufacturing_date",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "batch_prepare_vol",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "std_package_size",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ],
+      "row_count": 201,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_ingredient_intake_lists_intake_lot_id",
+          "column": "intake_lot_id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_ingredient_intake_lists_id",
+          "column": "id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_ingredient_intake_lists_mat_sap_code",
+          "column": "mat_sap_code",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_ingredient_intake_lists_blind_code",
+          "column": "blind_code",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `ingredient_intake_lists` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `intake_lot_id` varchar(50) NOT NULL,\n  `lot_id` varchar(50) NOT NULL,\n  `warehouse_location` varchar(50) DEFAULT NULL,\n  `blind_code` varchar(50) DEFAULT NULL,\n  `mat_sap_code` varchar(50) NOT NULL,\n  `re_code` varchar(50) DEFAULT NULL,\n  `material_description` varchar(200) DEFAULT NULL,\n  `uom` varchar(20) DEFAULT NULL,\n  `intake_vol` float NOT NULL,\n  `remain_vol` float NOT NULL,\n  `intake_package_vol` float DEFAULT NULL,\n  `package_intake` int(11) DEFAULT NULL,\n  `expire_date` datetime DEFAULT NULL,\n  `status` varchar(20) DEFAULT NULL,\n  `intake_at` timestamp NULL DEFAULT current_timestamp(),\n  `intake_by` varchar(50) NOT NULL,\n  `edit_by` varchar(50) DEFAULT NULL,\n  `edit_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),\n  `po_number` varchar(50) DEFAULT NULL,\n  `manufacturing_date` datetime DEFAULT NULL,\n  `batch_prepare_vol` float DEFAULT NULL,\n  `std_package_size` float DEFAULT NULL,\n  PRIMARY KEY (`id`),\n  KEY `ix_ingredient_intake_lists_intake_lot_id` (`intake_lot_id`),\n  KEY `ix_ingredient_intake_lists_id` (`id`),\n  KEY `ix_ingredient_intake_lists_mat_sap_code` (`mat_sap_code`),\n  KEY `ix_ingredient_intake_lists_blind_code` (`blind_code`)\n) ENGINE=InnoDB AUTO_INCREMENT=256 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "ingredients": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "blind_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "mat_sap_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ingredient_id",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "name",
+          "type": "varchar(150)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "unit",
+          "type": "varchar(20)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Group",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "NO",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "creat_by",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": "on update current_timestamp()"
+        },
+        {
+          "name": "update_by",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": "Active",
+          "extra": ""
+        },
+        {
+          "name": "re_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "std_package_size",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "25",
+          "extra": ""
+        },
+        {
+          "name": "std_prebatch_batch_size",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        }
+      ],
+      "row_count": 206,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "idx_ingredients_blind_code",
+          "column": "blind_code",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_ingredients_mat_sap_code",
+          "column": "mat_sap_code",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `ingredients` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `blind_code` varchar(50) DEFAULT NULL,\n  `mat_sap_code` varchar(50) DEFAULT NULL,\n  `ingredient_id` varchar(50) NOT NULL,\n  `name` varchar(150) NOT NULL,\n  `unit` varchar(20) NOT NULL,\n  `Group` varchar(50) DEFAULT NULL,\n  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),\n  `creat_by` varchar(50) NOT NULL,\n  `updated_at` timestamp NULL DEFAULT NULL ON UPDATE current_timestamp(),\n  `update_by` varchar(50) DEFAULT NULL,\n  `status` varchar(20) DEFAULT 'Active',\n  `re_code` varchar(50) DEFAULT NULL,\n  `std_package_size` float DEFAULT 25,\n  `std_prebatch_batch_size` float DEFAULT 0,\n  PRIMARY KEY (`id`),\n  KEY `idx_ingredients_blind_code` (`blind_code`),\n  KEY `ix_ingredients_mat_sap_code` (`mat_sap_code`)\n) ENGINE=InnoDB AUTO_INCREMENT=516 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "packing_records": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "batch_id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "pack_date",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "package_type",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "quantity",
+          "type": "decimal(10,2)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "unit",
+          "type": "varchar(10)",
+          "null": "YES",
+          "key": "",
+          "default": "pcs",
+          "extra": ""
+        }
+      ],
+      "row_count": 2,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "batch_id",
+          "column": "batch_id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `packing_records` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `batch_id` int(11) NOT NULL,\n  `pack_date` datetime DEFAULT current_timestamp(),\n  `package_type` varchar(50) DEFAULT NULL,\n  `quantity` decimal(10,2) NOT NULL,\n  `unit` varchar(10) DEFAULT 'pcs',\n  PRIMARY KEY (`id`),\n  KEY `batch_id` (`batch_id`),\n  CONSTRAINT `packing_records_ibfk_1` FOREIGN KEY (`batch_id`) REFERENCES `batches` (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "plants": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "plant_id",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "UNI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "plant_name",
+          "type": "varchar(100)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "plant_capacity",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "plant_description",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": "Active",
+          "extra": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": "on update current_timestamp()"
+        }
+      ],
+      "row_count": 4,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "plant_code",
+          "column": "plant_id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "idx_plant_id",
+          "column": "plant_id",
+          "unique": true,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `plants` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `plant_id` varchar(50) NOT NULL,\n  `plant_name` varchar(100) NOT NULL,\n  `created_at` timestamp NULL DEFAULT current_timestamp(),\n  `plant_capacity` float DEFAULT 0,\n  `plant_description` varchar(255) DEFAULT NULL,\n  `status` varchar(20) DEFAULT 'Active',\n  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `plant_code` (`plant_id`),\n  UNIQUE KEY `idx_plant_id` (`plant_id`)\n) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "prebatch_items": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "batch_db_id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "plan_id",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "batch_id",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "re_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ingredient_name",
+          "type": "varchar(200)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "required_volume",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "wh",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "status",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        }
+      ],
+      "row_count": 169,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "batch_db_id",
+          "column": "batch_db_id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_items_plan_id",
+          "column": "plan_id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_items_batch_id",
+          "column": "batch_id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_items_re_code",
+          "column": "re_code",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_items_id",
+          "column": "id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `prebatch_items` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `batch_db_id` int(11) NOT NULL,\n  `plan_id` varchar(50) DEFAULT NULL,\n  `batch_id` varchar(100) DEFAULT NULL,\n  `re_code` varchar(50) DEFAULT NULL,\n  `ingredient_name` varchar(200) DEFAULT NULL,\n  `required_volume` float DEFAULT NULL,\n  `wh` varchar(50) DEFAULT NULL,\n  `status` int(11) DEFAULT NULL,\n  `created_at` timestamp NULL DEFAULT current_timestamp(),\n  `updated_at` timestamp NULL DEFAULT current_timestamp(),\n  PRIMARY KEY (`id`),\n  KEY `batch_db_id` (`batch_db_id`),\n  KEY `ix_prebatch_items_plan_id` (`plan_id`),\n  KEY `ix_prebatch_items_batch_id` (`batch_id`),\n  KEY `ix_prebatch_items_re_code` (`re_code`),\n  KEY `ix_prebatch_items_id` (`id`),\n  CONSTRAINT `prebatch_items_ibfk_1` FOREIGN KEY (`batch_db_id`) REFERENCES `production_batches` (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=246 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "prebatch_recs": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "req_id",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "batch_record_id",
+          "type": "varchar(100)",
+          "null": "NO",
+          "key": "UNI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "plan_id",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "re_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "package_no",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "total_packages",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "net_volume",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "total_volume",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "total_request_volume",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "intake_lot_id",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "recheck_status",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "recheck_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "recheck_by",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ],
+      "row_count": 174,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_recs_batch_record_id",
+          "column": "batch_record_id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "req_id",
+          "column": "req_id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_recs_intake_lot_id",
+          "column": "intake_lot_id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_recs_id",
+          "column": "id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_recs_re_code",
+          "column": "re_code",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_recs_plan_id",
+          "column": "plan_id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `prebatch_recs` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `req_id` int(11) DEFAULT NULL,\n  `batch_record_id` varchar(100) NOT NULL,\n  `plan_id` varchar(50) DEFAULT NULL,\n  `re_code` varchar(50) DEFAULT NULL,\n  `package_no` int(11) DEFAULT NULL,\n  `total_packages` int(11) DEFAULT NULL,\n  `net_volume` float DEFAULT NULL,\n  `total_volume` float DEFAULT NULL,\n  `total_request_volume` float DEFAULT NULL,\n  `intake_lot_id` varchar(50) DEFAULT NULL,\n  `created_at` timestamp NULL DEFAULT current_timestamp(),\n  `recheck_status` int(11) DEFAULT 0 COMMENT '0=Pending, 1=OK, 2=Error',\n  `recheck_at` timestamp NULL DEFAULT NULL,\n  `recheck_by` varchar(50) DEFAULT NULL,\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `ix_prebatch_recs_batch_record_id` (`batch_record_id`),\n  KEY `req_id` (`req_id`),\n  KEY `ix_prebatch_recs_intake_lot_id` (`intake_lot_id`),\n  KEY `ix_prebatch_recs_id` (`id`),\n  KEY `ix_prebatch_recs_re_code` (`re_code`),\n  KEY `ix_prebatch_recs_plan_id` (`plan_id`),\n  CONSTRAINT `prebatch_recs_ibfk_1` FOREIGN KEY (`req_id`) REFERENCES `prebatch_reqs` (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=431 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "prebatch_reqs": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "batch_db_id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "plan_id",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "batch_id",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "re_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ingredient_name",
+          "type": "varchar(200)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "required_volume",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "wh",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "status",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        }
+      ],
+      "row_count": 174,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "batch_db_id",
+          "column": "batch_db_id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_reqs_id",
+          "column": "id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_reqs_plan_id",
+          "column": "plan_id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_reqs_re_code",
+          "column": "re_code",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_reqs_batch_id",
+          "column": "batch_id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `prebatch_reqs` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `batch_db_id` int(11) NOT NULL,\n  `plan_id` varchar(50) DEFAULT NULL,\n  `batch_id` varchar(100) DEFAULT NULL,\n  `re_code` varchar(50) DEFAULT NULL,\n  `ingredient_name` varchar(200) DEFAULT NULL,\n  `required_volume` float DEFAULT NULL,\n  `wh` varchar(50) DEFAULT NULL,\n  `status` int(11) DEFAULT NULL,\n  `created_at` timestamp NULL DEFAULT current_timestamp(),\n  `updated_at` timestamp NULL DEFAULT current_timestamp(),\n  PRIMARY KEY (`id`),\n  KEY `batch_db_id` (`batch_db_id`),\n  KEY `ix_prebatch_reqs_id` (`id`),\n  KEY `ix_prebatch_reqs_plan_id` (`plan_id`),\n  KEY `ix_prebatch_reqs_re_code` (`re_code`),\n  KEY `ix_prebatch_reqs_batch_id` (`batch_id`),\n  CONSTRAINT `prebatch_reqs_ibfk_1` FOREIGN KEY (`batch_db_id`) REFERENCES `production_batches` (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=416 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "prebatch_scans": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "item_id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "batch_record_id",
+          "type": "varchar(100)",
+          "null": "NO",
+          "key": "UNI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "package_no",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "total_packages",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "net_volume",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "total_volume",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "total_request_volume",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "intake_lot_id",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_scans_batch_record_id",
+          "column": "batch_record_id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "item_id",
+          "column": "item_id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_scans_id",
+          "column": "id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_prebatch_scans_intake_lot_id",
+          "column": "intake_lot_id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `prebatch_scans` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `item_id` int(11) NOT NULL,\n  `batch_record_id` varchar(100) NOT NULL,\n  `package_no` int(11) DEFAULT NULL,\n  `total_packages` int(11) DEFAULT NULL,\n  `net_volume` float DEFAULT NULL,\n  `total_volume` float DEFAULT NULL,\n  `total_request_volume` float DEFAULT NULL,\n  `intake_lot_id` varchar(50) DEFAULT NULL,\n  `created_at` timestamp NULL DEFAULT current_timestamp(),\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `ix_prebatch_scans_batch_record_id` (`batch_record_id`),\n  KEY `item_id` (`item_id`),\n  KEY `ix_prebatch_scans_id` (`id`),\n  KEY `ix_prebatch_scans_intake_lot_id` (`intake_lot_id`),\n  CONSTRAINT `prebatch_scans_ibfk_1` FOREIGN KEY (`item_id`) REFERENCES `prebatch_items` (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "production_batches": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "plan_id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "batch_id",
+          "type": "varchar(100)",
+          "null": "NO",
+          "key": "UNI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "sku_id",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "plant",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "batch_size",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "status",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": "on update current_timestamp()"
+        },
+        {
+          "name": "flavour_house",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "spp",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "batch_prepare",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "ready_to_product",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "production",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "done",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        }
+      ],
+      "row_count": 40,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_production_batches_batch_id",
+          "column": "batch_id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "plan_id",
+          "column": "plan_id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_production_batches_id",
+          "column": "id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `production_batches` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `plan_id` int(11) NOT NULL,\n  `batch_id` varchar(100) NOT NULL,\n  `sku_id` varchar(50) NOT NULL,\n  `plant` varchar(50) DEFAULT NULL,\n  `batch_size` float DEFAULT NULL,\n  `status` varchar(50) DEFAULT NULL,\n  `created_at` timestamp NULL DEFAULT current_timestamp(),\n  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),\n  `flavour_house` tinyint(1) DEFAULT 0,\n  `spp` tinyint(1) DEFAULT 0,\n  `batch_prepare` tinyint(1) DEFAULT 0,\n  `ready_to_product` tinyint(1) DEFAULT 0,\n  `production` tinyint(1) DEFAULT 0,\n  `done` tinyint(1) DEFAULT 0,\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `ix_production_batches_batch_id` (`batch_id`),\n  KEY `plan_id` (`plan_id`),\n  KEY `ix_production_batches_id` (`id`),\n  CONSTRAINT `production_batches_ibfk_1` FOREIGN KEY (`plan_id`) REFERENCES `production_plans` (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=133 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "production_orders": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "order_number",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "UNI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "plant_id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "recipe_id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "target_quantity",
+          "type": "decimal(10,2)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "start_date",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "status",
+          "type": "enum('planned','released','in_progress','completed','cancelled')",
+          "null": "YES",
+          "key": "",
+          "default": "planned",
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        }
+      ],
+      "row_count": 3,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "order_number",
+          "column": "order_number",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "plant_id",
+          "column": "plant_id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "recipe_id",
+          "column": "recipe_id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `production_orders` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `order_number` varchar(50) NOT NULL,\n  `plant_id` int(11) NOT NULL,\n  `recipe_id` int(11) NOT NULL,\n  `target_quantity` decimal(10,2) NOT NULL,\n  `start_date` date DEFAULT NULL,\n  `status` enum('planned','released','in_progress','completed','cancelled') DEFAULT 'planned',\n  `created_at` timestamp NULL DEFAULT current_timestamp(),\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `order_number` (`order_number`),\n  KEY `plant_id` (`plant_id`),\n  KEY `recipe_id` (`recipe_id`),\n  CONSTRAINT `production_orders_ibfk_1` FOREIGN KEY (`plant_id`) REFERENCES `plants` (`id`),\n  CONSTRAINT `production_orders_ibfk_2` FOREIGN KEY (`recipe_id`) REFERENCES `recipes` (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "production_plan_history": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "plan_db_id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "action",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "old_status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "new_status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "remarks",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "changed_by",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "changed_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        }
+      ],
+      "row_count": 10,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "plan_db_id",
+          "column": "plan_db_id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `production_plan_history` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `plan_db_id` int(11) NOT NULL,\n  `action` varchar(50) NOT NULL,\n  `old_status` varchar(20) DEFAULT NULL,\n  `new_status` varchar(20) DEFAULT NULL,\n  `remarks` varchar(255) DEFAULT NULL,\n  `changed_by` varchar(50) NOT NULL,\n  `changed_at` timestamp NULL DEFAULT current_timestamp(),\n  PRIMARY KEY (`id`),\n  KEY `plan_db_id` (`plan_db_id`),\n  CONSTRAINT `production_plan_history_ibfk_1` FOREIGN KEY (`plan_db_id`) REFERENCES `production_plans` (`id`) ON DELETE CASCADE\n) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "production_plans": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "sku_id",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "sku_name",
+          "type": "varchar(200)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "plant",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "total_volume",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "batch_size",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "num_batches",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "start_date",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "finish_date",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": "on update current_timestamp()"
+        },
+        {
+          "name": "flavour_house",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "spp",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "batch_prepare",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "ready_to_product",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "production",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "done",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "plan_id",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "total_plan_volume",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_by",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "updated_by",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ],
+      "row_count": 11,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_production_plans_id",
+          "column": "id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_production_plans_plan_id",
+          "column": "plan_id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `production_plans` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `sku_id` varchar(50) NOT NULL,\n  `sku_name` varchar(200) DEFAULT NULL,\n  `plant` varchar(50) DEFAULT NULL,\n  `total_volume` float DEFAULT NULL,\n  `batch_size` float DEFAULT NULL,\n  `num_batches` int(11) DEFAULT NULL,\n  `start_date` date DEFAULT NULL,\n  `finish_date` date DEFAULT NULL,\n  `status` varchar(20) DEFAULT NULL,\n  `created_at` timestamp NULL DEFAULT current_timestamp(),\n  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),\n  `flavour_house` tinyint(1) DEFAULT 0,\n  `spp` tinyint(1) DEFAULT 0,\n  `batch_prepare` tinyint(1) DEFAULT 0,\n  `ready_to_product` tinyint(1) DEFAULT 0,\n  `production` tinyint(1) DEFAULT 0,\n  `done` tinyint(1) DEFAULT 0,\n  `plan_id` varchar(50) DEFAULT NULL,\n  `total_plan_volume` float DEFAULT NULL,\n  `created_by` varchar(50) DEFAULT NULL,\n  `updated_by` varchar(50) DEFAULT NULL,\n  PRIMARY KEY (`id`),\n  KEY `ix_production_plans_id` (`id`),\n  KEY `ix_production_plans_plan_id` (`plan_id`)\n) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "products": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "product_code",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "UNI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "name",
+          "type": "varchar(100)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "unit_of_measure",
+          "type": "varchar(10)",
+          "null": "YES",
+          "key": "",
+          "default": "kg",
+          "extra": ""
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        }
+      ],
+      "row_count": 2,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "product_code",
+          "column": "product_code",
+          "unique": true,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `products` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `product_code` varchar(50) NOT NULL,\n  `name` varchar(100) NOT NULL,\n  `unit_of_measure` varchar(10) DEFAULT 'kg',\n  `description` text DEFAULT NULL,\n  `created_at` timestamp NULL DEFAULT current_timestamp(),\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `product_code` (`product_code`)\n) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "sku_actions": {
+      "columns": [
+        {
+          "name": "action_code",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "action_description",
+          "type": "varchar(200)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": "on update current_timestamp()"
+        },
+        {
+          "name": "component_filter",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ],
+      "row_count": 7,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "action_code",
+          "unique": true,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `sku_actions` (\n  `action_code` varchar(50) NOT NULL,\n  `action_description` varchar(200) NOT NULL,\n  `created_at` timestamp NULL DEFAULT current_timestamp(),\n  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),\n  `component_filter` varchar(255) DEFAULT NULL,\n  PRIMARY KEY (`action_code`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "sku_destinations": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "destination_code",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "UNI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "description",
+          "type": "varchar(200)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ],
+      "row_count": 5,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_sku_destinations_destination_code",
+          "column": "destination_code",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_sku_destinations_id",
+          "column": "id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `sku_destinations` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `destination_code` varchar(50) NOT NULL,\n  `description` varchar(200) DEFAULT NULL,\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `ix_sku_destinations_destination_code` (`destination_code`),\n  KEY `ix_sku_destinations_id` (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "sku_histories": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "sku_db_id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "action",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "old_status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "new_status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "remarks",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "update_by",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "update_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        }
+      ],
+      "row_count": 0,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "sku_db_id",
+          "column": "sku_db_id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_sku_histories_id",
+          "column": "id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `sku_histories` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `sku_db_id` int(11) NOT NULL,\n  `action` varchar(50) NOT NULL,\n  `old_status` varchar(20) DEFAULT NULL,\n  `new_status` varchar(20) DEFAULT NULL,\n  `remarks` varchar(255) DEFAULT NULL,\n  `update_by` varchar(50) NOT NULL,\n  `update_at` timestamp NULL DEFAULT current_timestamp(),\n  PRIMARY KEY (`id`),\n  KEY `sku_db_id` (`sku_db_id`),\n  KEY `ix_sku_histories_id` (`id`),\n  CONSTRAINT `sku_histories_ibfk_1` FOREIGN KEY (`sku_db_id`) REFERENCES `sku_masters` (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "sku_masters": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "sku_id",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "UNI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "sku_name",
+          "type": "varchar(200)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "std_batch_size",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "1000",
+          "extra": ""
+        },
+        {
+          "name": "uom",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "creat_by",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "update_by",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": "on update current_timestamp()"
+        }
+      ],
+      "row_count": 3,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_skus_sku_id",
+          "column": "sku_id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_skus_id",
+          "column": "id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `sku_masters` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `sku_id` varchar(50) NOT NULL,\n  `sku_name` varchar(200) NOT NULL,\n  `std_batch_size` float DEFAULT 1000,\n  `uom` varchar(20) DEFAULT NULL,\n  `status` varchar(20) DEFAULT NULL,\n  `creat_by` varchar(50) NOT NULL,\n  `update_by` varchar(50) DEFAULT NULL,\n  `created_at` timestamp NULL DEFAULT current_timestamp(),\n  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `ix_skus_sku_id` (`sku_id`),\n  KEY `ix_skus_id` (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "sku_phases": {
+      "columns": [
+        {
+          "name": "phase_id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "phase_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "phase_description",
+          "type": "varchar(200)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": "on update current_timestamp()"
+        }
+      ],
+      "row_count": 8,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "phase_id",
+          "unique": true,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `sku_phases` (\n  `phase_id` int(11) NOT NULL,\n  `phase_code` varchar(50) DEFAULT NULL,\n  `phase_description` varchar(200) NOT NULL,\n  `created_at` timestamp NULL DEFAULT current_timestamp(),\n  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),\n  PRIMARY KEY (`phase_id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "sku_steps": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "sku_id",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "phase_number",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "phase_id",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "master_step",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "sub_step",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "destination",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "re_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "action_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "action_description",
+          "type": "varchar(100)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "setup_step",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "require",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "low_tol",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "0.001",
+          "extra": ""
+        },
+        {
+          "name": "high_tol",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "agitator_rpm",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "high_shear_rpm",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "temperature",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ph",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "7",
+          "extra": ""
+        },
+        {
+          "name": "step_time",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "step_timer_control",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": "on update current_timestamp()"
+        },
+        {
+          "name": "qc_temperature",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "brix",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "qc_ph",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "qc_brix",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "uom",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "temp_low",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "temp_high",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "step_condition",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "qc_temp",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "record_steam_pressure",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "record_ctw",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "operation_brix_record",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "operation_ph_record",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "brix_sp",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ph_sp",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "action",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ],
+      "row_count": 26,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_sku_steps_id",
+          "column": "id",
+          "unique": false,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_sku_steps_sku_id",
+          "column": "sku_id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `sku_steps` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `sku_id` varchar(50) NOT NULL,\n  `phase_number` varchar(20) DEFAULT NULL,\n  `phase_id` varchar(50) DEFAULT NULL,\n  `master_step` int(11) NOT NULL,\n  `sub_step` int(11) NOT NULL,\n  `destination` varchar(100) DEFAULT NULL,\n  `re_code` varchar(50) DEFAULT NULL,\n  `action_code` varchar(50) DEFAULT NULL,\n  `action_description` varchar(100) NOT NULL,\n  `setup_step` varchar(100) DEFAULT NULL,\n  `require` float DEFAULT NULL,\n  `low_tol` float DEFAULT 0.001,\n  `high_tol` float DEFAULT NULL,\n  `agitator_rpm` float DEFAULT NULL,\n  `high_shear_rpm` float DEFAULT NULL,\n  `temperature` float DEFAULT NULL,\n  `ph` float DEFAULT 7,\n  `step_time` int(11) DEFAULT NULL,\n  `step_timer_control` int(11) DEFAULT NULL,\n  `created_at` timestamp NULL DEFAULT current_timestamp(),\n  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),\n  `qc_temperature` tinyint(1) DEFAULT 0,\n  `brix` float DEFAULT NULL,\n  `qc_ph` tinyint(1) DEFAULT NULL,\n  `qc_brix` tinyint(1) DEFAULT NULL,\n  `uom` varchar(20) DEFAULT NULL,\n  `temp_low` float DEFAULT NULL,\n  `temp_high` float DEFAULT NULL,\n  `step_condition` varchar(100) DEFAULT NULL,\n  `qc_temp` tinyint(1) DEFAULT 0,\n  `record_steam_pressure` tinyint(1) DEFAULT 0,\n  `record_ctw` tinyint(1) DEFAULT 0,\n  `operation_brix_record` tinyint(1) DEFAULT 0,\n  `operation_ph_record` tinyint(1) DEFAULT 0,\n  `brix_sp` varchar(50) DEFAULT NULL,\n  `ph_sp` varchar(50) DEFAULT NULL,\n  `action` varchar(100) DEFAULT NULL,\n  PRIMARY KEY (`id`),\n  KEY `ix_sku_steps_id` (`id`),\n  KEY `ix_sku_steps_sku_id` (`sku_id`)\n) ENGINE=InnoDB AUTO_INCREMENT=59 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "users": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "username",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "UNI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "email",
+          "type": "varchar(100)",
+          "null": "NO",
+          "key": "UNI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "password_hash",
+          "type": "varchar(255)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "full_name",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "role",
+          "type": "enum('Admin','Manager','Operator','QC_Inspector','Viewer')",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "department",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "status",
+          "type": "enum('Active','Inactive')",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "permissions",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "last_login",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": "on update current_timestamp()"
+        }
+      ],
+      "row_count": 18,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "username",
+          "column": "username",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "email",
+          "column": "email",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_users_id",
+          "column": "id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `users` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `username` varchar(50) NOT NULL,\n  `email` varchar(100) NOT NULL,\n  `password_hash` varchar(255) NOT NULL,\n  `full_name` varchar(100) DEFAULT NULL,\n  `role` enum('Admin','Manager','Operator','QC_Inspector','Viewer') DEFAULT NULL,\n  `department` varchar(100) DEFAULT NULL,\n  `status` enum('Active','Inactive') DEFAULT NULL,\n  `permissions` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`permissions`)),\n  `last_login` datetime DEFAULT NULL,\n  `created_at` timestamp NULL DEFAULT current_timestamp(),\n  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `username` (`username`),\n  UNIQUE KEY `email` (`email`),\n  KEY `ix_users_id` (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    "v_sku_complete": {
+      "columns": [
+        {
+          "name": "sku_id",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "sku_name",
+          "type": "varchar(200)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "std_batch_size",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "1000",
+          "extra": ""
+        },
+        {
+          "name": "uom",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "phase_number",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "phase_id",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "sub_step",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "step_number",
+          "type": "varchar(32)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "action",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "action_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "action_description",
+          "type": "varchar(200)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "re_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ingredient_name",
+          "type": "varchar(150)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "mat_sap_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "blind_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "destination",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "destination_description",
+          "type": "varchar(200)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "required_amount",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "low_tol",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "0.001",
+          "extra": ""
+        },
+        {
+          "name": "high_tol",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "agitator_rpm",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "high_shear_rpm",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "temperature",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "step_time",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "qc_temp",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "record_steam_pressure",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "record_ctw",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "operation_brix_record",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "operation_ph_record",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "brix_sp",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ph_sp",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "setup_step",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "creat_by",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "update_by",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        }
+      ],
+      "row_count": 30,
+      "indexes": [],
+      "create_statement": "CREATE ALGORITHM=UNDEFINED DEFINER=`mixingcontrol`@`%` SQL SECURITY DEFINER VIEW `xmixingcontrol`.`v_sku_complete` AS select `sm`.`sku_id` AS `sku_id`,`sm`.`sku_name` AS `sku_name`,`sm`.`std_batch_size` AS `std_batch_size`,`sm`.`uom` AS `uom`,`sm`.`status` AS `status`,`ss`.`phase_number` AS `phase_number`,`ss`.`phase_id` AS `phase_id`,`ss`.`sub_step` AS `sub_step`,concat(`ss`.`phase_number`,'.',`ss`.`sub_step`) AS `step_number`,`ss`.`action` AS `action`,`ss`.`action_code` AS `action_code`,`sa`.`action_description` AS `action_description`,`ss`.`re_code` AS `re_code`,`ing`.`name` AS `ingredient_name`,`ing`.`mat_sap_code` AS `mat_sap_code`,`ing`.`blind_code` AS `blind_code`,`ss`.`destination` AS `destination`,`sd`.`description` AS `destination_description`,`ss`.`require` AS `required_amount`,`ss`.`low_tol` AS `low_tol`,`ss`.`high_tol` AS `high_tol`,`ss`.`agitator_rpm` AS `agitator_rpm`,`ss`.`high_shear_rpm` AS `high_shear_rpm`,`ss`.`temperature` AS `temperature`,`ss`.`step_time` AS `step_time`,`ss`.`qc_temp` AS `qc_temp`,`ss`.`record_steam_pressure` AS `record_steam_pressure`,`ss`.`record_ctw` AS `record_ctw`,`ss`.`operation_brix_record` AS `operation_brix_record`,`ss`.`operation_ph_record` AS `operation_ph_record`,`ss`.`brix_sp` AS `brix_sp`,`ss`.`ph_sp` AS `ph_sp`,`ss`.`setup_step` AS `setup_step`,`sm`.`creat_by` AS `creat_by`,`sm`.`created_at` AS `created_at`,`sm`.`update_by` AS `update_by`,`sm`.`updated_at` AS `updated_at` from ((((`xmixingcontrol`.`sku_masters` `sm` left join `xmixingcontrol`.`sku_steps` `ss` on(`sm`.`sku_id` = `ss`.`sku_id`)) left join `xmixingcontrol`.`sku_actions` `sa` on(`ss`.`action_code` = `sa`.`action_code`)) left join `xmixingcontrol`.`sku_destinations` `sd` on(`ss`.`destination` = `sd`.`destination_code`)) left join `xmixingcontrol`.`ingredients` `ing` on(`ss`.`re_code` = `ing`.`re_code`))"
+    },
+    "v_sku_master_detail": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "sku_id",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "sku_name",
+          "type": "varchar(200)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "std_batch_size",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "1000",
+          "extra": ""
+        },
+        {
+          "name": "uom",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "creat_by",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "update_by",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "total_phases",
+          "type": "bigint(21)",
+          "null": "NO",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "total_sub_steps",
+          "type": "bigint(21)",
+          "null": "NO",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "last_step_update",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        }
+      ],
+      "row_count": 3,
+      "indexes": [],
+      "create_statement": "CREATE ALGORITHM=UNDEFINED DEFINER=`mixingcontrol`@`%` SQL SECURITY DEFINER VIEW `xmixingcontrol`.`v_sku_master_detail` AS select `sm`.`id` AS `id`,`sm`.`sku_id` AS `sku_id`,`sm`.`sku_name` AS `sku_name`,`sm`.`std_batch_size` AS `std_batch_size`,`sm`.`uom` AS `uom`,`sm`.`status` AS `status`,`sm`.`creat_by` AS `creat_by`,`sm`.`created_at` AS `created_at`,`sm`.`update_by` AS `update_by`,`sm`.`updated_at` AS `updated_at`,count(distinct `ss`.`phase_number`) AS `total_phases`,count(`ss`.`id`) AS `total_sub_steps`,max(`ss`.`updated_at`) AS `last_step_update` from (`xmixingcontrol`.`sku_masters` `sm` left join `xmixingcontrol`.`sku_steps` `ss` on(`sm`.`sku_id` = `ss`.`sku_id`)) group by `sm`.`id`,`sm`.`sku_id`,`sm`.`sku_name`,`sm`.`std_batch_size`,`sm`.`uom`,`sm`.`status`,`sm`.`creat_by`,`sm`.`created_at`,`sm`.`update_by`,`sm`.`updated_at`"
+    },
+    "v_sku_step_detail": {
+      "columns": [
+        {
+          "name": "step_id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "sku_id",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "phase_number",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "phase_id",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "sub_step",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "action",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "re_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "action_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "setup_step",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "destination",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "require",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "uom",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "low_tol",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "0.001",
+          "extra": ""
+        },
+        {
+          "name": "high_tol",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "step_condition",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "agitator_rpm",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "high_shear_rpm",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "temperature",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "temp_low",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "temp_high",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ph",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "7",
+          "extra": ""
+        },
+        {
+          "name": "brix",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "step_time",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "step_timer_control",
+          "type": "int(11)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "qc_temp",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "record_steam_pressure",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "record_ctw",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "operation_brix_record",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "operation_ph_record",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "brix_sp",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ph_sp",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "step_created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "step_updated_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "sku_name",
+          "type": "varchar(200)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "std_batch_size",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "1000",
+          "extra": ""
+        },
+        {
+          "name": "uom_master",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "sku_status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "action_description",
+          "type": "varchar(200)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "destination_description",
+          "type": "varchar(200)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ingredient_name",
+          "type": "varchar(150)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "mat_sap_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "blind_code",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ingredient_category",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ingredient_unit",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "std_package_size",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "25",
+          "extra": ""
+        },
+        {
+          "name": "step_label",
+          "type": "varchar(32)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "full_action_description",
+          "type": "varchar(253)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "full_destination_description",
+          "type": "varchar(303)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ],
+      "row_count": 30,
+      "indexes": [],
+      "create_statement": "CREATE ALGORITHM=UNDEFINED DEFINER=`mixingcontrol`@`%` SQL SECURITY DEFINER VIEW `xmixingcontrol`.`v_sku_step_detail` AS select `ss`.`id` AS `step_id`,`ss`.`sku_id` AS `sku_id`,`ss`.`phase_number` AS `phase_number`,`ss`.`phase_id` AS `phase_id`,`ss`.`sub_step` AS `sub_step`,`ss`.`action` AS `action`,`ss`.`re_code` AS `re_code`,`ss`.`action_code` AS `action_code`,`ss`.`setup_step` AS `setup_step`,`ss`.`destination` AS `destination`,`ss`.`require` AS `require`,`ss`.`uom` AS `uom`,`ss`.`low_tol` AS `low_tol`,`ss`.`high_tol` AS `high_tol`,`ss`.`step_condition` AS `step_condition`,`ss`.`agitator_rpm` AS `agitator_rpm`,`ss`.`high_shear_rpm` AS `high_shear_rpm`,`ss`.`temperature` AS `temperature`,`ss`.`temp_low` AS `temp_low`,`ss`.`temp_high` AS `temp_high`,`ss`.`ph` AS `ph`,`ss`.`brix` AS `brix`,`ss`.`step_time` AS `step_time`,`ss`.`step_timer_control` AS `step_timer_control`,`ss`.`qc_temp` AS `qc_temp`,`ss`.`record_steam_pressure` AS `record_steam_pressure`,`ss`.`record_ctw` AS `record_ctw`,`ss`.`operation_brix_record` AS `operation_brix_record`,`ss`.`operation_ph_record` AS `operation_ph_record`,`ss`.`brix_sp` AS `brix_sp`,`ss`.`ph_sp` AS `ph_sp`,`ss`.`created_at` AS `step_created_at`,`ss`.`updated_at` AS `step_updated_at`,`sm`.`sku_name` AS `sku_name`,`sm`.`std_batch_size` AS `std_batch_size`,`sm`.`uom` AS `uom_master`,`sm`.`status` AS `sku_status`,`sa`.`action_description` AS `action_description`,`sd`.`description` AS `destination_description`,`ing`.`name` AS `ingredient_name`,`ing`.`mat_sap_code` AS `mat_sap_code`,`ing`.`blind_code` AS `blind_code`,`ing`.`Group` AS `ingredient_category`,`ing`.`unit` AS `ingredient_unit`,`ing`.`std_package_size` AS `std_package_size`,concat(`ss`.`phase_number`,'.',`ss`.`sub_step`) AS `step_label`,case when `ss`.`action_code` is not null then concat(`ss`.`action_code`,' - ',`sa`.`action_description`) else `ss`.`action` end AS `full_action_description`,case when `ss`.`destination` is not null then concat(`ss`.`destination`,' - ',`sd`.`description`) else NULL end AS `full_destination_description` from ((((`xmixingcontrol`.`sku_steps` `ss` join `xmixingcontrol`.`sku_masters` `sm` on(`ss`.`sku_id` = `sm`.`sku_id`)) left join `xmixingcontrol`.`sku_actions` `sa` on(`ss`.`action_code` = `sa`.`action_code`)) left join `xmixingcontrol`.`sku_destinations` `sd` on(`ss`.`destination` = `sd`.`destination_code`)) left join `xmixingcontrol`.`ingredients` `ing` on(`ss`.`re_code` = `ing`.`re_code`))"
+    },
+    "warehouses": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "int(11)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "UNI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "name",
+          "type": "varchar(100)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "description",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "current_timestamp()",
+          "extra": ""
+        }
+      ],
+      "row_count": 2,
+      "indexes": [
+        {
+          "name": "PRIMARY",
+          "column": "id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_warehouses_warehouse_id",
+          "column": "warehouse_id",
+          "unique": true,
+          "type": "BTREE"
+        },
+        {
+          "name": "ix_warehouses_id",
+          "column": "id",
+          "unique": false,
+          "type": "BTREE"
+        }
+      ],
+      "create_statement": "CREATE TABLE `warehouses` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `warehouse_id` varchar(50) NOT NULL,\n  `name` varchar(100) NOT NULL,\n  `description` varchar(255) DEFAULT NULL,\n  `status` varchar(20) DEFAULT NULL,\n  `created_at` timestamp NULL DEFAULT current_timestamp(),\n  `updated_at` timestamp NULL DEFAULT current_timestamp(),\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `ix_warehouses_warehouse_id` (`warehouse_id`),\n  KEY `ix_warehouses_id` (`id`)\n) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    }
+  }
+}

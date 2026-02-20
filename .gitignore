@@ -10,7 +10,6 @@ env/
 /build/
 /dist/
 *.log
-*.sqlite3
 coverage/
 *.egg-info/
 *.egg
