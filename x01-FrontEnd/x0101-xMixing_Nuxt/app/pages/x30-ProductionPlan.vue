@@ -6,6 +6,7 @@ import { appConfig } from '~/appConfig/config'
 
 const $q = useQuasar()
 const { t } = useI18n()
+const { generateQrDataUrl } = useQrCode()
 
 // --- State ---
 const skuId = ref('')
@@ -132,6 +133,8 @@ const columns = computed<QTableColumn[]>(() => [
     align: 'right',
     sortable: true,
   },
+  { name: 'start_date', label: t('prodPlan.startDate'), field: 'start_date', align: 'center', sortable: true },
+  { name: 'finish_date', label: t('prodPlan.finishDate'), field: 'finish_date', align: 'center', sortable: true },
   { name: 'flavour_house', label: t('prodPlan.flavourHouse'), field: 'flavour_house', align: 'center' },
   { name: 'spp', label: t('prodPlan.spp'), field: 'spp', align: 'center' },
   { name: 'batch_prepare', label: t('prodPlan.batchPrepare'), field: 'batch_prepare', align: 'center' },
@@ -152,6 +155,7 @@ const batchColumns = computed<QTableColumn[]>(() => [
   { name: 'ready_to_product', label: t('prodPlan.readyToProd'), field: 'ready_to_product', align: 'center' },
   { name: 'production', label: t('prodPlan.production'), field: 'production', align: 'center' },
   { name: 'done', label: t('prodPlan.done'), field: 'done', align: 'center' },
+  { name: 'actions', label: t('common.actions'), field: 'actions', align: 'center' },
 ])
 // Actions
 // Fetch SKUs
@@ -279,6 +283,212 @@ const showHistory = async (plan: any) => {
     console.error('Error loading history:', e)
     $q.notify({ type: 'negative', message: t('common.error') })
   }
+}
+
+const printBatchLabel = async (plan: any, batch: any) => {
+  const existingIframe = document.getElementById('print-iframe')
+  if (existingIframe) {
+    document.body.removeChild(existingIframe)
+  }
+
+  const iframe = document.createElement('iframe')
+  iframe.id = 'print-iframe'
+  iframe.style.position = 'fixed'
+  iframe.style.right = '0'
+  iframe.style.bottom = '0'
+  iframe.style.width = '1px'
+  iframe.style.height = '1px'
+  iframe.style.border = '0'
+  iframe.style.opacity = '0.01'
+  document.body.appendChild(iframe)
+
+  try {
+    const templateResponse = await fetch('/labels/BatchPlan-Label.svg')
+    const templateStr = await templateResponse.text()
+
+    // Determine batch index within the plan's batches array
+    const batchIndex = (plan.batches?.findIndex((b: any) => b.batch_id === batch.batch_id) ?? 0) + 1
+    const totalBatches = plan.batches?.length ?? 1
+
+    const qrData = {
+      plan_id: plan.plan_id,
+      batch_id: batch.batch_id,
+      sku_id: plan.sku_id,
+      batch_no: batchIndex,
+    }
+    const qrString = JSON.stringify(qrData)
+    const qrLarge = await generateQrDataUrl(qrString, 150)
+
+    const plantName = plantNames.value[plan.plant] || plan.plant || '-'
+
+    let formattedSvg = templateStr
+      .replace(/\{\{PlanId\}\}/g, plan.plan_id || '-')
+      .replace(/\{\{BatchId\}\}/g, batch.batch_id || '-')
+      .replace(/\{\{SKU\}\}/g, `${plan.sku_id}${plan.sku_name ? ' - ' + plan.sku_name : ''}`)
+      .replace(/\{\{BatchNo\}\}/g, `${batchIndex} / ${totalBatches}`)
+      .replace(/\{\{PlanStartDate\}\}/g, plan.start_date || '-')
+      .replace(/\{\{PlanFinishDate\}\}/g, plan.finish_date || '-')
+      .replace(/\{\{BatchSize\}\}/g, batch.batch_size?.toString() || '0')
+      .replace(/\{\{PlanSize\}\}/g, plan.total_plan_volume?.toString() || '0')
+      .replace(/\{\{PlantId\}\}/g, plan.plant || '-')
+      .replace(/\{\{PlantName\}\}/g, plantName)
+      .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString())
+      .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="231.028" y="391.028" width="148.972" height="148.972" />`)
+
+    const html = `
+      <html>
+        <head>
+          <title>Print Label - ${batch.batch_id}</title>
+          <style>
+            @page {
+              size: 4in 6in;
+              margin: 0;
+            }
+            body {
+              margin: 0;
+              padding: 0;
+              background: white;
+              box-sizing: border-box;
+            }
+            .label-container {
+              width: 4in;
+              height: 6in;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+            }
+            .label-container svg {
+              width: 100%;
+              height: 100%;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="label-container">${formattedSvg}</div>
+        </body>
+      </html>
+    `
+
+    const doc = iframe.contentWindow?.document
+    if (doc) {
+      doc.open()
+      doc.write(html)
+      doc.close()
+      iframe.onload = () => {
+        iframe.contentWindow?.focus()
+        iframe.contentWindow?.print()
+      }
+    }
+  } catch (error) {
+    console.error('Failed to print batch label:', error)
+    $q.notify({ type: 'negative', message: 'Failed to generate label' })
+  }
+}
+
+const printAllBatchLabels = async (plan: any) => {
+  const batches = plan.batches
+  if (!batches || batches.length === 0) {
+    $q.notify({ type: 'warning', message: 'No batches to print' })
+    return
+  }
+
+  const existingIframe = document.getElementById('print-iframe')
+  if (existingIframe) {
+    document.body.removeChild(existingIframe)
+  }
+
+  const iframe = document.createElement('iframe')
+  iframe.id = 'print-iframe'
+  iframe.style.position = 'fixed'
+  iframe.style.right = '0'
+  iframe.style.bottom = '0'
+  iframe.style.width = '1px'
+  iframe.style.height = '1px'
+  iframe.style.border = '0'
+  iframe.style.opacity = '0.01'
+  document.body.appendChild(iframe)
+
+  try {
+    const templateResponse = await fetch('/labels/BatchPlan-Label.svg')
+    const templateStr = await templateResponse.text()
+    const plantName = plantNames.value[plan.plant] || plan.plant || '-'
+    const totalBatches = batches.length
+
+    let labelsHtml = ''
+
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i]
+      const batchIndex = i + 1
+
+      const qrData = {
+        plan_id: plan.plan_id,
+        batch_id: batch.batch_id,
+        sku_id: plan.sku_id,
+        batch_no: batchIndex,
+      }
+      const qrLarge = await generateQrDataUrl(JSON.stringify(qrData), 150)
+
+      const svgContent = templateStr
+        .replace(/\{\{PlanId\}\}/g, plan.plan_id || '-')
+        .replace(/\{\{BatchId\}\}/g, batch.batch_id || '-')
+        .replace(/\{\{SKU\}\}/g, `${plan.sku_id}${plan.sku_name ? ' - ' + plan.sku_name : ''}`)
+        .replace(/\{\{BatchNo\}\}/g, `${batchIndex} / ${totalBatches}`)
+        .replace(/\{\{PlanStartDate\}\}/g, plan.start_date || '-')
+        .replace(/\{\{PlanFinishDate\}\}/g, plan.finish_date || '-')
+        .replace(/\{\{BatchSize\}\}/g, batch.batch_size?.toString() || '0')
+        .replace(/\{\{PlanSize\}\}/g, plan.total_plan_volume?.toString() || '0')
+        .replace(/\{\{PlantId\}\}/g, plan.plant || '-')
+        .replace(/\{\{PlantName\}\}/g, plantName)
+        .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString())
+        .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="231.028" y="391.028" width="148.972" height="148.972" />`)
+
+      labelsHtml += `<div class="label-container">${svgContent}</div>`
+    }
+
+    const html = `
+      <html>
+        <head>
+          <title>Batch Labels - ${plan.plan_id}</title>
+          <style>
+            @page { size: 4in 6in; margin: 0; }
+            body { margin: 0; padding: 0; background: white; }
+            .label-container {
+              width: 4in; height: 6in;
+              page-break-after: always;
+              display: flex; justify-content: center; align-items: center;
+            }
+            .label-container svg { width: 100%; height: 100%; }
+          </style>
+        </head>
+        <body>${labelsHtml}</body>
+      </html>
+    `
+
+    const doc = iframe.contentWindow?.document
+    if (doc) {
+      doc.open()
+      doc.write(html)
+      doc.close()
+      iframe.onload = () => {
+        iframe.contentWindow?.focus()
+        iframe.contentWindow?.print()
+      }
+    }
+  } catch (error) {
+    console.error('Failed to print all batch labels:', error)
+    $q.notify({ type: 'negative', message: 'Failed to generate labels' })
+  }
+}
+
+// Expand / Collapse All
+const expandedRows = ref<Set<number>>(new Set())
+
+const expandAll = () => {
+  filteredPlans.value.forEach((p: any) => expandedRows.value.add(p.id))
+}
+
+const collapseAll = () => {
+  expandedRows.value.clear()
 }
 
 const printPlan = (plan: any) => {
@@ -677,6 +887,13 @@ onMounted(() => {
       <div class="row items-center justify-between q-mb-xs">
         <div class="text-subtitle2 text-weight-bold">{{ t('prodPlan.plansMaster') }}</div>
         <div class="row items-center q-gutter-x-xs">
+          <q-btn icon="unfold_more" flat round dense color="primary" size="sm" @click="expandAll">
+            <q-tooltip>Expand All</q-tooltip>
+          </q-btn>
+          <q-btn icon="unfold_less" flat round dense color="primary" size="sm" @click="collapseAll">
+            <q-tooltip>Collapse All</q-tooltip>
+          </q-btn>
+          <q-separator vertical inset />
           <q-btn icon="refresh" flat round dense color="primary" @click="fetchPlans" size="sm" />
           <q-btn icon="print" flat round dense color="primary" @click="printAllPlans" size="sm">
             <q-tooltip>{{ t('prodPlan.printAllPlans') }}</q-tooltip>
@@ -715,13 +932,13 @@ onMounted(() => {
             <q-tr :props="props" class="cursor-pointer hover-bg" @click="props.expand = !props.expand">
               <q-td auto-width>
                 <q-btn
-                  size="xs"
+                  size="sm"
                   color="primary"
                   round
                   flat
                   dense
                   @click.stop="props.expand = !props.expand"
-                  :icon="props.expand ? 'keyboard_arrow_up' : 'keyboard_arrow_down'"
+                  :icon="props.expand ? 'keyboard_arrow_down' : 'keyboard_arrow_right'"
                 />
               </q-td>
               <q-td v-for="col in props.cols" :key="col.name" :props="props">
@@ -750,7 +967,16 @@ onMounted(() => {
                   <span class="text-weight-bold">{{ props.row.total_volume }}</span>
                 </template>
                 <template v-else-if="col.name === 'actions'">
-                    <q-btn icon="more_vert" flat round dense size="sm" color="grey-7">
+                    <div class="row no-wrap items-center">
+                      <q-btn
+                        icon="print_all"
+                        flat round dense size="sm" color="blue-7"
+                        @click.stop="printAllBatchLabels(props.row)"
+                      >
+                        <q-tooltip>Print All Batch Labels</q-tooltip>
+                        <q-icon name="layers" />
+                      </q-btn>
+                      <q-btn icon="more_vert" flat round dense size="sm" color="grey-7">
                         <q-menu auto-close>
                             <q-list style="min-width: 150px">
                                 <q-item clickable @click="printPlan(props.row)">
@@ -768,11 +994,79 @@ onMounted(() => {
                                 </q-item>
                             </q-list>
                         </q-menu>
-                    </q-btn>
+                      </q-btn>
+                    </div>
                 </template>
                 <template v-else>
                   {{ col.value }}
                 </template>
+              </q-td>
+            </q-tr>
+            
+            <!-- Expanded Row for Batches -->
+            <q-tr v-show="props.expand" :props="props" class="bg-blue-grey-1">
+              <q-td colspan="100%" class="q-pa-md">
+                <div class="text-subtitle2 q-mb-sm text-blue-9">{{ t('prodPlan.batchDetails') }} - {{ props.row.plan_id }}</div>
+                <template v-if="props.row.batches && props.row.batches.length > 0">
+                  <q-table
+                    :rows="props.row.batches"
+                    :columns="batchColumns"
+                    row-key="batch_id"
+                    flat
+                    dense
+                    hide-bottom
+                    :pagination="{ rowsPerPage: 0 }"
+                    class="bg-white"
+                  >
+                    <template v-slot:header="batchProps">
+                      <q-tr :props="batchProps" class="bg-grey-3">
+                        <q-th
+                          v-for="col in batchProps.cols"
+                          :key="col.name"
+                          :props="batchProps"
+                          class="text-weight-bold"
+                        >
+                          {{ col.label }}
+                        </q-th>
+                      </q-tr>
+                    </template>
+                    <template v-slot:body="batchProps">
+                      <q-tr :props="batchProps" class="hover-bg">
+                        <q-td v-for="col in batchProps.cols" :key="col.name" :props="batchProps">
+                          <template v-if="col.name === 'status'">
+                            <q-badge
+                              :color="
+                                batchProps.row.status === 'Cancelled'
+                                  ? 'red'
+                                  : batchProps.row.status === 'Draft' || batchProps.row.status === 'Pending'
+                                    ? 'grey-6'
+                                    : 'green'
+                              "
+                              text-color="white"
+                              class="text-weight-bold"
+                            >
+                              {{ batchProps.row.status }}
+                            </q-badge>
+                          </template>
+                          <template v-else-if="col.name === 'batch_id'">
+                            <span class="text-weight-medium">{{ batchProps.row.batch_id }}</span>
+                          </template>
+                          <template v-else-if="col.name === 'actions'">
+                            <q-btn icon="print" flat round dense color="primary" @click="printBatchLabel(props.row, batchProps.row)">
+                              <q-tooltip>{{ t('prodPlan.printLabel') }}</q-tooltip>
+                            </q-btn>
+                          </template>
+                          <template v-else>
+                            {{ col.value }}
+                          </template>
+                        </q-td>
+                      </q-tr>
+                    </template>
+                  </q-table>
+                </template>
+                <div v-else class="text-caption text-grey-7 q-py-sm">
+                  {{ t('common.noData') }}
+                </div>
               </q-td>
             </q-tr>
           </template>

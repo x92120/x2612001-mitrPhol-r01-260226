@@ -232,7 +232,7 @@ class ProductionBatch(Base):
     plan = relationship("ProductionPlan", back_populates="batches")
 
 class PreBatchReq(Base):
-    __tablename__ = "preBatch_reqs"
+    __tablename__ = "prebatch_reqs"
 
     id = Column(Integer, primary_key=True, index=True)
     batch_db_id = Column(Integer, ForeignKey("production_batches.id"), nullable=False)
@@ -250,10 +250,10 @@ class PreBatchReq(Base):
     batch = relationship("ProductionBatch", backref="reqs")
 
 class PreBatchRec(Base):
-    __tablename__ = "preBatch_recs"
+    __tablename__ = "prebatch_recs"
 
     id = Column(Integer, primary_key=True, index=True)
-    req_id = Column(Integer, ForeignKey("preBatch_reqs.id"), nullable=True)
+    req_id = Column(Integer, ForeignKey("prebatch_reqs.id"), nullable=True)
     batch_record_id = Column(String(100), unique=True, nullable=False, index=True)
     plan_id = Column(String(50), index=True)
     re_code = Column(String(50), index=True)

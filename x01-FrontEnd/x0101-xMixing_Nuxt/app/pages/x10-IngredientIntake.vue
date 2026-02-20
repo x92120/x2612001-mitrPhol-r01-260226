@@ -455,9 +455,42 @@ const filteredRows = computed(() => {
 // Auto-refresh timer
 let refreshInterval: any = null
 
+const allIngredients = ref<any[]>([])
+const ingredientOptions = ref<any[]>([])
+
+const fetchAllIngredients = async () => {
+  try {
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/ingredients/`, {
+      headers: getAuthHeader() as Record<string, string>,
+    })
+    allIngredients.value = data
+  } catch (error) {
+    console.error('Failed to fetch all ingredients:', error)
+  }
+}
+
+const filterIngredients = (val: string, update: (callback: () => void) => void) => {
+  if (val === '') {
+    update(() => {
+      ingredientOptions.value = allIngredients.value
+    })
+    return
+  }
+  update(() => {
+    const needle = val.toLowerCase()
+    ingredientOptions.value = allIngredients.value.filter(
+      v => 
+        (v.ingredient_id && v.ingredient_id.toLowerCase().includes(needle)) || 
+        (v.name && v.name.toLowerCase().includes(needle)) ||
+        (v.mat_sap_code && String(v.mat_sap_code).toLowerCase().includes(needle))
+    )
+  })
+}
+
 onMounted(() => {
   fetchReceipts()
   generateIntakeLotId() // Generate initial ID
+  fetchAllIngredients() // Fetch list of ingredients for the autocomplete dropdown
 
   // Auto-focus scanner input on mount
   focusScannerInput()
@@ -591,6 +624,9 @@ const printLabel = async (record: IngredientIntake) => {
   iframe.style.opacity = '0.01'
   document.body.appendChild(iframe)
 
+  const templateResponse = await fetch('/labels/ingredient_intake-label.svg')
+  const templateStr = await templateResponse.text()
+
   const numPackages = record.package_intake || 1
   let labelsHtml = ''
 
@@ -609,84 +645,24 @@ const printLabel = async (record: IngredientIntake) => {
     }
     const qrString = JSON.stringify(qrData)
 
-    // Generate QR codes locally — no internet required
+    // Generate QR codes locally
     const qrLarge = await generateQrDataUrl(qrString, 150)
-    const qrSmall = await generateQrDataUrl(qrString, 100)
 
-    labelsHtml += `
-      <div class="label-container">
-        
-        <!-- Top Part (4x4 inch) -->
-        <div class="part-top">
-          <div class="header">INGREDIENT INTAKE</div>
-          
-          <div class="main-info">
-             <div class="field-item">
-               <div class="label">Intake Lot ID</div>
-               <div class="value-mono">${record.intake_lot_id}</div>
-             </div>
-             
-             <div class="field-item">
-               <div class="label">Ingredient Code</div>
-               <div class="value-huge text-primary">${record.re_code || '-'}</div>
-               <div class="value small text-grey">${record.mat_sap_code}</div>
-             </div>
+    let formattedSvg = templateStr
+      .replace(/\{\{IntakeLotId\}\}/g, record.intake_lot_id || '-')
+      .replace(/\{\{ReCode\}\}/g, record.re_code || '-')
+      .replace(/\{\{MatSapCode\}\}/g, record.mat_sap_code || '-')
+      .replace(/\{\{SupplierLot\}\}/g, record.lot_id || '-')
+      .replace(/\{\{ExpireDate\}\}/g, (record.expire_date ? record.expire_date.split('T')[0] : '-') || '-')
+      .replace(/\{\{MenufacturingDate\}\}/g, (record.manufacturing_date ? record.manufacturing_date.split('T')[0] : '-') || '-')
+      .replace(/\{\{PackageString\}\}/g, `${i} / ${numPackages}`)
+      .replace(/\{\{IntakeVol\}\}/g, record.intake_vol?.toFixed(2) || '0.00')
+      .replace(/\{\{PackageVol\}\}/g, record.intake_package_vol?.toFixed(2) || '0.00')
+      .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="226.77165" y="340.15747" width="151.18111" height="151.18111" />`)
+      .replace(/\{\{Operator\}\}/g, record.intake_by || 'Operator')
+      .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString())
 
-             <div class="row">
-               <div class="col">
-                  <div class="label">Intake Vol</div>
-                  <div class="value-huge">${record.intake_package_vol?.toFixed(2)} <span class="unit">kg</span></div>
-               </div>
-               <div class="col right">
-                  <div class="label">Package</div>
-                  <div class="value-large">${i} / ${numPackages}</div>
-               </div>
-             </div>
-
-              <div class="row">
-               <div class="col">
-                  <div class="label">Expire Date</div>
-                  <div class="value">${record.expire_date?.split('T')[0] || '-'}</div>
-               </div>
-               <div class="col right">
-                  <div class="label">Supplier Lot</div>
-                  <div class="value">${record.lot_id || '-'}</div>
-               </div>
-             </div>
-          </div>
-
-          <div class="qr-code-top">
-             <img src="${qrLarge}" />
-          </div>
-        </div>
-
-        <!-- Bottom Part (4x2 inch) -->
-        <div class="part-bottom">
-           <div class="field-item">
-             <div class="label">Intake Lot ID</div>
-             <div class="value-mono small">${record.intake_lot_id}</div>
-           </div>
-           
-           <div class="row">
-              <div class="col">
-                 <div class="label">Material</div>
-                 <div class="value large text-primary">${record.re_code || '-'}</div>
-                 <div class="value small text-grey">${record.mat_sap_code}</div>
-              </div>
-              <div class="col right">
-                 <div class="label">Weight</div>
-                 <div class="value large">${record.intake_package_vol?.toFixed(2)} kg</div>
-                 <div class="value text-grey" style="font-size: 14pt; margin-top: 5px;">${i} / ${numPackages}</div>
-              </div>
-           </div>
-
-           <div class="qr-code-bottom">
-             <img src="${qrSmall}" />
-          </div>
-        </div>
-
-      </div>
-    `
+    labelsHtml += `<div class="label-container">${formattedSvg}</div>`
   }
 
   const html = `
@@ -701,134 +677,20 @@ const printLabel = async (record: IngredientIntake) => {
           body {
             margin: 0;
             padding: 0;
-            font-family: Arial, sans-serif;
             background: white;
             box-sizing: border-box;
           }
           .label-container {
             width: 4in;
             height: 6in;
-            position: relative;
-            box-sizing: border-box;
-            border: 1px dotted #ccc; /* Guide for cutting/viewing */
             page-break-after: always;
             display: flex;
-            flex-direction: column;
+            justify-content: center;
+            align-items: center;
           }
-          
-          /* Top Part: 4x4 inch */
-          .part-top {
+          .label-container svg {
             width: 100%;
-            height: 4in;
-            box-sizing: border-box;
-            padding: 15px;
-            border-bottom: 2px dashed #000; /* Tear-off line */
-            position: relative;
-          }
-
-          /* Bottom Part: 4x2 inch */
-          .part-bottom {
-            width: 100%;
-            height: 2in;
-            box-sizing: border-box;
-            padding: 10px 15px;
-            position: relative;
-            background-color: #f9f9f9; /* Subtle diff */
-          }
-
-          .header {
-            text-align: center;
-            font-weight: 900;
-            font-size: 16pt;
-            border-bottom: 2px solid #000;
-            padding-bottom: 5px;
-            margin-bottom: 10px;
-            letter-spacing: 1px;
-          }
-
-          .field-item {
-            margin-bottom: 10px;
-          }
-
-          .row {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 10px;
-          }
-          .col { flex: 1; }
-          .col.right { text-align: right; }
-
-          .label {
-            font-size: 9pt;
-            color: #555;
-            text-transform: uppercase;
-            font-weight: bold;
-            margin-bottom: 2px;
-          }
-          
-          .value { font-size: 12pt; font-weight: bold; color: #000; }
-          .value.large { font-size: 18pt; }
-          .value.small { font-size: 10pt; }
-          
-          .value-mono {
-            font-family: 'Courier New', monospace;
-            font-size: 14pt;
-            font-weight: bold;
-            color: #000;
-            letter-spacing: -0.5px;
-          }
-          .value-mono.small { font-size: 11pt; }
-
-          .value-huge {
-            font-size: 32pt;
-            font-weight: bold;
-            line-height: 1;
-          }
-          .value-large {
-            font-size: 24pt;
-            font-weight: bold;
-            line-height: 1;
-          }
-          .unit { font-size: 14pt; color: #666; font-weight: normal; }
-          
-          .text-grey { color: #666; }
-
-          /* QR Codes Positioning - Adjusted to prevent overlap */
-          .qr-code-top {
-            position: absolute;
-            top: 50px; /* Moved down slightly */
-            right: 5px;
-            width: 100px;
-            height: 100px;
-            z-index: 10;
-          }
-          .qr-code-bottom {
-            position: absolute;
-            top: 10px;
-            right: 5px;
-            width: 60px;
-            height: 60px;
-          }
-          img { width: 100%; height: 100%; }
-          
-          /* Ensure text area does not overlap with QR */
-          .main-info {
-             width: 70%; /* Reserve 30% width on right for QR */
-          }
-          
-          /* Specific bottom part adjustments */
-          .part-bottom {
-             display: flex;
-             flex-direction: column;
-             justify-content: center;
-          }
-          .part-bottom .row, .part-bottom .field-item {
-             width: 75%; /* Limit width to avoid QR overlap */
-          }
-
-          @media print {
-            .label-container { border: none; }
-            .part-bottom { background-color: transparent; }
+            height: 100%;
           }
         </style>
       </head>
@@ -998,14 +860,32 @@ const onFileSelected = async (event: Event) => {
             <!-- Row 1: Ingredient ID + Blind Code -->
             <div class="row q-col-gutter-md">
               <div class="col-12 col-md-4">
-                <q-input
+                <q-select
                   ref="ingredientCodeRef"
                   outlined
                   v-model="ingredientId"
+                  use-input
+                  hide-selected
+                  fill-input
+                  input-debounce="0"
+                  :options="ingredientOptions"
+                  option-value="ingredient_id"
+                  option-label="ingredient_id"
+                  emit-value
+                  map-options
                   :label="t('ingredient.ingredientCode')"
+                  @filter="filterIngredients"
                   @keyup.enter="onScannerEnter"
                   autofocus
                 >
+                  <template v-slot:option="scope">
+                    <q-item v-bind="scope.itemProps">
+                      <q-item-section>
+                        <q-item-label>{{ scope.opt.ingredient_id }}</q-item-label>
+                        <q-item-label caption>{{ scope.opt.name }} ({{ scope.opt.mat_sap_code }})</q-item-label>
+                      </q-item-section>
+                    </q-item>
+                  </template>
                   <template v-slot:prepend>
                     <q-icon
                       name="circle"
@@ -1019,7 +899,7 @@ const onFileSelected = async (event: Event) => {
                       @click="openIngredientDialog"
                     />
                   </template>
-                </q-input>
+                </q-select>
               </div>
               <div class="col-12 col-md-4">
                 <q-input
