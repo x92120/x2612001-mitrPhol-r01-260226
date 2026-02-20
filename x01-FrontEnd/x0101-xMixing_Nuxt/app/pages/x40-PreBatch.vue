@@ -1549,12 +1549,12 @@ const onSelectBatch = (index: number) => {
 
         <q-card bordered flat class="q-mb-md">
             <q-card-section class="q-pb-none row items-center">
-              <div class="text-h6">On Hand Inventory</div>
+              <div class="text-h6">{{ t('preBatch.onHandInventory') }}</div>
               <q-space />
               <q-btn flat round dense icon="refresh" color="primary" @click="fetchInventory" class="q-mr-sm">
-                  <q-tooltip>Refresh Inventory</q-tooltip>
+                  <q-tooltip>{{ t('preBatch.refreshInventory') }}</q-tooltip>
               </q-btn>
-              <q-checkbox v-model="showAllInventory" label="Show All (including Hold/Inactive)" dense class="text-caption" />
+              <q-checkbox v-model="showAllInventory" :label="t('preBatch.showAllInv')" dense class="text-caption" />
             </q-card-section>
            <q-card-section>
               <q-table
@@ -1589,21 +1589,21 @@ const onSelectBatch = (index: number) => {
                                 color="blue" icon="print" 
                                 @click.stop="openIntakeLabelDialog(props.row)"
                             >
-                                <q-tooltip>Print Intake Label</q-tooltip>
+                                <q-tooltip>{{ t('preBatch.printIntakeLabel') }}</q-tooltip>
                             </q-btn>
                             <q-btn 
                                 round dense flat size="sm" 
                                 color="blue" icon="history" 
                                 @click.stop="onViewHistory(props.row)"
                             >
-                                <q-tooltip>View History (Monitor Only)</q-tooltip>
+                                <q-tooltip>{{ t('preBatch.viewHistoryMonitor') }}</q-tooltip>
                             </q-btn>
                             <q-btn 
                                 round dense flat size="sm" 
                                 color="yellow-9" icon="settings" 
                                 @click.stop="onViewHistory(props.row)"
                             >
-                                <q-tooltip>Inventory Settings & History</q-tooltip>
+                                <q-tooltip>{{ t('preBatch.invSettings') }}</q-tooltip>
                             </q-btn>
                         </div>
                     </q-td>
@@ -1612,7 +1612,7 @@ const onSelectBatch = (index: number) => {
                 <!-- Summary Row -->
                 <template v-slot:bottom-row>
                     <q-tr class="bg-grey-2 text-weight-bold">
-                        <q-td colspan="9" class="text-right">Total:</q-td>
+                        <q-td colspan="9" class="text-right">{{ t('preBatch.total') }}</q-td>
                         <q-td class="text-right">{{ inventorySummary.remain_vol.toFixed(3) }}</q-td>
                         <q-td></q-td>
                         <q-td class="text-center">{{ inventorySummary.pkgs }}</q-td>
@@ -1636,7 +1636,7 @@ const onSelectBatch = (index: number) => {
                 <div class="row q-col-gutter-md items-center">
                     <!-- Title -->
                     <div class="col-auto">
-                        <div class="text-h6">Package Prepare for:</div>
+                        <div class="text-h6">{{ t('preBatch.packagePrepareFor') }}</div>
                     </div>
                     
                     <!-- Batch Planning ID -->
@@ -1647,13 +1647,13 @@ const onSelectBatch = (index: number) => {
                         dense
                         bg-color="grey-2"
                         readonly
-                        placeholder="Batch Planning ID"
+                        :placeholder="t('preBatch.batchPlanningId')"
                         />
                     </div>
 
                     <!-- From Intake Lot ID Label -->
                     <div class="col-auto">
-                        <div class="text-h6">From Intake Lot ID</div>
+                        <div class="text-h6">{{ t('preBatch.fromIntakeLotId') }}</div>
                     </div>
 
                     <!-- Selected Intake Lot ID -->
@@ -1664,7 +1664,7 @@ const onSelectBatch = (index: number) => {
                         v-model="selectedIntakeLotId"
                         dense
                         bg-color="white"
-                        placeholder="Scan Intake Lot ID"
+                        :placeholder="t('preBatch.scanIntakeLotId')"
                         clearable
                         autofocus
                         @keyup.enter="onIntakeLotScanEnter"
@@ -1679,7 +1679,7 @@ const onSelectBatch = (index: number) => {
 
                 <!-- Request Volume (col-md) -->
                 <div class="col-12 col-md">
-                    <div class="text-subtitle2 q-mb-xs text-no-wrap">Request Volume (kg)</div>
+                    <div class="text-subtitle2 q-mb-xs text-no-wrap">{{ t('preBatch.requestVolume') }}</div>
                     <q-input
                     outlined
                     :model-value="requireVolume.toFixed(4)"
@@ -1692,7 +1692,7 @@ const onSelectBatch = (index: number) => {
 
                 <!-- Req for this Package (col-md) -->
                 <div class="col-12 col-md">
-                    <div class="text-subtitle2 q-mb-xs text-no-wrap text-blue-9 text-weight-bold">Req for this Package (kg)</div>
+                    <div class="text-subtitle2 q-mb-xs text-no-wrap text-blue-9 text-weight-bold">{{ t('preBatch.reqForPackage') }}</div>
                     <q-input
                     outlined
                     :model-value="targetWeight.toFixed(4)"
@@ -1705,7 +1705,7 @@ const onSelectBatch = (index: number) => {
 
                 <!-- Packaged Volume (col-md) -->
                 <div class="col-12 col-md">
-                    <div class="text-subtitle2 q-mb-xs text-no-wrap">Packaged Volume (kg)</div>
+                    <div class="text-subtitle2 q-mb-xs text-no-wrap">{{ t('preBatch.packagedVolume') }}</div>
                     <q-input
                     outlined
                     :model-value="batchedVolume.toFixed(4)"
@@ -1718,7 +1718,7 @@ const onSelectBatch = (index: number) => {
 
                 <!-- Remain Volume (col-md) -->
                 <div class="col-12 col-md">
-                    <div class="text-subtitle2 q-mb-xs text-no-wrap">Remain Volume (kg)</div>
+                    <div class="text-subtitle2 q-mb-xs text-no-wrap">{{ t('preBatch.remainVolume') }}</div>
                     <q-input
                     outlined
                     :model-value="remainToBatch.toFixed(4)"
@@ -1731,7 +1731,7 @@ const onSelectBatch = (index: number) => {
                 
                 <!-- Package Size (col-md) -->
                 <div class="col-12 col-md">
-                    <div class="text-subtitle2 q-mb-xs text-no-wrap">Package Size (kg)</div>
+                    <div class="text-subtitle2 q-mb-xs text-no-wrap">{{ t('preBatch.packageSize') }}</div>
                     <q-input
                     outlined
                     v-model.number="packageSize"
@@ -1752,7 +1752,7 @@ const onSelectBatch = (index: number) => {
                                 size="sm" 
                                 @click="unlockPackageSize"
                             >
-                                <q-tooltip>{{ isPackageSizeLocked ? 'Unlock to edit' : 'Lock field' }}</q-tooltip>
+                                <q-tooltip>{{ isPackageSizeLocked ? t('preBatch.unlockToEdit') : t('preBatch.lockField') }}</q-tooltip>
                             </q-btn>
                         </template>
                     </q-input>
@@ -1760,7 +1760,7 @@ const onSelectBatch = (index: number) => {
 
                 <!-- Package (col-md) -->
                 <div class="col-12 col-md">
-                    <div class="text-subtitle2 q-mb-xs text-no-wrap">Next Package No.</div>
+                    <div class="text-subtitle2 q-mb-xs text-no-wrap">{{ t('preBatch.nextPkgNo') }}</div>
                     <q-input
                     outlined
                     :model-value="nextPackageNo"
@@ -1809,7 +1809,7 @@ const onSelectBatch = (index: number) => {
                 <!-- Done Button -->
                 <div class="col-12 col-md-2">
                     <q-btn
-                    label="Done"
+                    :label="t('prodPlan.done')"
                     color="grey-6"
                     text-color="black"
                     class="full-width q-py-xs"
@@ -1827,7 +1827,7 @@ const onSelectBatch = (index: number) => {
         <q-card bordered flat class="bg-white">
             <q-card-section class="q-py-xs bg-blue-grey-1 text-blue-grey-9 row items-center no-wrap">
                 <q-icon name="list_alt" size="xs" class="q-mr-xs" />
-                <div class="text-subtitle2 text-weight-bold">PreBatch List (Current Batch)</div>
+                <div class="text-subtitle2 text-weight-bold">{{ t('preBatch.preBatchList') }}</div>
                 <q-space />
                 
                 
@@ -1837,7 +1837,7 @@ const onSelectBatch = (index: number) => {
                     v-model="deleteInput"
                     outlined
                     dense
-                    placeholder="Scan label barcode to confirm"
+                    placeholder=""
                     @keyup.enter="onDeleteScanEnter"
                     class="q-ml-sm"
                     style="min-width: 250px;"
@@ -1866,7 +1866,7 @@ const onSelectBatch = (index: number) => {
                     <template v-slot:top-right>
                         <q-btn
                             v-if="selectedPreBatchLogs.length > 0"
-                            label="Print Packing Box Label"
+                            :label="t('preBatch.printPackingBoxLabel')"
                             color="green-7"
                             icon="inventory_2"
                             dense
@@ -1887,7 +1887,7 @@ const onSelectBatch = (index: number) => {
                                 size="sm" 
                                 @click.stop="onReprintLabel(props.row)"
                             >
-                                <q-tooltip>Reprint this label</q-tooltip>
+                                <q-tooltip>{{ t('preBatch.reprintLabel') }}</q-tooltip>
                             </q-btn>
                         </q-td>
                     </template>
@@ -1902,18 +1902,18 @@ const onSelectBatch = (index: number) => {
                                 size="sm" 
                                 @click.stop="onDeleteRecord(props.row)"
                             >
-                                <q-tooltip>Cancel this pack & return to inventory</q-tooltip>
+                                <q-tooltip>{{ t('preBatch.cancelReturnInv') }}</q-tooltip>
                             </q-btn>
                         </q-td>
                     </template>
                     <template v-slot:bottom-row>
                         <q-tr class="bg-blue-grey-1 text-weight-bold">
-                            <q-td colspan="2" class="text-right text-uppercase text-caption">Summary:</q-td>
+                            <q-td colspan="2" class="text-right text-uppercase text-caption">{{ t('preBatch.summary') }}</q-td>
                             <q-td class="text-center">{{ preBatchSummary.count }} / {{ preBatchSummary.targetCount }}</q-td>
                             <q-td class="text-right">
                                 {{ preBatchSummary.totalNetWeight }} / {{ preBatchSummary.targetWeight }}
                                 <div class="text-caption" :class="preBatchSummary.errorColor">
-                                    Error: {{ preBatchSummary.errorVolume }}
+                                    {{ t('preBatch.error') }} {{ preBatchSummary.errorVolume }}
                                 </div>
                             </q-td>
                             <q-td></q-td>
@@ -1921,8 +1921,8 @@ const onSelectBatch = (index: number) => {
                     </template>
                     <template v-slot:no-data>
                         <div class="full-width row flex-center q-pa-md text-grey" style="font-size: 0.8rem;">
-                            <span v-if="!selectedBatch">Select a batch to see records</span>
-                            <span v-else>No records found for this batch</span>
+                            <span v-if="!selectedBatch">{{ t('preBatch.selectBatchRecords') }}</span>
+                            <span v-else>{{ t('preBatch.noRecordsForBatch') }}</span>
                         </div>
                     </template>
                 </q-table>
@@ -1935,28 +1935,28 @@ const onSelectBatch = (index: number) => {
     <q-dialog v-model="showAuthDialog" persistent>
         <q-card style="min-width: 350px">
             <q-card-section class="bg-primary text-white row items-center">
-                <div class="text-h6">Authorization Required</div>
+                <div class="text-h6">{{ t('preBatch.authRequired') }}</div>
                 <q-space />
                 <q-btn icon="close" flat round dense v-close-popup />
             </q-card-section>
 
             <q-card-section class="q-pa-md">
-                <p>Please enter your password to unlock <b>Package Size</b> editing:</p>
+                <p>{{ t('preBatch.enterPwdUnlock') }}</p>
                 <q-input 
                     v-model="authPassword" 
                     type="password" 
                     outlined 
                     dense 
-                    label="User Password" 
+                    :label="t('preBatch.userPassword')" 
                     autofocus
                     @keyup.enter="verifyAuth"
                 />
             </q-card-section>
 
             <q-card-actions align="right" class="q-pa-md">
-                <q-btn label="Cancel" flat color="grey-7" v-close-popup />
+                <q-btn :label="t('common.cancel')" flat color="grey-7" v-close-popup />
                 <q-btn 
-                    label="Verify & Unlock" 
+                    :label="t('preBatch.verifyUnlock')" 
                     color="primary" 
                     unelevated 
                     @click="verifyAuth" 
@@ -1969,7 +1969,7 @@ const onSelectBatch = (index: number) => {
     <q-dialog v-model="showDeleteDialog" persistent>
         <q-card style="min-width: 400px; max-width: 500px">
             <q-card-section class="bg-negative text-white row items-center">
-                <div class="text-h6">Confirm Repack & Cancel</div>
+                <div class="text-h6">{{ t('preBatch.confirmRepackCancel') }}</div>
                 <q-space />
                 <q-btn icon="close" flat round dense v-close-popup />
             </q-card-section>
@@ -2006,9 +2006,9 @@ const onSelectBatch = (index: number) => {
                         <q-icon name="circle" color="positive" />
                     </template>
                 </q-input>
-                <q-btn label="Go Back" flat color="grey-7" v-close-popup />
+                <q-btn :label="t('preBatch.goBack')" flat color="grey-7" v-close-popup />
                 <q-btn 
-                    label="Confirm Deletion" 
+                    :label="t('preBatch.confirmDeletion')" 
                     color="negative" 
                     unelevated 
                     @click="onConfirmDeleteManual" 
@@ -2022,7 +2022,7 @@ const onSelectBatch = (index: number) => {
       <q-card style="min-width: 650px; max-width: 800px">
         <!-- Dialog Header -->
         <q-card-section class="row items-center q-pb-none bg-grey-3">
-          <div class="text-h6 text-weight-bold text-grey-8">Package Label Print</div>
+          <div class="text-h6 text-weight-bold text-grey-8">{{ t('preBatch.packageLabelPrint') }}</div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup class="bg-grey-5 text-white" />
         </q-card-section>
@@ -2033,7 +2033,7 @@ const onSelectBatch = (index: number) => {
           <!-- ID Input Row -->
           <div class="row q-col-gutter-md q-mb-md items-end">
             <div class="col-8">
-              <div class="text-subtitle2 q-mb-xs">Package Label ID</div>
+              <div class="text-subtitle2 q-mb-xs">{{ t('preBatch.packageLabelId') }}</div>
               <div class="row no-wrap">
                 <q-input v-model="packageLabelId" outlined dense class="full-width bg-white" />
                 <q-btn icon="arrow_drop_down" outline color="grey-7" class="q-ml-sm" />
@@ -2041,7 +2041,7 @@ const onSelectBatch = (index: number) => {
             </div>
             <div class="col-4">
               <q-btn
-                label="Reprint"
+                :label="t('preBatch.reprint')"
                 color="grey-6"
                 class="full-width"
                 size="md"
@@ -2067,7 +2067,7 @@ const onSelectBatch = (index: number) => {
           <!-- Main Print Button -->
           <div class="row justify-end">
             <q-btn
-              label="Print"
+              :label="t('common.print')"
               color="primary"
               class="q-px-xl q-py-sm"
               size="lg"
@@ -2124,7 +2124,7 @@ const onSelectBatch = (index: number) => {
                 <td class="text-caption">{{ h.remarks || '-' }}</td>
               </tr>
               <tr v-if="!selectedHistoryItem?.history || selectedHistoryItem.history.length === 0">
-                <td colspan="6" class="text-center text-grey q-pa-md italic">No history records found</td>
+                <td colspan="6" class="text-center text-grey q-pa-md italic">{{ t('preBatch.noHistoryRecords') }}</td>
               </tr>
             </tbody>
           </q-markup-table>
@@ -2133,12 +2133,12 @@ const onSelectBatch = (index: number) => {
         <q-card-section class="q-pt-md">
            <div class="row q-col-gutter-sm">
               <div class="col-12 col-md-6">
-                 <div class="text-caption text-grey">Target Information</div>
+                 <div class="text-caption text-grey">{{ t('preBatch.targetInfo') }}</div>
                  <div class="text-subtitle2">Lot: {{ selectedHistoryItem?.intake_lot_id }}</div>
                  <div class="text-subtitle2">MAT: {{ selectedHistoryItem?.mat_sap_code }}</div>
               </div>
               <div class="col-12 col-md-6">
-                 <div class="text-caption text-grey">Current Status</div>
+                 <div class="text-caption text-grey">{{ t('preBatch.currentStatus') }}</div>
                  <q-badge :color="selectedHistoryItem?.status === 'Active' ? 'green' : (selectedHistoryItem?.status === 'Hold' ? 'orange' : 'red')" size="md">
                     {{ selectedHistoryItem?.status }}
                  </q-badge>
@@ -2149,7 +2149,7 @@ const onSelectBatch = (index: number) => {
         <q-separator />
 
         <q-card-actions align="right">
-          <q-btn flat label="Close" color="primary" v-close-popup />
+          <q-btn flat :label="t('common.close')" color="primary" v-close-popup />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -2158,7 +2158,7 @@ const onSelectBatch = (index: number) => {
     <q-dialog v-model="showIntakeLabelDialog">
       <q-card style="min-width: 650px">
         <q-card-section class="row items-center q-pb-none bg-grey-3 text-black">
-          <div class="text-h6 text-weight-bold">Ingredient Intake Label Print</div>
+          <div class="text-h6 text-weight-bold">{{ t('preBatch.intakeLabelPrint') }}</div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
@@ -2170,14 +2170,14 @@ const onSelectBatch = (index: number) => {
                     <q-select
                         outlined
                         dense
-                        label="Default Printer"
+                        :label="t('preBatch.defaultPrinter')"
                         v-model="selectedPrinter"
                         :options="['Zebra-Label-Printer', 'Brother-QL-800', 'Microsoft Print to PDF']"
                         bg-color="white"
                     />
                 </div>
                 <div class="col-4">
-                    <q-btn color="primary" icon="print" label="Direct Print" class="full-width" @click="printIntakeLabel" />
+                    <q-btn color="primary" icon="print" :label="t('preBatch.directPrint')" class="full-width" @click="printIntakeLabel" />
                 </div>
             </div>
 
@@ -2271,7 +2271,7 @@ const onSelectBatch = (index: number) => {
     <q-dialog v-model="showPackingBoxLabelDialog" persistent>
       <q-card style="min-width: 650px; max-width: 800px">
         <q-card-section class="row items-center q-pb-none bg-green-1 text-green-9">
-          <div class="text-h6 text-weight-bold">Packing Box Label Preview</div>
+          <div class="text-h6 text-weight-bold">{{ t('preBatch.packingBoxPreview') }}</div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
@@ -2288,9 +2288,9 @@ const onSelectBatch = (index: number) => {
           </div>
 
           <div class="row justify-end q-gutter-sm">
-            <q-btn label="Cancel" flat color="grey-7" v-close-popup />
+            <q-btn :label="t('common.cancel')" flat color="grey-7" v-close-popup />
             <q-btn
-              label="Print Packing Box Label"
+              :label="t('preBatch.printPackingBoxLabel')"
               color="green-7"
               class="q-px-xl"
               size="lg"

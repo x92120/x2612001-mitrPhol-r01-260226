@@ -11,6 +11,7 @@ const $q = useQuasar()
 const { getAuthHeader, user } = useAuth()
 const { lastScan, connect } = useMqttLocalDevice()
 const { generateLabelSvg, printLabel } = useLabelPrinter()
+const { t } = useI18n()
 
 // --- State ---
 const selectedBatchId = ref<string>('')
@@ -827,7 +828,7 @@ const onPreviewPackingBoxLabel = async () => {
       <div class="row justify-between items-center">
         <div class="row items-center q-gutter-sm">
           <q-icon name="view_list" size="sm" />
-          <div class="text-h6 text-weight-bolder">Production Plan List</div>
+          <div class="text-h6 text-weight-bolder">{{ t('prodPlan.title') }}</div>
         </div>
         <div class="text-caption text-weight-bold text-blue-2">Version {{ version }}</div>
       </div>
@@ -842,7 +843,7 @@ const onPreviewPackingBoxLabel = async () => {
             dense
             v-model="selectedWarehouse"
             :options="warehouses"
-            label="Filter by Warehouse Station"
+            :label="t('packing.filterByWarehouse')"
             bg-color="white"
             class="shadow-1"
         >
@@ -855,7 +856,7 @@ const onPreviewPackingBoxLabel = async () => {
             <div class="q-pa-sm bg-primary text-white text-weight-bold text-subtitle2 flex justify-between items-center shadow-1">
                 <div class="row items-center">
                     <q-icon name="list" class="q-mr-sm" />
-                    <span>Production Plan List</span>
+                    <span>{{ t('prodPlan.title') }}</span>
                 </div>
                 <div class="row items-center q-gutter-x-xs">
                     <q-btn 
@@ -957,7 +958,7 @@ const onPreviewPackingBoxLabel = async () => {
                                 flat 
                                 color="primary" 
                                 icon="playlist_add" 
-                                label="ADD ALL TO LIST" 
+                                :label="t('packing.addAllToList')" 
                                 size="sm"
                                 class="text-weight-bold"
                                 @click.stop="onAddPlanToList(props.row)"
@@ -1101,7 +1102,7 @@ const onPreviewPackingBoxLabel = async () => {
             <div class="q-pa-sm bg-blue-grey-9 text-white text-weight-bold text-body2 flex justify-between items-center">
                 <div class="row items-center">
                     <q-icon name="print" class="q-mr-sm" />
-                    <span>Box Label Print List</span>
+                    <span>{{ t('packing.printList') }}</span>
                 </div>
                 <div class="q-gutter-x-xs">
                     <q-btn icon="delete_sweep" flat round dense color="white" size="sm" @click="clearPrintList" v-if="printQueue.length > 0">
@@ -1138,14 +1139,14 @@ const onPreviewPackingBoxLabel = async () => {
                     unelevated 
                     color="primary" 
                     icon="check_circle" 
-                    label="Confirm Packing Table" 
+                    :label="t('packing.confirmPackingTable')" 
                     size="md" 
                     class="full-width text-weight-bold"
                     no-caps
                     @click="onCreatePackingList"
                 />
                 <div class="row full-width q-gutter-x-sm q-mt-sm">
-                    <q-btn outline color="grey-7" label="Clear List" class="col" no-caps @click="onClosePackingList" size="sm" />
+                    <q-btn outline color="grey-7" :label="t('packing.clearList')" class="col" no-caps @click="onClosePackingList" size="sm" />
                 </div>
             </q-card-actions>
         </q-card>
