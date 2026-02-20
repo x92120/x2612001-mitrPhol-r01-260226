@@ -1,0 +1,11 @@
+<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+  <!-- Favicon-optimized: minimal detail, bold contrast -->
+  <defs>
+    <linearGradient id="gFav" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFB800"/>
+      <stop offset="100%" stop-color="#FFA500"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="3" width="42" height="42" rx="9" fill="url(#gFav)"/>
+  <text x="24" y="36" font-family="'Courier New', Courier, monospace" font-size="33" font-weight="700" fill="#8B1A1A" text-anchor="middle">X</text>
+</svg>

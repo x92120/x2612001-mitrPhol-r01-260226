@@ -24,3 +24,7 @@ This project is set up to explore the capabilities of Google's Gemini 3.1 Pro mo
    ```bash
    python explorer.py
    ```
+
+---
+# Repository: x2612001-mitrPhol
+Original remote repository for tracking project history.

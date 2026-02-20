@@ -1,0 +1,44 @@
+version: '3.7'
+
+services:
+  node-red:
+    image: nodered/node-red:latest
+    container_name: node-red
+    environment:
+      - TZ=Asia/Bangkok
+    ports:
+      - "1880:1880"
+    volumes:
+      - ./node-red-data:/data
+    restart: unless-stopped
+    depends_on:
+      - rabbitmq
+    networks:
+      - xmixing-net
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672" # AMQP
+      - "1883:1883" # MQTT
+      - "15672:15672" # Management UI
+      - "15675:15675" # Web MQTT
+    environment:
+      - TZ=Asia/Bangkok
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbitmq_management load_definitions "/etc/rabbitmq/definitions.json"
+    volumes:
+      - ./rabbitmq-data:/var/lib/rabbitmq
+      - ./rabbitmq_definitions.json:/etc/rabbitmq/definitions.json:ro
+    # Enable MQTT and Web MQTT plugins
+    command: >
+      sh -c "rabbitmq-plugins enable --offline rabbitmq_mqtt rabbitmq_web_mqtt && rabbitmq-server"
+    restart: unless-stopped
+    networks:
+      - xmixing-net
+
+networks:
+  xmixing-net:
+    driver: bridge

@@ -1,0 +1,13 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFB800"/>
+      <stop offset="100%" stop-color="#FFA500"/>
+    </linearGradient>
+    <filter id="shadow512">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#00000040"/>
+    </filter>
+  </defs>
+  <rect x="32" y="32" width="448" height="448" rx="72" fill="url(#g512)" filter="url(#shadow512)"/>
+  <text x="256" y="366" font-family="'Courier New', Courier, monospace" font-size="340" font-weight="700" fill="#8B1A1A" text-anchor="middle">X</text>
+</svg>

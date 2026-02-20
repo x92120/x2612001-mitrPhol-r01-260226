@@ -1,5 +1,24 @@
+# Local Scaffolding
 venv/
 .env
 __pycache__/
 *.py[cod]
 .DS_Store
+
+# Remote Additions
+.vscode/
+.idea/
+node_modules/
+*.pyc
+env/
+/build/
+/dist/
+*.log
+coverage/
+*.egg-info/
+*.egg
+.cache/
+pytest_cache/
+x09-LocalMqtt/rabbitmq-data/
+.venv/
+x01-FrontEnd.zip

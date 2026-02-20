@@ -1,0 +1,3 @@
+# Disable HID interface (Keyboard wedge) for Barcode Scanner 1d6f:0003
+# Only disable if Interface Class is HID (03)
+SUBSYSTEM=="usb", ATTR{bInterfaceClass}=="03", ATTRS{idVendor}=="1d6f", ATTRS{idProduct}=="0003", ATTR{authorized}="0"

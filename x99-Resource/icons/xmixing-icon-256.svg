@@ -1,0 +1,13 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g256" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFB800"/>
+      <stop offset="100%" stop-color="#FFA500"/>
+    </linearGradient>
+    <filter id="shadow256">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#00000033"/>
+    </filter>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="40" fill="url(#g256)" filter="url(#shadow256)"/>
+  <text x="128" y="183" font-family="'Courier New', Courier, monospace" font-size="170" font-weight="700" fill="#8B1A1A" text-anchor="middle">X</text>
+</svg>

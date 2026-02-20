@@ -1,0 +1,108 @@
+[
+    {
+        "id": "f6f2187d.f17ca8",
+        "type": "tab",
+        "label": "Scanner Debug",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "3cc11d24.ff01a2",
+        "type": "mqtt in",
+        "z": "f6f2187d.f17ca8",
+        "name": "",
+        "topic": "scanner/#",
+        "qos": "2",
+        "datatype": "auto",
+        "broker": "913af1.025c851",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 150,
+        "y": 100,
+        "wires": [
+            [
+                "d9f9c7e0.8a1238"
+            ]
+        ]
+    },
+    {
+        "id": "d9f9c7e0.8a1238",
+        "type": "debug",
+        "z": "f6f2187d.f17ca8",
+        "name": "",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 410,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "e6a2b3c4.d5e6f7",
+        "type": "mqtt in",
+        "z": "f6f2187d.f17ca8",
+        "name": "",
+        "topic": "scale/#",
+        "qos": "2",
+        "datatype": "auto",
+        "broker": "913af1.025c851",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 150,
+        "y": 180,
+        "wires": [
+            [
+                "a1b2c3d4.e5f6g7"
+            ]
+        ]
+    },
+    {
+        "id": "a1b2c3d4.e5f6g7",
+        "type": "debug",
+        "z": "f6f2187d.f17ca8",
+        "name": "",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 410,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "913af1.025c851",
+        "type": "mqtt-broker",
+        "name": "Local RabbitMQ",
+        "broker": "rabbitmq",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "willQos": "0",
+        "willPayload": "",
+        "credentials": {
+            "user": "admin",
+            "password": "admin"
+        }
+    }
+]
