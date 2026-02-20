@@ -6,6 +6,7 @@ import { appConfig } from '~/appConfig/config'
 
 const router = useRouter()
 const $q = useQuasar()
+const { t } = useI18n()
 
 const formData = ref({
   username: '',
@@ -31,7 +32,7 @@ const validateForm = () => {
   ) {
     $q.notify({
       type: 'negative',
-      message: 'Please fill in all required fields',
+      message: t('register.fillRequired'),
       position: 'top',
     })
     return false
@@ -40,7 +41,7 @@ const validateForm = () => {
   if (formData.value.password !== formData.value.confirmPassword) {
     $q.notify({
       type: 'negative',
-      message: 'Passwords do not match',
+      message: t('register.passwordsNoMatch'),
       position: 'top',
     })
     return false
@@ -73,7 +74,7 @@ const handleRegister = async () => {
     if (response.ok) {
       $q.notify({
         type: 'positive',
-        message: 'Registration successful! Please login with your credentials.',
+        message: t('register.success'),
         position: 'top',
         timeout: 2000
       })
@@ -82,7 +83,7 @@ const handleRegister = async () => {
       const errorData = await response.json().catch(() => ({}))
       $q.notify({
         type: 'negative',
-        message: errorData.detail || 'Registration failed',
+        message: errorData.detail || t('register.failed'),
         position: 'top',
       })
     }
@@ -90,7 +91,7 @@ const handleRegister = async () => {
     console.error('❌ Registration error:', error)
     $q.notify({
       type: 'negative',
-      message: 'Network error. Please try again.',
+      message: t('register.networkError'),
       position: 'top',
     })
   } finally {
@@ -119,14 +120,14 @@ const goToLogin = () => router.push('/x80-UserLogin')
         <!-- Header -->
         <q-card-section class="text-center bg-primary text-white">
           <img src="/images/logo-final.svg" style="height: 80px; margin-bottom: 20px;" />
-          <div class="text-subtitle2 q-mt-sm">Create New Account</div>
+          <div class="text-subtitle2 q-mt-sm">{{ t('register.createAccount') }}</div>
         </q-card-section>
 
         <!-- Form Content -->
         <q-card-section class="q-pa-lg">
           <!-- Username -->
           <div class="q-mb-md">
-            <q-input v-model="formData.username" outlined label="Username *" dense>
+            <q-input v-model="formData.username" outlined :label="t('register.username') + ' *'" dense>
               <template v-slot:prepend>
                 <q-icon name="account_circle" color="primary" />
               </template>
@@ -135,7 +136,7 @@ const goToLogin = () => router.push('/x80-UserLogin')
 
           <!-- Full Name -->
           <div class="q-mb-md">
-            <q-input v-model="formData.fullName" outlined label="Full Name *" dense>
+            <q-input v-model="formData.fullName" outlined :label="t('register.fullName') + ' *'" dense>
               <template v-slot:prepend>
                 <q-icon name="person" color="primary" />
               </template>
@@ -144,7 +145,7 @@ const goToLogin = () => router.push('/x80-UserLogin')
 
           <!-- Email -->
           <div class="q-mb-md">
-            <q-input v-model="formData.email" outlined label="Email Address *" type="email" dense>
+            <q-input v-model="formData.email" outlined :label="t('register.email') + ' *'" type="email" dense>
               <template v-slot:prepend>
                 <q-icon name="email" color="primary" />
               </template>
@@ -157,7 +158,7 @@ const goToLogin = () => router.push('/x80-UserLogin')
               v-model="formData.department"
               outlined
               :options="departments"
-              label="Department"
+              :label="t('register.department')"
               dense
               emit-value
               map-options
@@ -173,7 +174,7 @@ const goToLogin = () => router.push('/x80-UserLogin')
             <q-input
               v-model="formData.password"
               outlined
-              label="Password *"
+              :label="t('register.password') + ' *'"
               :type="showPassword ? 'text' : 'password'"
               dense
             >
@@ -196,7 +197,7 @@ const goToLogin = () => router.push('/x80-UserLogin')
             <q-input
               v-model="formData.confirmPassword"
               outlined
-              label="Confirm Password *"
+              :label="t('register.confirmPassword') + ' *'"
               :type="showConfirmPassword ? 'text' : 'password'"
               dense
             >
@@ -216,7 +217,7 @@ const goToLogin = () => router.push('/x80-UserLogin')
 
           <!-- Register Button -->
           <q-btn
-            label="Create Account"
+            :label="t('register.createBtn')"
             color="primary"
             size="lg"
             class="full-width text-white text-weight-bold"
@@ -226,14 +227,14 @@ const goToLogin = () => router.push('/x80-UserLogin')
 
           <!-- Login Link -->
           <div class="text-center q-mt-md">
-            <span>Already have an account? </span>
-            <q-btn label="Login here" flat size="sm" color="primary" @click="goToLogin" />
+            <span>{{ t('register.alreadyHaveAccount') }} </span>
+            <q-btn :label="t('register.loginHere')" flat size="sm" color="primary" @click="goToLogin" />
           </div>
         </q-card-section>
 
         <!-- Footer -->
         <q-card-section class="text-center text-caption bg-primary text-white">
-          © 2026 xMixingControl. All rights reserved.
+          {{ t('register.copyright') }}
         </q-card-section>
       </q-card>
     </div>

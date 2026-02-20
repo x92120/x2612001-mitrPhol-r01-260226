@@ -9,6 +9,7 @@ interface Warehouse {
 }
 
 const $q = useQuasar()
+const { t } = useI18n()
 
 // --- State ---
 const warehouses = ref<Warehouse[]>([
@@ -43,30 +44,12 @@ const form = ref<Warehouse>({
   description: '',
 })
 
-const columns: QTableColumn[] = [
-  {
-    name: 'id',
-    label: 'Warehouse ID',
-    field: 'id',
-    align: 'left',
-    sortable: true,
-  },
-  {
-    name: 'name',
-    label: 'Warehouse Name',
-    field: 'name',
-    align: 'left',
-    sortable: true,
-  },
-  {
-    name: 'description',
-    label: 'Description',
-    field: 'description',
-    align: 'left',
-    sortable: true,
-  },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'right' },
-]
+const columns = computed((): QTableColumn[] => [
+  { name: 'id', label: t('whConfig.warehouseId'), field: 'id', align: 'left', sortable: true },
+  { name: 'name', label: t('whConfig.warehouseName'), field: 'name', align: 'left', sortable: true },
+  { name: 'description', label: t('common.description'), field: 'description', align: 'left', sortable: true },
+  { name: 'actions', label: t('common.actions'), field: 'actions', align: 'right' },
+])
 
 // --- Actions ---
 const openAddDialog = () => {
@@ -87,19 +70,19 @@ const openEditDialog = (row: Warehouse) => {
 
 const onDelete = (id: string) => {
   $q.dialog({
-    title: 'Confirm',
-    message: 'Are you sure you want to delete this warehouse?',
+    title: t('common.confirm'),
+    message: t('whConfig.confirmDelete'),
     cancel: true,
     persistent: true,
   }).onOk(() => {
     warehouses.value = warehouses.value.filter((w) => w.id !== id)
-    $q.notify({ type: 'positive', message: 'Warehouse deleted' })
+    $q.notify({ type: 'positive', message: t('whConfig.warehouseDeleted') })
   })
 }
 
 const onSave = () => {
   if (!form.value.id || !form.value.name) {
-    $q.notify({ type: 'warning', message: 'ID and Name are required' })
+    $q.notify({ type: 'warning', message: t('whConfig.idNameRequired') })
     return
   }
 
@@ -107,15 +90,15 @@ const onSave = () => {
     const index = warehouses.value.findIndex((w) => w.id === form.value.id)
     if (index !== -1) {
       warehouses.value[index] = { ...form.value }
-      $q.notify({ type: 'positive', message: 'Warehouse updated' })
+      $q.notify({ type: 'positive', message: t('whConfig.warehouseUpdated') })
     }
   } else {
     if (warehouses.value.some((w) => w.id === form.value.id)) {
-      $q.notify({ type: 'negative', message: 'Warehouse ID already exists' })
+      $q.notify({ type: 'negative', message: t('whConfig.warehouseIdExists') })
       return
     }
     warehouses.value.push({ ...form.value })
-    $q.notify({ type: 'positive', message: 'Warehouse added' })
+    $q.notify({ type: 'positive', message: t('whConfig.warehouseAdded') })
   }
   showDialog.value = false
 }
@@ -125,9 +108,9 @@ const onSave = () => {
   <q-page class="q-pa-md">
     <q-card>
       <q-card-section class="bg-primary text-white row items-center justify-between">
-        <div class="text-h6">Warehouse Configuration</div>
+        <div class="text-h6">{{ t('whConfig.title') }}</div>
         <q-btn
-          label="Add Warehouse"
+          :label="t('whConfig.addWarehouse')"
           color="white"
           text-color="primary"
           unelevated
@@ -165,25 +148,25 @@ const onSave = () => {
     <q-dialog v-model="showDialog" persistent>
       <q-card style="min-width: 400px">
         <q-card-section>
-          <div class="text-h6">{{ isEditing ? 'Edit Warehouse' : 'Add New Warehouse' }}</div>
+          <div class="text-h6">{{ isEditing ? t('whConfig.editWarehouse') : t('whConfig.addNewWarehouse') }}</div>
         </q-card-section>
 
         <q-card-section class="q-pt-none">
           <q-input
             v-model="form.id"
-            label="Warehouse ID *"
+            :label="t('whConfig.warehouseId') + ' *'"
             dense
             autofocus
             :readonly="isEditing"
             class="q-mb-md"
           />
-          <q-input v-model="form.name" label="Warehouse Name *" dense class="q-mb-md" />
-          <q-input v-model="form.description" label="Description" type="textarea" dense />
+          <q-input v-model="form.name" :label="t('whConfig.warehouseName') + ' *'" dense class="q-mb-md" />
+          <q-input v-model="form.description" :label="t('common.description')" type="textarea" dense />
         </q-card-section>
 
         <q-card-actions align="right" class="text-primary">
-          <q-btn flat label="Cancel" v-close-popup />
-          <q-btn flat label="Save" @click="onSave" />
+          <q-btn flat :label="t('common.cancel')" v-close-popup />
+          <q-btn flat :label="t('common.save')" @click="onSave" />
         </q-card-actions>
       </q-card>
     </q-dialog>

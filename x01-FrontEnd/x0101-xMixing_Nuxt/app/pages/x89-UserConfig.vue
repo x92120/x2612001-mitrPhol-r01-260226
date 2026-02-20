@@ -20,6 +20,7 @@ interface User {
 
 const $q = useQuasar()
 const { getAuthHeader } = useAuth()
+const { t } = useI18n()
 const selectedUser = ref<User | null>(null)
 const isCreateDialogOpen = ref(false)
 const newUser = ref<User>({
@@ -78,7 +79,7 @@ const fetchUsers = async () => {
     } else {
       $q.notify({
         type: 'negative',
-        message: 'Failed to fetch users',
+        message: t('userConfig.failedFetchUsers'),
         position: 'top',
       })
     }
@@ -86,7 +87,7 @@ const fetchUsers = async () => {
     console.error('Error fetching users:', error)
     $q.notify({
       type: 'negative',
-      message: 'Error fetching users',
+      message: t('userConfig.errorFetchUsers'),
       position: 'top',
     })
   } finally {
@@ -130,13 +131,13 @@ const saveUserChanges = async () => {
       }
       $q.notify({
         type: 'primary',
-        message: 'User updated successfully!',
+        message: t('userConfig.userUpdated'),
         position: 'top',
       })
       selectedUser.value = null
     } else {
       const errorData = await response.json()
-      let errorMessage = 'Failed to update user'
+      let errorMessage = t('userConfig.failedUpdate')
       if (typeof errorData.detail === 'string') {
         errorMessage = errorData.detail
       } else if (Array.isArray(errorData.detail)) {
@@ -151,7 +152,7 @@ const saveUserChanges = async () => {
     console.error('Error updating user:', error)
     $q.notify({
       type: 'negative',
-      message: error.message || 'Failed to update user',
+      message: error.message || t('userConfig.failedUpdate'),
       position: 'top',
     })
   } finally {
@@ -176,19 +177,19 @@ const createUser = async () => {
       users.value.push(createdUser)
       $q.notify({
         type: 'primary',
-        message: 'User created successfully!',
+        message: t('userConfig.userCreated'),
         position: 'top',
       })
       closeCreateDialog()
     } else {
       const errorData = await response.json()
-      throw new Error(errorData.detail || 'Failed to create user')
+      throw new Error(errorData.detail || t('userConfig.failedCreate'))
     }
   } catch (error: any) {
     console.error('Error creating user:', error)
     $q.notify({
       type: 'negative',
-      message: error.message || 'Failed to create user',
+      message: error.message || t('userConfig.failedCreate'),
       position: 'top',
     })
   } finally {
@@ -235,8 +236,8 @@ const closeDialog = () => {
 
 const deleteUser = (user: User) => {
   $q.dialog({
-    title: 'Delete User',
-    message: `Are you sure you want to delete "${user.full_name || user.username}"? This action cannot be undone.`,
+    title: t('userConfig.deleteUser'),
+    message: t('userConfig.confirmDeleteUser', { name: user.full_name || user.username }),
     cancel: true,
     persistent: true,
     color: 'negative',
@@ -248,13 +249,13 @@ const deleteUser = (user: User) => {
       })
       if (response.ok) {
         users.value = users.value.filter(u => u.id !== user.id)
-        $q.notify({ type: 'positive', message: `User "${user.full_name || user.username}" deleted`, position: 'top' })
+        $q.notify({ type: 'positive', message: t('userConfig.userDeleted', { name: user.full_name || user.username }), position: 'top' })
       } else {
         const errorData = await response.json()
-        throw new Error(errorData.detail || 'Failed to delete user')
+        throw new Error(errorData.detail || t('userConfig.failedDeleteUser'))
       }
     } catch (error: any) {
-      $q.notify({ type: 'negative', message: error.message || 'Failed to delete user', position: 'top' })
+      $q.notify({ type: 'negative', message: error.message || t('userConfig.failedDeleteUser'), position: 'top' })
     }
   })
 }
@@ -267,7 +268,7 @@ const deleteUser = (user: User) => {
       <div class="col-12">
         <q-card class="shadow-1">
           <q-card-section class="bg-info text-white">
-            <div class="text-h6 text-weight-bold">User Access Management</div>
+            <div class="text-h6 text-weight-bold">{{ t('userConfig.title') }}</div>
           </q-card-section>
 
           <q-form class="q-pa-md">
@@ -277,7 +278,7 @@ const deleteUser = (user: User) => {
                 <q-input
                   v-model="searchQuery"
                   outlined
-                  label="Search users by name or email..."
+                  :label="t('userConfig.searchUsers')"
                   dense
                   class="col"
                 >
@@ -286,7 +287,7 @@ const deleteUser = (user: User) => {
                   </template>
                 </q-input>
                 <q-btn
-                  label="Add User"
+                  :label="t('userConfig.addUser')"
                   color="primary"
                   icon="add"
                   class="q-ml-md"
@@ -306,12 +307,12 @@ const deleteUser = (user: User) => {
           <q-table
             :rows="filteredUsers"
             :columns="[
-              { name: 'full_name', label: 'Name', field: 'full_name', align: 'left' },
-              { name: 'email', label: 'Email', field: 'email', align: 'left' },
-              { name: 'role', label: 'Role', field: 'role', align: 'left' },
-              { name: 'department', label: 'Department', field: 'department', align: 'left' },
-              { name: 'status', label: 'Status', field: 'status', align: 'center' },
-              { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+              { name: 'full_name', label: t('userConfig.name'), field: 'full_name', align: 'left' },
+              { name: 'email', label: t('userConfig.email'), field: 'email', align: 'left' },
+              { name: 'role', label: t('userConfig.role'), field: 'role', align: 'left' },
+              { name: 'department', label: t('userConfig.department'), field: 'department', align: 'left' },
+              { name: 'status', label: t('common.status'), field: 'status', align: 'center' },
+              { name: 'actions', label: t('common.actions'), field: 'actions', align: 'center' },
             ]"
             row-key="id"
             flat
@@ -330,7 +331,7 @@ const deleteUser = (user: User) => {
             <template v-slot:body-cell-actions="props">
               <q-td :props="props">
                 <q-btn
-                  label="Manage"
+                  :label="t('userConfig.manage')"
                   color="info"
                   size="sm"
                   padding="xs md"
@@ -338,7 +339,7 @@ const deleteUser = (user: User) => {
                   @click="selectUser(props.row)"
                 />
                 <q-btn
-                  label="Delete"
+                  :label="t('common.delete')"
                   color="negative"
                   size="sm"
                   padding="xs md"
@@ -358,7 +359,7 @@ const deleteUser = (user: User) => {
       <q-card style="min-width: 400px">
         <q-card-section class="bg-primary text-white">
           <div class="row items-center">
-            <div class="text-h6">Add New User</div>
+            <div class="text-h6">{{ t('userConfig.addNewUser') }}</div>
             <q-space />
             <q-btn icon="close" flat round dense @click="closeCreateDialog" />
           </div>
@@ -370,9 +371,9 @@ const deleteUser = (user: User) => {
               filled
               v-model="newUser.username"
               label="Username *"
-              hint="Unique identifier"
+              :hint="t('userConfig.uniqueId')"
               lazy-rules
-              :rules="[ val => val && val.length > 0 || 'Please type something']"
+              :rules="[ val => val && val.length > 0 || t('userConfig.pleaseType')]"
             />
              <q-input
               filled
@@ -380,7 +381,7 @@ const deleteUser = (user: User) => {
               label="Email *"
               type="email"
               lazy-rules
-              :rules="[ val => val && val.length > 0 || 'Please type something']"
+              :rules="[ val => val && val.length > 0 || t('userConfig.pleaseType')]"
             />
             <q-input
               filled
@@ -388,7 +389,7 @@ const deleteUser = (user: User) => {
               label="Password *"
               type="password"
               lazy-rules
-              :rules="[ val => val && val.length >= 6 || 'Password must be at least 6 characters']"
+              :rules="[ val => val && val.length >= 6 || t('userConfig.passwordMinLength')]"
             />
             <q-input
               filled
@@ -408,8 +409,8 @@ const deleteUser = (user: User) => {
             />
 
             <div align="right">
-              <q-btn label="Cancel" flat color="primary" v-close-popup class="q-mr-sm" @click="closeCreateDialog" />
-              <q-btn label="Create User" type="submit" color="primary" :loading="isLoading" />
+              <q-btn :label="t('common.cancel')" flat color="primary" v-close-popup class="q-mr-sm" @click="closeCreateDialog" />
+              <q-btn :label="t('userConfig.createUser')" type="submit" color="primary" :loading="isLoading" />
             </div>
           </q-form>
         </q-card-section>
@@ -444,35 +445,35 @@ const deleteUser = (user: User) => {
           <div class="row q-col-gutter-xl">
             <!-- Left Column: User Info -->
             <div class="col-12 col-md-6">
-              <div class="text-subtitle2 text-weight-bold q-mb-md">User Information</div>
+              <div class="text-subtitle2 text-weight-bold q-mb-md">{{ t('userConfig.userInfo') }}</div>
               
               <div class="q-mb-md">
-                <div class="text-caption">Username</div>
+                <div class="text-caption">{{ t('register.username') }}</div>
                 <q-input v-model="selectedUser.username" outlined dense />
               </div>
 
               <div class="q-mb-md">
-                <div class="text-caption">Full Name</div>
+                <div class="text-caption">{{ t('register.fullName') }}</div>
                 <q-input v-model="selectedUser.full_name" outlined dense />
               </div>
 
               <div class="q-mb-md">
-                <div class="text-caption">Email</div>
+                <div class="text-caption">{{ t('userConfig.email') }}</div>
                 <q-input v-model="selectedUser.email" outlined dense />
               </div>
 
               <div class="q-mb-md">
-                <div class="text-caption">Role</div>
+                <div class="text-caption">{{ t('userConfig.role') }}</div>
                 <q-select v-model="selectedUser.role" outlined :options="roles" dense emit-value />
               </div>
 
               <div class="q-mb-md">
-                <div class="text-caption">Department</div>
+                <div class="text-caption">{{ t('userConfig.department') }}</div>
                 <q-input v-model="selectedUser.department" outlined dense />
               </div>
 
               <div class="q-mb-md">
-                <div class="text-caption">Status</div>
+                <div class="text-caption">{{ t('common.status') }}</div>
                 <q-select
                   v-model="selectedUser.status"
                   outlined
@@ -485,7 +486,7 @@ const deleteUser = (user: User) => {
               <div class="q-mt-lg">
                 <q-expansion-item
                   icon="lock"
-                  label="Change Password"
+                  :label="t('userConfig.changePassword')"
                   header-class="bg-grey-2 text-grey-8"
                   expand-icon-class="text-grey-8"
                   default-closed
@@ -496,9 +497,9 @@ const deleteUser = (user: User) => {
                         v-model="selectedUser.new_password" 
                         outlined 
                         dense 
-                        label="New Password" 
+                        :label="t('userConfig.newPassword')"
                         type="password"
-                        hint="Leave empty to keep current password"
+                        :hint="t('userConfig.keepCurrentPassword')"
                       />
                     </q-card-section>
                   </q-card>
@@ -508,7 +509,7 @@ const deleteUser = (user: User) => {
 
             <!-- Right Column: Permissions -->
             <div class="col-12 col-md-6">
-              <div class="text-subtitle2 text-weight-bold q-mb-md">Permissions</div>
+              <div class="text-subtitle2 text-weight-bold q-mb-md">{{ t('userConfig.permissions') }}</div>
               <q-separator class="q-mb-md" />
 
               <div class="column q-gutter-sm">
@@ -528,13 +529,13 @@ const deleteUser = (user: User) => {
         <!-- Dialog Actions -->
         <q-card-section class="text-right bg-info text-white">
           <q-btn
-            label="Cancel"
+            :label="t('common.cancel')"
             flat
             class="q-mr-sm text-white text-weight-bold"
             @click="closeDialog"
           />
           <q-btn
-            label="Save Changes"
+            :label="t('userConfig.saveChanges')"
             color="white"
             text-color="info"
             class="text-weight-bold"

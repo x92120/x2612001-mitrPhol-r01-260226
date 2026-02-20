@@ -10,26 +10,26 @@ const applicationVersion = '1.0.0'
 const releaseDate = 'January 2026'
 const developerName = 'devTeam@xDev.co.th'
 
-const features = ref([
+const features = computed(() => [
   {
     icon: 'inventory',
-    title: 'Ingredient Management',
-    description: 'Track and manage ingredient receiving with detailed inventory management.',
+    title: t('about.featIngTitle'),
+    description: t('about.featIngDesc'),
   },
   {
     icon: 'menu_book',
-    title: 'SKU Management',
-    description: 'Create, store, and manage recipes with precise ingredient measurements.',
+    title: t('about.featSkuTitle'),
+    description: t('about.featSkuDesc'),
   },
   {
     icon: 'shopping_cart',
-    title: 'Pre-Batch Planning',
-    description: 'Plan and prepare batches before production with accurate calculations.',
+    title: t('about.featPreBatchTitle'),
+    description: t('about.featPreBatchDesc'),
   },
   {
     icon: 'show_chart',
-    title: 'Production Planning',
-    description: 'Schedule and organize production runs with timeline management.',
+    title: t('about.featProdTitle'),
+    description: t('about.featProdDesc'),
   },
 ])
 
@@ -89,7 +89,7 @@ const fetchAllTranslations = async () => {
     }
   } catch (e) {
     console.error('Failed to fetch translations', e)
-    $q.notify({ type: 'negative', message: 'Failed to load translations from database' })
+    $q.notify({ type: 'negative', message: t('about.failedLoadTranslations') })
   } finally {
     isLoadingTranslations.value = false
   }
@@ -103,7 +103,7 @@ const sectionOptions = computed(() => {
     if (section) sections.add(section)
   })
   return [
-    { label: `All (${translationRows.value.length})`, value: 'all' },
+    { label: `${t('about.section')}: All (${translationRows.value.length})`, value: 'all' },
     ...Array.from(sections).sort().map(s => {
       const count = translationRows.value.filter(r => r.key.startsWith(s + '.')).length
       return { label: `${s} (${count})`, value: s }
@@ -161,9 +161,10 @@ const saveTranslation = async () => {
 
     // Update local data
     const idx = translationRows.value.findIndex(r => r.key === editKey.value)
-    if (idx >= 0) {
-      translationRows.value[idx].en = editEn.value
-      translationRows.value[idx].th = editTh.value
+    const row = idx >= 0 ? translationRows.value[idx] : undefined
+    if (row) {
+      row.en = editEn.value
+      row.th = editTh.value
     }
 
     // Reload live dictionary in the i18n composable
@@ -172,13 +173,13 @@ const saveTranslation = async () => {
     showEditDialog.value = false
     $q.notify({
       type: 'positive',
-      message: `✅ Updated: ${editKey.value}`,
+      message: `✅ ${t('about.updated')}: ${editKey.value}`,
       position: 'top',
       timeout: 1500,
     })
   } catch (e) {
     console.error('Save error', e)
-    $q.notify({ type: 'negative', message: 'Failed to save translation' })
+    $q.notify({ type: 'negative', message: t('about.failedSaveTranslation') })
   } finally {
     isSaving.value = false
   }
@@ -199,7 +200,7 @@ const openAddDialog = () => {
 
 const saveNewTranslation = async () => {
   if (!newKey.value) {
-    $q.notify({ type: 'warning', message: 'Key is required' })
+    $q.notify({ type: 'warning', message: t('about.keyRequired') })
     return
   }
 
@@ -227,11 +228,11 @@ const saveNewTranslation = async () => {
     showAddDialog.value = false
     $q.notify({
       type: 'positive',
-      message: `✅ Added: ${newKey.value}`,
+      message: `✅ ${t('about.added')}: ${newKey.value}`,
       position: 'top',
     })
   } catch (e) {
-    $q.notify({ type: 'negative', message: 'Failed to add translation' })
+    $q.notify({ type: 'negative', message: t('about.failedAddTranslation') })
   } finally {
     isSaving.value = false
   }
@@ -247,7 +248,7 @@ const translationStats = computed(() => {
 
 // Table columns
 const translationColumns = [
-  { name: 'key', label: 'Key', field: 'key', align: 'left' as const, sortable: true, style: 'width: 250px; font-family: monospace; font-size: 12px; color: #1565c0' },
+  { name: 'key', label: t('about.keyLabel'), field: 'key', align: 'left' as const, sortable: true, style: 'width: 250px; font-family: monospace; font-size: 12px; color: #1565c0' },
   { name: 'en', label: '🇬🇧 English', field: 'en', align: 'left' as const, sortable: true },
   { name: 'th', label: '🇹🇭 ไทย', field: 'th', align: 'left' as const, sortable: true },
   { name: 'actions', label: '', field: 'actions', align: 'center' as const, style: 'width: 60px' },
@@ -266,9 +267,9 @@ onMounted(() => {
         <q-card class="bg-gradient text-white shadow-4">
           <q-card-section class="text-center q-py-xl">
             <div class="text-h3 q-mb-md text-weight-bold">xMixing</div>
-            <div class="text-subtitle1 q-mb-sm">Batch Management & Mixing Control System</div>
+            <div class="text-subtitle1 q-mb-sm">{{ t('about.subtitle') }}</div>
             <div class="text-caption">
-              Version {{ applicationVersion }} | Released {{ releaseDate }}
+              {{ t('about.version') }} {{ applicationVersion }} | {{ t('about.released') }} {{ releaseDate }}
             </div>
           </q-card-section>
         </q-card>
@@ -280,16 +281,12 @@ onMounted(() => {
       <div class="col-12">
         <q-card>
           <q-card-section>
-            <div class="text-h5 q-mb-md text-weight-bold">About This Application</div>
+            <div class="text-h5 q-mb-md text-weight-bold">{{ t('about.aboutTitle') }}</div>
             <p class="text-body1 q-mb-md">
-              xMixing is a comprehensive batch management and mixing control system designed
-              for manufacturing and production environments. This application streamlines the entire
-              production workflow from ingredient receiving through final batch production.
+              {{ t('about.aboutDesc1') }}
             </p>
             <p class="text-body1 q-mb-md">
-              Whether you're managing multiple recipes, tracking ingredients, or planning production
-              schedules, xMixing provides the tools you need to maintain accuracy,
-              efficiency, and quality control throughout your operations.
+              {{ t('about.aboutDesc2') }}
             </p>
           </q-card-section>
         </q-card>
@@ -299,7 +296,7 @@ onMounted(() => {
     <!-- Key Features Section -->
     <div class="row q-mb-lg">
       <div class="col-12">
-        <div class="text-h5 q-mb-md text-weight-bold">Key Features</div>
+        <div class="text-h5 q-mb-md text-weight-bold">{{ t('about.keyFeatures') }}</div>
       </div>
       <div
         v-for="feature in features"
@@ -347,14 +344,14 @@ onMounted(() => {
           <div class="row items-center justify-between">
             <div class="row items-center q-gutter-sm">
               <q-icon name="translate" size="sm" />
-              <div class="text-h6 text-weight-bold">Translation Editor / แก้ไขคำแปล</div>
+              <div class="text-h6 text-weight-bold">{{ t('about.translationEditor') }} / แก้ไขคำแปล</div>
             </div>
             <div class="row items-center q-gutter-sm">
               <q-badge color="white" text-color="blue-9">
-                {{ translationStats.total }} keys
+                {{ translationStats.total }} {{ t('about.keys') }}
               </q-badge>
               <q-badge v-if="translationStats.missingTh > 0" color="orange">
-                {{ translationStats.missingTh }} missing TH
+                {{ translationStats.missingTh }} {{ t('about.missingTh') }}
               </q-badge>
               <q-btn
                 flat round dense
@@ -362,7 +359,7 @@ onMounted(() => {
                 color="white"
                 @click="openAddDialog"
               >
-                <q-tooltip>Add New Key</q-tooltip>
+                <q-tooltip>{{ t('about.addNewKey') }}</q-tooltip>
               </q-btn>
               <q-btn
                 flat round dense
@@ -371,7 +368,7 @@ onMounted(() => {
                 @click="fetchAllTranslations"
                 :loading="isLoadingTranslations"
               >
-                <q-tooltip>Reload from Database</q-tooltip>
+                <q-tooltip>{{ t('about.reloadFromDb') }}</q-tooltip>
               </q-btn>
               <q-btn
                 flat round dense
@@ -379,7 +376,7 @@ onMounted(() => {
                 color="white"
                 v-close-popup
               >
-                <q-tooltip>Close</q-tooltip>
+                <q-tooltip>{{ t('common.close') }}</q-tooltip>
               </q-btn>
             </div>
           </div>
@@ -397,7 +394,7 @@ onMounted(() => {
                 outlined
                 dense
                 bg-color="white"
-                label="Section"
+                :label="t('about.section')"
               >
                 <template v-slot:prepend>
                   <q-icon name="folder" color="blue-9" size="xs" />
@@ -409,7 +406,7 @@ onMounted(() => {
                 v-model="translationSearch"
                 outlined
                 dense
-                placeholder="Search by key, English or Thai text..."
+                :placeholder="t('about.searchPlaceholder')"
                 bg-color="white"
                 clearable
               >
@@ -432,7 +429,7 @@ onMounted(() => {
             dense
             :loading="isLoadingTranslations"
             :rows-per-page-options="[15, 30, 50, 100, 0]"
-            :rows-per-page-label="'Rows per page'"
+            :rows-per-page-label="t('about.rowsPerPage')"
             class="translation-table"
             :filter="translationSearch"
             :filter-method="() => filteredTranslationRows"
@@ -458,7 +455,7 @@ onMounted(() => {
             <template v-slot:body-cell-th="props">
               <q-td :props="props" style="max-width: 350px; word-wrap: break-word; white-space: normal;">
                 <span v-if="props.value" class="text-grey-9">{{ props.value }}</span>
-                <span v-else class="text-orange text-italic">( missing )</span>
+                <span v-else class="text-orange text-italic">{{ t('about.missing') }}</span>
               </q-td>
             </template>
 
@@ -472,7 +469,7 @@ onMounted(() => {
                   size="sm"
                   @click="openEditDialog(props.row)"
                 >
-                  <q-tooltip>Edit / แก้ไข</q-tooltip>
+                  <q-tooltip>{{ t('common.edit') }} / แก้ไข</q-tooltip>
                 </q-btn>
               </q-td>
             </template>
@@ -481,8 +478,8 @@ onMounted(() => {
             <template v-slot:no-data>
               <div class="text-center q-pa-lg text-grey-5">
                 <q-icon name="translate" size="64px" class="q-mb-md" />
-                <div class="text-h6">No translations found</div>
-                <div class="text-caption">Try adjusting the search or section filter</div>
+                <div class="text-h6">{{ t('about.noTranslationsFound') }}</div>
+                <div class="text-caption">{{ t('about.tryAdjusting') }}</div>
               </div>
             </template>
           </q-table>
@@ -499,7 +496,7 @@ onMounted(() => {
         <q-card-section class="bg-blue-9 text-white q-py-sm">
           <div class="row items-center">
             <q-icon name="edit" class="q-mr-sm" />
-            <div class="text-subtitle1 text-weight-bold">Edit Translation / แก้ไขคำแปล</div>
+            <div class="text-subtitle1 text-weight-bold">{{ t('about.editTranslation') }} / แก้ไขคำแปล</div>
             <q-space />
             <q-btn flat round dense icon="close" color="white" v-close-popup />
           </div>
@@ -513,7 +510,7 @@ onMounted(() => {
             dense
             readonly
             bg-color="grey-2"
-            label="Key"
+            :label="t('about.keyLabel')"
             class="q-mb-md"
           >
             <template v-slot:prepend>
@@ -552,10 +549,10 @@ onMounted(() => {
         </q-card-section>
 
         <q-card-actions align="right" class="q-pa-md bg-grey-1">
-          <q-btn flat label="Cancel / ยกเลิก" color="grey" v-close-popup />
+          <q-btn flat :label="t('common.cancel') + ' / ยกเลิก'" color="grey" v-close-popup />
           <q-btn
             unelevated
-            label="Save / บันทึก"
+            :label="t('common.save') + ' / บันทึก'"
             color="blue-9"
             icon="save"
             @click="saveTranslation"
@@ -573,7 +570,7 @@ onMounted(() => {
         <q-card-section class="bg-green-8 text-white q-py-sm">
           <div class="row items-center">
             <q-icon name="add_circle" class="q-mr-sm" />
-            <div class="text-subtitle1 text-weight-bold">Add New Translation Key</div>
+            <div class="text-subtitle1 text-weight-bold">{{ t('about.addNewTranslationKey') }}</div>
             <q-space />
             <q-btn flat round dense icon="close" color="white" v-close-popup />
           </div>
@@ -584,9 +581,9 @@ onMounted(() => {
             v-model="newKey"
             outlined
             dense
-            label="Key (e.g. section.keyName)"
+            :label="t('about.keyPlaceholder')"
             class="q-mb-md"
-            hint="Use dot notation: section.keyName"
+            :hint="t('about.keyHint')"
           >
             <template v-slot:prepend>
               <q-icon name="key" color="green-8" />
@@ -597,7 +594,7 @@ onMounted(() => {
             v-model="newEn"
             outlined
             dense
-            label="🇬🇧 English Value"
+            :label="'🇬🇧 ' + t('about.englishValue')"
             type="textarea"
             autogrow
             class="q-mb-md"
@@ -607,17 +604,17 @@ onMounted(() => {
             v-model="newTh"
             outlined
             dense
-            label="🇹🇭 Thai Value (ภาษาไทย)"
+            :label="'🇹🇭 ' + t('about.thaiValue') + ' (ภาษาไทย)'"
             type="textarea"
             autogrow
           />
         </q-card-section>
 
         <q-card-actions align="right" class="q-pa-md bg-grey-1">
-          <q-btn flat label="Cancel" color="grey" v-close-popup />
+          <q-btn flat :label="t('common.cancel')" color="grey" v-close-popup />
           <q-btn
             unelevated
-            label="Add Key"
+            :label="t('about.addKey')"
             color="green-8"
             icon="add"
             @click="saveNewTranslation"
@@ -633,7 +630,7 @@ onMounted(() => {
       <div class="col-12">
         <q-card>
           <q-card-section>
-            <div class="text-h5 q-mb-md text-weight-bold">Technology Stack</div>
+            <div class="text-h5 q-mb-md text-weight-bold">{{ t('about.techStack') }}</div>
             <div class="row q-col-gutter-md">
               <div v-for="tech in technologies" :key="tech.name" class="col-12 col-sm-6 col-md-4">
                 <q-item class="bg-light-blue-7 text-white rounded-borders">
@@ -657,10 +654,10 @@ onMounted(() => {
       <div class="col-12">
         <q-card class="bg-light-blue-7 text-white">
           <q-card-section class="text-center">
-            <div class="text-h6 q-mb-md">Developed By</div>
+            <div class="text-h6 q-mb-md">{{ t('about.developedBy') }}</div>
             <div class="text-body2 q-mb-lg">{{ developerName }}</div>
-            <div class="text-body2 q-mb-md">© 2026 xMixing. All rights reserved.</div>
-            <div class="text-caption">Built with Nuxt 4, Vue 3 & Quasar Framework</div>
+            <div class="text-body2 q-mb-md">{{ t('about.copyright') }}</div>
+            <div class="text-caption">{{ t('about.builtWith') }}</div>
           </q-card-section>
         </q-card>
       </div>
@@ -671,24 +668,24 @@ onMounted(() => {
       <div class="col-12">
         <q-card>
           <q-card-section>
-            <div class="text-h5 q-mb-md text-weight-bold">Support & Feedback</div>
+            <div class="text-h5 q-mb-md text-weight-bold">{{ t('about.supportFeedback') }}</div>
             <p class="text-body2 q-mb-md">
-              For support, feature requests, or bug reports, please contact the development team.
+              {{ t('about.supportDesc') }}
             </p>
             <div class="row q-gutter-md">
               <q-btn
                 color="light-blue-7"
-                label="Contact Support"
+                :label="t('about.contactSupport')"
                 icon="email"
                 flat
-                @click="$q.notify({ message: 'Support contact information coming soon!' })"
+                @click="$q.notify({ message: t('about.supportComingSoon') })"
               />
               <q-btn
                 color="light-blue-7"
-                label="Report Issue"
+                :label="t('about.reportIssue')"
                 icon="bug_report"
                 flat
-                @click="$q.notify({ message: 'Bug reporting system coming soon!' })"
+                @click="$q.notify({ message: t('about.bugReportComingSoon') })"
               />
             </div>
           </q-card-section>

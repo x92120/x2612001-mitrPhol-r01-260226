@@ -5,6 +5,7 @@ import { appConfig } from '~/appConfig/config'
 // import VueApexCharts from 'vue3-apexcharts'
 
 const $q = useQuasar()
+const { t } = useI18n()
 
 interface MetricPoint {
   timestamp: string
@@ -170,7 +171,7 @@ onUnmounted(() => {
         <div class="col-12">
           <div class="text-h5 flex items-center">
             <q-icon name="dns" class="q-mr-sm" color="primary" />
-            Admin Dashboard Monitoring
+            {{ t('dashboard.title') }}
             <q-spacer />
             <q-chip color="primary" text-color="white" icon="info" dense>
               {{ status.os }}
@@ -189,28 +190,28 @@ onUnmounted(() => {
               <q-card-section>
                 <div class="text-subtitle1 text-weight-bold flex items-center">
                   <q-icon name="computer" class="q-mr-xs" />
-                  PC Information
+                  {{ t('dashboard.pcInfo') }}
                 </div>
               </q-card-section>
               <q-card-section class="q-pt-none">
                 <div class="q-mb-sm">
-                  <div class="text-caption opacity-70">Hostname</div>
+                  <div class="text-caption opacity-70">{{ t('dashboard.hostname') }}</div>
                   <div class="text-subtitle2">{{ status.hostname }}</div>
                 </div>
                 <div class="q-mb-sm">
-                  <div class="text-caption opacity-70">Local IP Address</div>
+                  <div class="text-caption opacity-70">{{ t('dashboard.localIp') }}</div>
                   <div class="text-subtitle2">{{ status.local_ip }}</div>
                 </div>
                 <div class="q-mb-sm">
-                  <div class="text-caption opacity-70">OS / Kernel</div>
+                  <div class="text-caption opacity-70">{{ t('dashboard.osKernel') }}</div>
                   <div class="text-subtitle2">{{ status.os }}</div>
                 </div>
                 <div class="q-mb-sm">
-                  <div class="text-caption opacity-70">Architecture</div>
+                  <div class="text-caption opacity-70">{{ t('dashboard.architecture') }}</div>
                   <div class="text-subtitle2">{{ status.architecture }}</div>
                 </div>
                 <div class="q-mb-sm">
-                  <div class="text-caption opacity-70">CPU Model</div>
+                  <div class="text-caption opacity-70">{{ t('dashboard.cpuModel') }}</div>
                   <div class="text-subtitle2 text-italic" style="font-size: 0.8rem">
                     {{ status.cpu_model }}
                   </div>
@@ -223,11 +224,11 @@ onUnmounted(() => {
               <q-card-section>
                 <div class="text-subtitle1 text-weight-bold flex items-center">
                   <q-icon name="history" class="q-mr-xs" />
-                  System Uptime
+                  {{ t('dashboard.systemUptime') }}
                 </div>
               </q-card-section>
               <q-card-section class="q-pt-none">
-                <div class="text-caption text-grey-5">System Boot Time</div>
+                <div class="text-caption text-grey-5">{{ t('dashboard.bootTime') }}</div>
                 <div class="text-subtitle2">
                   {{ new Date(status.boot_time * 1000).toLocaleString() }}
                 </div>
@@ -239,7 +240,7 @@ onUnmounted(() => {
                   @click="fetchStatus" 
                   :loading="loading" 
                   class="q-mt-md full-width"
-                  label="Refresh Metrics"
+                  :label="t('dashboard.refreshMetrics')"
                 />
               </q-card-section>
             </q-card>
@@ -295,7 +296,7 @@ onUnmounted(() => {
                 <q-card-section>
                   <div class="text-subtitle1 text-weight-bold flex items-center">
                     <q-icon name="ram" class="q-mr-xs" color="blue" />
-                    Memory (RAM)
+                    {{ t('dashboard.memoryRam') }}
                   </div>
                 </q-card-section>
                 <q-card-section class="flex flex-center">
@@ -335,7 +336,7 @@ onUnmounted(() => {
                 <q-card-section>
                   <div class="text-subtitle1 text-weight-bold flex items-center">
                     <q-icon name="storage" class="q-mr-xs" color="purple" />
-                    Storage (Disk)
+                    {{ t('dashboard.storageDisk') }}
                   </div>
                 </q-card-section>
                 <q-card-section class="flex flex-center">
@@ -375,20 +376,20 @@ onUnmounted(() => {
                 <q-card-section>
                   <div class="text-subtitle1 text-weight-bold flex items-center">
                     <q-icon name="swap_calls" class="q-mr-xs" color="green" />
-                    Network Traffic
+                    {{ t('dashboard.networkTraffic') }}
                   </div>
                 </q-card-section>
                 <q-card-section class="q-pt-none">
                   <div class="row q-col-gutter-sm">
                     <div class="col-6 col-md-3">
                       <div class="bg-green-1 q-pa-sm rounded-borders">
-                        <div class="text-caption text-grey-7">Sent</div>
+                        <div class="text-caption text-grey-7">{{ t('dashboard.sent') }}</div>
                         <div class="text-subtitle1 text-weight-bold">{{ formatBytes(status.network.bytes_sent) }}</div>
                       </div>
                     </div>
                     <div class="col-6 col-md-3">
                       <div class="bg-green-1 q-pa-sm rounded-borders">
-                        <div class="text-caption text-grey-7">Received</div>
+                        <div class="text-caption text-grey-7">{{ t('dashboard.received') }}</div>
                         <div class="text-subtitle1 text-weight-bold">{{ formatBytes(status.network.bytes_recv) }}</div>
                       </div>
                     </div>
@@ -413,7 +414,7 @@ onUnmounted(() => {
             <div class="col-12 col-md-6">
               <q-card flat bordered>
                 <q-card-section class="q-pb-none">
-                  <div class="text-subtitle2 text-weight-bold">CPU History (1h)</div>
+                  <div class="text-subtitle2 text-weight-bold">{{ t('dashboard.cpuHistory') }}</div>
                 </q-card-section>
                 <q-card-section>
                   <apexchart height="200" :options="baseChartOptions" :series="cpuSeries" />
@@ -424,7 +425,7 @@ onUnmounted(() => {
             <div class="col-12 col-md-6">
               <q-card flat bordered>
                 <q-card-section class="q-pb-none">
-                  <div class="text-subtitle2 text-weight-bold">Memory History (1h)</div>
+                  <div class="text-subtitle2 text-weight-bold">{{ t('dashboard.memHistory') }}</div>
                 </q-card-section>
                 <q-card-section>
                   <apexchart height="200" :options="baseChartOptions" :series="memSeries" />
@@ -439,16 +440,16 @@ onUnmounted(() => {
       <template #fallback>
         <div class="flex flex-center" style="height: 80vh">
           <q-spinner-gears size="100px" color="primary" />
-          <div class="text-h6 q-ml-md">Loading System Metrics...</div>
+          <div class="text-h6 q-ml-md">{{ t('dashboard.loadingMetrics') }}</div>
         </div>
       </template>
     </ClientOnly>
     
     <div v-if="error" class="q-pa-md text-red text-center">
       <q-icon name="error" size="lg" />
-      <div class="text-h6">Error connecting to monitoring service</div>
+      <div class="text-h6">{{ t('dashboard.errorConnecting') }}</div>
       <p>{{ error }}</p>
-      <q-btn label="Retry" color="primary" @click="fetchStatus" />
+      <q-btn :label="t('dashboard.retry')" color="primary" @click="fetchStatus" />
     </div>
   </q-page>
 </template>

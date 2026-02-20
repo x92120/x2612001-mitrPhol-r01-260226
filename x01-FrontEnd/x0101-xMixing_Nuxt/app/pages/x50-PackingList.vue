@@ -47,20 +47,20 @@ const printingBatchLabel = ref(false)
 
 const selectedReCode = ref<string | null>(null)
 
-const planColumns = [
-    { name: 'plan_id', label: 'PLAN ID', field: 'plan_id', align: 'left', sortable: true },
-    { name: 'sku_id', label: 'SKU', field: 'sku_id', align: 'left' },
-    { name: 'total_volume', label: 'TOTAL kg', field: 'total_volume', align: 'right' },
-    { name: 'package_info', label: 'PACKS', field: 'package_info', align: 'center' },
-]
+const planColumns = computed(() => [
+    { name: 'plan_id', label: 'PLAN ID', field: 'plan_id', align: 'left' as const, sortable: true },
+    { name: 'sku_id', label: 'SKU', field: 'sku_id', align: 'left' as const },
+    { name: 'total_volume', label: t('common.total') + ' kg', field: 'total_volume', align: 'right' as const },
+    { name: 'package_info', label: t('common.packs'), field: 'package_info', align: 'center' as const },
+])
 
-const batchColumns = [
-    { name: 'batch_id', label: 'BATCH ID', field: 'batch_id', align: 'left', sortable: true },
-    { name: 'batch_size', label: 'QTY (kg)', field: 'batch_size', align: 'right', sortable: true },
-    { name: 'pkg_count', label: 'BAGS', field: 'pkg_count', align: 'center' },
-    { name: 'status', label: 'STATUS', field: 'status', align: 'center', sortable: true },
-    { name: 'expand', label: '', field: 'expand', align: 'center' }
-]
+const batchColumns = computed(() => [
+    { name: 'batch_id', label: 'BATCH ID', field: 'batch_id', align: 'left' as const, sortable: true },
+    { name: 'batch_size', label: t('common.kg'), field: 'batch_size', align: 'right' as const, sortable: true },
+    { name: 'pkg_count', label: t('packing.bags'), field: 'pkg_count', align: 'center' as const },
+    { name: 'status', label: t('common.status'), field: 'status', align: 'center' as const, sortable: true },
+    { name: 'expand', label: '', field: 'expand', align: 'center' as const }
+])
 
 const pagination = ref({
     sortBy: 'plan_id',
@@ -315,7 +315,7 @@ const fetchWarehouses = async () => {
             headers: getAuthHeader() as Record<string, string>
         })
         const whIds = data.map(w => w.warehouse_id)
-        warehouses.value = ['All Warehouse', ...whIds]
+        warehouses.value = [t('packing.allWarehouse'), ...whIds]
     } catch (error) {
         console.error('Error fetching warehouses:', error)
     }
@@ -324,7 +324,7 @@ const fetchWarehouses = async () => {
 const fetchAllData = async () => {
     loading.value = true
     try {
-        const whParam = selectedWarehouse.value === 'All Warehouse' ? '' : `&wh=${selectedWarehouse.value}`
+        const whParam = selectedWarehouse.value === t('packing.allWarehouse') ? '' : `&wh=${selectedWarehouse.value}`
         const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-scans/?limit=1000${whParam}`, {
             headers: getAuthHeader() as Record<string, string>
         })
@@ -388,15 +388,15 @@ const getReqStatus = (req: any) => {
     // 1. Use database status if it's already Completed (2)
     if (req.status === 2) {
         // If it's done in DB, but we want to show packing progress too
-        const label = confirmedCount === totalCount && totalCount > 0 ? 'Done' : 'Prepared'
+        const label = confirmedCount === totalCount && totalCount > 0 ? t('packing.done') : t('packing.prepared')
         return { code: 2, label, count: confirmedCount || totalCount, total: totalCount }
     }
     
     // 2. Otherwise calculate based on records in this session
-    if (records.length === 0) return { code: 0, label: 'Awaiting', count: 0, total: 0 }
-    if (confirmedCount > 0 || verifiedRecordIds.value.size > 0) return { code: 1, label: 'Packing', count: confirmedCount, total: totalCount }
+    if (records.length === 0) return { code: 0, label: t('packing.awaiting'), count: 0, total: 0 }
+    if (confirmedCount > 0 || verifiedRecordIds.value.size > 0) return { code: 1, label: t('packing.packing'), count: confirmedCount, total: totalCount }
     
-    return { code: 0, label: 'Awaiting', count: 0, total: totalCount }
+    return { code: 0, label: t('packing.awaiting'), count: 0, total: totalCount }
 }
 
 const isBatchPacked = (batch: any) => {
@@ -507,8 +507,8 @@ const handleBarcodeScan = (barcode: string) => {
             scanFeedback.value = {
                 show: true,
                 type: 'success',
-                title: 'BOX CONFIRMED!',
-                message: `${toConfirm.length} ingredient(s) successfully confirmed inside Box [${barcode}].`,
+                title: t('packing.boxConfirmed'),
+                message: t('packing.boxConfirmedMsg', { count: toConfirm.length, id: barcode }),
                 batchId: ''
             }
             pendingRecord.value = null
@@ -517,7 +517,7 @@ const handleBarcodeScan = (barcode: string) => {
             // No bags pending for this box
             $q.notify({
                 type: 'warning',
-                message: `Box ${barcode} scanned, but no ingredient bags are currently pending for it. Scan bags first!`,
+                message: t('packing.noItemsPending', { id: barcode }),
                 position: 'top'
             })
             return
@@ -529,7 +529,7 @@ const handleBarcodeScan = (barcode: string) => {
     
     if (record) {
         if (confirmedRecordIds.value.has(barcode)) {
-            $q.notify({ type: 'warning', message: `Already Packed & Confirmed: ${barcode}`, position: 'top' })
+            $q.notify({ type: 'warning', message: t('packing.alreadyPacked', { id: barcode }), position: 'top' })
         } else {
             // Mark as Yellow Blink
             verifiedRecordIds.value.add(barcode)
@@ -545,15 +545,15 @@ const handleBarcodeScan = (barcode: string) => {
             scanFeedback.value = {
                 show: true,
                 type: 'instruction',
-                title: 'INSTRUCTION',
-                message: `Put this ingredient bag [${record.re_code}] to Batch Packing Box:`,
+                title: t('packing.instruction'),
+                message: t('packing.putIngredientToBatch', { code: record.re_code }),
                 batchId: targetId
             }
         }
     } else {
         $q.notify({
             type: 'negative',
-            message: `Unknown Barcode: ${barcode}`,
+            message: t('packing.unknownBarcode', { id: barcode }),
             position: 'top'
         })
     }
@@ -573,7 +573,7 @@ onMounted(() => {
 // --- Actions ---
 const onCreatePackingList = () => {
     if (verifiedRecordIds.value.size === 0) {
-        $q.notify({ type: 'warning', message: 'No items verified yet' })
+        $q.notify({ type: 'warning', message: t('packing.noItemsVerified') })
         return
     }
     
@@ -585,7 +585,7 @@ const onCreatePackingList = () => {
     
     $q.notify({ 
         type: 'positive', 
-        message: 'Packing List Confirmed & Saved',
+        message: t('packing.packingListConfirmed'),
         icon: 'cloud_done'
     })
 }
@@ -601,7 +601,7 @@ const simulateScanForPlan = (planId: string) => {
 const onClosePackingList = () => {
   verifiedRecordIds.value.clear()
   selectedBatchId.value = ''
-  $q.notify({ type: 'grey', message: 'Session Cleared' })
+  $q.notify({ type: 'grey', message: t('packing.sessionCleared') })
 }
 
 
@@ -613,7 +613,7 @@ const onAddAllToPrintList = () => {
     })
     $q.notify({
         type: 'positive',
-        message: 'Added all batches from current plans to print list',
+        message: t('packing.addedAllBatches'),
         icon: 'playlist_add_check'
     })
 }
@@ -668,7 +668,7 @@ const addToPrintList = (batch: any, plan: any) => {
     
     const whSummary = Object.entries(whMap).length > 0 
         ? Object.entries(whMap).map(([wh, count]) => `${wh}: ${count} packs`).join(' | ')
-        : 'No Requirements'
+        : t('packing.noRequirements')
 
     // Summary of ingredients (Database requirements)
     const ingredientSummary: { re_code: string, weight: number, count: number }[] = []
@@ -745,7 +745,7 @@ const prepareProjectedLabels = async () => {
         printSvgs.value = generated
     } catch (err) {
         console.error('Error preparing print labels:', err)
-        $q.notify({ type: 'negative', message: 'Failed to prepare labels for printing' })
+        $q.notify({ type: 'negative', message: t('packing.failedPrepareLabels') })
     } finally {
         labelsGenerating.value = false
     }
@@ -753,7 +753,7 @@ const prepareProjectedLabels = async () => {
 
 const onPrintAllInList = async () => {
     if (printQueue.value.length === 0) {
-        $q.notify({ type: 'warning', message: 'Print List is empty' })
+        $q.notify({ type: 'warning', message: t('packing.printListEmpty') })
         return
     }
     await prepareProjectedLabels()
@@ -809,11 +809,11 @@ const onPreviewPackingBoxLabel = async () => {
             packingBoxLabelSvg.value = svg
             showPackingBoxLabelDialog.value = true
         } else {
-            $q.notify({ type: 'negative', message: 'Failed to generate label' })
+            $q.notify({ type: 'negative', message: t('packing.failedGenerateLabel') })
         }
     } catch (err) {
         console.error('Print Error:', err)
-        $q.notify({ type: 'negative', message: 'Error generating label' })
+        $q.notify({ type: 'negative', message: t('packing.errorGeneratingLabel') })
     } finally {
         printingBatchLabel.value = false
     }
@@ -866,7 +866,7 @@ const onPreviewPackingBoxLabel = async () => {
                         @click="onPreviewPackingBoxLabel"
                         :loading="printingBatchLabel"
                     >
-                        <q-tooltip>Print Packing Box Label for Selected Batch</q-tooltip>
+                        <q-tooltip>{{ t('packing.printBoxLabelForBatch') }}</q-tooltip>
                     </q-btn>
                     <q-btn 
                         icon="receipt_long" 
@@ -874,7 +874,7 @@ const onPreviewPackingBoxLabel = async () => {
                         color="white" 
                         @click="showPrintListDialog = true"
                     >
-                        <q-tooltip>Open Packing Box List (Print Queue)</q-tooltip>
+                        <q-tooltip>{{ t('packing.openPrintQueue') }}</q-tooltip>
                         <q-badge color="orange" floating v-if="printQueue.length > 0">{{ printQueue.length }}</q-badge>
                     </q-btn>
                     <q-separator vertical dark class="q-mx-xs" />
@@ -941,7 +941,7 @@ const onPreviewPackingBoxLabel = async () => {
                             <span class="text-black text-weight-bolder">{{ (props.row.batches?.length || 0) }}</span>
                         </div>
                         <q-tooltip anchor="top middle" self="bottom middle" :offset="[0, 8]">
-                          Packed Batches / Ready(Weighed) Batches / Total Planned Batches
+                          {{ t('packing.packedReadyTotal') }}
                         </q-tooltip>
                       </q-td>
                     </q-tr>
@@ -951,7 +951,7 @@ const onPreviewPackingBoxLabel = async () => {
                           <div class="row items-center justify-between q-mb-sm">
                             <div class="text-weight-bold text-blue-9">
                               <q-icon name="list_alt" class="q-mr-sm" />
-                              Batches for Plan: {{ props.row.plan_id }}
+                              {{ t('packing.batchesForPlan') }} {{ props.row.plan_id }}
                             </div>
                             <div class="q-gutter-x-sm">
                               <q-btn 
@@ -967,7 +967,7 @@ const onPreviewPackingBoxLabel = async () => {
                                 unelevated 
                                 color="blue-grey-8" 
                                 icon="print" 
-                                label="Print" 
+                                :label="t('common.print')" 
                                 size="sm"
                                 class="text-weight-bold shadow-1"
                                 :loading="labelsGenerating"
@@ -1051,10 +1051,10 @@ const onPreviewPackingBoxLabel = async () => {
                                       <q-markup-table dense flat bordered square class="bg-white">
                                         <thead class="bg-blue-grey-4 text-white">
                                           <tr>
-                                            <th class="text-left" style="font-size: 0.8em">Ingredient</th>
-                                            <th class="text-left" style="font-size: 0.8em">Name</th>
-                                            <th class="text-right" style="font-size: 0.8em">Req kg</th>
-                                            <th class="text-center" style="font-size: 0.8em">Status</th>
+                                            <th class="text-left" style="font-size: 0.8em">{{ t('preBatch.ingredient') }}</th>
+                                            <th class="text-left" style="font-size: 0.8em">{{ t('packing.name') }}</th>
+                                            <th class="text-right" style="font-size: 0.8em">{{ t('packing.reqKg') }}</th>
+                                            <th class="text-center" style="font-size: 0.8em">{{ t('common.status') }}</th>
                                           </tr>
                                         </thead>
                                         <tbody>
@@ -1071,7 +1071,7 @@ const onPreviewPackingBoxLabel = async () => {
                                             </td>
                                           </tr>
                                           <tr v-if="!batchProps.row.items || batchProps.row.items.length === 0">
-                                            <td colspan="4" class="text-center text-grey italic q-pa-sm">No ingredients found for this batch</td>
+                                            <td colspan="4" class="text-center text-grey italic q-pa-sm">{{ t('packing.noIngredientsForBatch') }}</td>
                                           </tr>
                                         </tbody>
                                       </q-markup-table>
@@ -1082,7 +1082,7 @@ const onPreviewPackingBoxLabel = async () => {
 
                             <template v-slot:no-data>
                               <div class="full-width row flex-center text-grey italic q-pa-md">
-                                No batches found for this plan
+                                {{ t('packing.noBatchesForPlan') }}
                               </div>
                             </template>
                           </q-table>
@@ -1106,16 +1106,16 @@ const onPreviewPackingBoxLabel = async () => {
                 </div>
                 <div class="q-gutter-x-xs">
                     <q-btn icon="delete_sweep" flat round dense color="white" size="sm" @click="clearPrintList" v-if="printQueue.length > 0">
-                        <q-tooltip>Clear List</q-tooltip>
+                        <q-tooltip>{{ t('packing.clearList') }}</q-tooltip>
                     </q-btn>
-                    <q-btn icon="print" unelevated color="positive" size="xs" label="Print" :loading="labelsGenerating" @click="onPrintAllInList" v-if="printQueue.length > 0" />
+                    <q-btn icon="print" unelevated color="positive" size="xs" :label="t('common.print')" :loading="labelsGenerating" @click="onPrintAllInList" v-if="printQueue.length > 0" />
                 </div>
             </div>
 
             <div class="col relative-position bg-grey-1">
                 <q-scroll-area class="fit">
                     <div v-if="printQueue.length === 0" class="fit flex flex-center text-grey-6 q-pa-sm text-center">
-                        <div class="text-caption italic">No labels in queue. Click "CREATE LIST" in table below.</div>
+                        <div class="text-caption italic">{{ t('packing.noLabelsInQueue') }}</div>
                     </div>
                     
                     <q-list separator dense v-else>
@@ -1157,14 +1157,14 @@ const onPreviewPackingBoxLabel = async () => {
             <div class="q-pa-sm bg-blue-grey-8 text-white text-weight-bold text-subtitle2 flex justify-between items-center">
                 <div class="row items-center">
                     <q-icon name="view_list" class="q-mr-sm" />
-                    <span>Pre-Batch Scans Detailed List</span>
+                    <span>{{ t('packing.preBatchScansList') }}</span>
                     <q-badge v-if="selectedBatchForScans" color="orange" outline class="q-ml-sm">
-                        Batch: {{ selectedBatchForScans.batch_id }}
+                        {{ t('packing.batch') }}: {{ selectedBatchForScans.batch_id }}
                     </q-badge>
                 </div>
                 <div class="q-gutter-x-sm">
                     <q-btn flat round dense color="white" icon="qr_code_scanner" size="sm" @click="simulateScanForBatch(selectedBatchForScans.batch_id)" v-if="selectedBatchForScans">
-                        <q-tooltip>Simulate Scan for Selection</q-tooltip>
+                        <q-tooltip>{{ t('packing.simulateScan') }}</q-tooltip>
                     </q-btn>
                     <q-btn icon="close" flat round dense color="white" @click="selectedBatchForScans = null" v-if="selectedBatchForScans" />
                 </div>
@@ -1173,8 +1173,8 @@ const onPreviewPackingBoxLabel = async () => {
             <div class="col relative-position">
                 <div v-if="!selectedBatchForScans" class="fit flex flex-center text-grey-6 text-center column q-pa-lg">
                     <q-icon name="touch_app" size="64px" class="q-mb-md" />
-                    <div class="text-h6">No Batch Selected</div>
-                    <div class="text-caption">Click on a Batch in the list above to view its detailed pre-batch scans.</div>
+                    <div class="text-h6">{{ t('packing.noBatchSelected') }}</div>
+                    <div class="text-caption">{{ t('packing.clickBatchToView') }}</div>
                 </div>
 
                 <q-scroll-area v-else class="fit">
@@ -1183,10 +1183,10 @@ const onPreviewPackingBoxLabel = async () => {
                             <thead class="bg-grey-2">
                                 <tr>
                                     <th style="width: 40px"></th>
-                                    <th class="text-left">Ingredient</th>
-                                    <th class="text-left">Description</th>
-                                    <th class="text-right">Required Wt</th>
-                                    <th class="text-center">Status</th>
+                                    <th class="text-left">{{ t('preBatch.ingredient') }}</th>
+                                    <th class="text-left">{{ t('common.description') }}</th>
+                                    <th class="text-right">{{ t('packing.requiredWt') }}</th>
+                                    <th class="text-center">{{ t('common.status') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1222,10 +1222,10 @@ const onPreviewPackingBoxLabel = async () => {
                                             <q-markup-table dense flat bordered square class="q-ml-md q-mr-sm q-mb-sm">
                                                 <thead class="bg-white">
                                                     <tr class="text-grey-7" style="font-size: 0.8em">
-                                                        <th class="text-left">Scan Record ID</th>
-                                                        <th class="text-center">Pkg #</th>
-                                                        <th class="text-right">Net Wt</th>
-                                                        <th class="text-center">Pack Status</th>
+                                                        <th class="text-left">{{ t('packing.scanRecordId') }}</th>
+                                                        <th class="text-center">{{ t('packing.pkgNo') }}</th>
+                                                        <th class="text-right">{{ t('packing.netWt') }}</th>
+                                                        <th class="text-center">{{ t('packing.packStatus') }}</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody class="bg-white">
@@ -1243,7 +1243,7 @@ const onPreviewPackingBoxLabel = async () => {
                                                         </td>
                                                     </tr>
                                                     <tr v-if="getRecordsForBatchRequirement(selectedBatchForScans.batch_id, req.re_code).length === 0">
-                                                        <td colspan="4" class="text-center text-grey italic q-pa-sm">No scans recorded for this requirement yet.</td>
+                                                        <td colspan="4" class="text-center text-grey italic q-pa-sm">{{ t('packing.noScansRecorded') }}</td>
                                                     </tr>
                                                 </tbody>
                                             </q-markup-table>
@@ -1287,7 +1287,7 @@ const onPreviewPackingBoxLabel = async () => {
                 </div>
                 
                 <div v-if="scanFeedback.batchId" class="q-mt-md q-pa-md bg-white text-primary rounded-borders full-width shadow-3 text-center">
-                    <div class="text-caption text-grey-8 text-weight-bold">TARGET BOX ID</div>
+                    <div class="text-caption text-grey-8 text-weight-bold">{{ t('packing.targetBoxId') }}</div>
                     <div class="text-h5 text-weight-bolder letter-spacing-1">{{ scanFeedback.batchId }}</div>
                 </div>
             </q-card-section>
@@ -1298,7 +1298,7 @@ const onPreviewPackingBoxLabel = async () => {
                     outline
                     color="white"
                     icon="qr_code_scanner"
-                    label="SIMULATE BOX SCAN" 
+                    :label="t('packing.simulateBoxScan')" 
                     class="q-px-md text-weight-bold"
                     @click="handleBarcodeScan(scanFeedback.batchId)" 
                 />
@@ -1306,7 +1306,7 @@ const onPreviewPackingBoxLabel = async () => {
                     unelevated 
                     color="white" 
                     :text-color="scanFeedback.type === 'success' ? 'positive' : (scanFeedback.type === 'error' ? 'negative' : 'primary')"
-                    :label="scanFeedback.type === 'instruction' ? 'CONTINUE' : 'OK'" 
+                    :label="scanFeedback.type === 'instruction' ? t('packing.continue') : t('packing.ok')" 
                     class="q-px-xl text-weight-bold"
                     v-close-popup 
                 />
@@ -1320,7 +1320,7 @@ const onPreviewPackingBoxLabel = async () => {
             <q-card-section class="bg-blue-9 text-white row items-center q-py-sm">
                 <div class="text-subtitle1 text-weight-bold">
                     <q-icon name="print" class="q-mr-sm" />
-                    Box Label Print Queue
+                    {{ t('packing.printList') }}
                 </div>
                 <q-space />
                 <q-btn icon="close" flat round dense v-close-popup />
@@ -1329,8 +1329,8 @@ const onPreviewPackingBoxLabel = async () => {
             <q-card-section class="col scroll q-pa-none">
                 <div v-if="printQueue.length === 0" class="flex flex-center full-height column text-grey q-pa-xl">
                     <q-icon name="print_disabled" size="64px" class="q-mb-md" />
-                    <div class="text-h6">Queue is Empty</div>
-                    <div class="text-caption">Add labels from the planning list</div>
+                    <div class="text-h6">{{ t('packing.queueEmpty') }}</div>
+                    <div class="text-caption">{{ t('packing.addLabelsFromList') }}</div>
                 </div>
 
                 <q-list v-else separator class="bg-grey-2 q-pa-sm">
@@ -1338,7 +1338,7 @@ const onPreviewPackingBoxLabel = async () => {
                         <q-item-section>
                             <div class="row justify-between items-start">
                                 <div>
-                                    <div class="text-caption text-grey-7 text-weight-bold">#{{ index + 1 }} BOX LABEL</div>
+                                    <div class="text-caption text-grey-7 text-weight-bold">#{{ index + 1 }} {{ t('packing.boxLabel') }}</div>
                                     <div class="text-h6 text-primary text-weight-bolder" style="line-height:1.2">{{ item.batch_id }}</div>
                                 </div>
                                 <q-btn flat round dense color="negative" icon="delete" @click="removeFromPrintList(item.batch_id)" />
@@ -1349,23 +1349,23 @@ const onPreviewPackingBoxLabel = async () => {
                             <div class="q-gutter-y-xs">
                                 <div class="row no-wrap items-center">
                                     <q-icon name="warehouse" color="blue-grey" size="14px" class="q-mr-xs" />
-                                    <div class="text-caption text-weight-bold q-mr-xs">WH MANIFEST:</div>
+                                    <div class="text-caption text-weight-bold q-mr-xs">{{ t('packing.whManifest') }}</div>
                                     <div class="text-caption">{{ item.wh_summary }}</div>
                                 </div>
                                 <div class="row no-wrap items-center">
                                     <q-icon name="inventory_2" color="blue-grey" size="14px" class="q-mr-xs" />
-                                    <div class="text-caption text-weight-bold q-mr-xs">SKU/PLAN:</div>
+                                    <div class="text-caption text-weight-bold q-mr-xs">{{ t('packing.skuPlan') }}</div>
                                     <div class="text-caption">{{ item.sku }} | {{ item.plan_id }}</div>
                                 </div>
                                 <div class="row items-center q-mt-sm justify-between bg-blue-1 q-pa-sm rounded-borders">
                                     <div class="column">
-                                        <div class="text-overline text-blue-9" style="line-height:1">NET WEIGHT</div>
+                                        <div class="text-overline text-blue-9" style="line-height:1">{{ t('packing.netWeight') }}</div>
                                         <div class="text-subtitle1 text-weight-bolder">{{ item.total_vol }} kg</div>
                                     </div>
                                     <q-separator vertical class="q-mx-md" />
                                     <div class="column">
-                                        <div class="text-overline text-blue-9" style="line-height:1">QUANTITY</div>
-                                        <div class="text-subtitle1 text-weight-bolder">{{ item.bag_count }} BAGS</div>
+                                        <div class="text-overline text-blue-9" style="line-height:1">{{ t('packing.quantity') }}</div>
+                                        <div class="text-subtitle1 text-weight-bolder">{{ item.bag_count }} {{ t('packing.bags') }}</div>
                                     </div>
                                 </div>
                             </div>
@@ -1384,7 +1384,7 @@ const onPreviewPackingBoxLabel = async () => {
                             unelevated 
                             class="full-width q-py-md text-weight-bold shadow-3" 
                             color="blue-9" 
-                            label="Print" 
+                            :label="t('common.print')" 
                             icon="print"
                             @click="onPrintAllInList"
                             :disable="printQueue.length === 0"
@@ -1393,7 +1393,7 @@ const onPreviewPackingBoxLabel = async () => {
                     </div>
                 </div>
                 <div class="text-center q-mt-sm text-caption text-grey-7 italic">
-                    Labels will be printed in 4x4 layout
+                    {{ t('packing.labelsLayout') }}
                 </div>
             </q-card-section>
         </q-card>
@@ -1403,7 +1403,7 @@ const onPreviewPackingBoxLabel = async () => {
     <q-dialog v-model="showPackingBoxLabelDialog">
       <q-card style="min-width: 450px; border-radius: 12px;">
         <q-card-section class="bg-blue-9 text-white row items-center q-py-sm">
-          <div class="text-subtitle1 text-weight-bold">Packing Box Label Preview</div>
+          <div class="text-subtitle1 text-weight-bold">{{ t('packing.packingBoxLabelPreview') }}</div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
@@ -1424,7 +1424,7 @@ const onPreviewPackingBoxLabel = async () => {
                 outline 
                 class="full-width text-weight-bold" 
                 color="primary" 
-                label="CLOSE" 
+                :label="t('common.close')" 
                 v-close-popup 
               />
             </div>
@@ -1433,7 +1433,7 @@ const onPreviewPackingBoxLabel = async () => {
                 unelevated 
                 class="full-width text-weight-bold shadow-2" 
                 color="positive" 
-                label="PRINT LABEL" 
+                :label="t('packing.printLabel')" 
                 icon="print"
                 @click="printLabel(packingBoxLabelSvg)"
               />

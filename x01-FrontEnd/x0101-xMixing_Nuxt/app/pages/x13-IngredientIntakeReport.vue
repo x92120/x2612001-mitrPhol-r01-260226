@@ -15,29 +15,24 @@ interface ReportItem {
 
 const $q = useQuasar()
 const { getAuthHeader } = useAuth()
+const { t } = useI18n()
 const startDate = ref('')
 const endDate = ref('')
 const reportData = ref<ReportItem[]>([])
 const loading = ref(false)
-const columns: QTableColumn[] = [
-  { name: 'ingredient_id', label: 'Ingredient ID', field: 'ingredient_id', sortable: true, align: 'left' },
-  { name: 'ingredient_name', label: 'Ingredient Name', field: 'ingredient_name', sortable: true, align: 'left' },
-  { 
-    name: 'total_intake_vol', 
-    label: 'Total Volume (kg)', 
-    field: 'total_intake_vol', 
-    sortable: true, 
-    format: (val: number) => val.toFixed(2) 
-  },
-  { name: 'total_package_intake', label: 'Total Packages', field: 'total_package_intake', sortable: true },
-  { name: 'intake_count', label: 'No. of Intakes', field: 'intake_count', sortable: true },
-]
+const columns = computed((): QTableColumn[] => [
+  { name: 'ingredient_id', label: t('ingConfig.ingredientId'), field: 'ingredient_id', sortable: true, align: 'left' },
+  { name: 'ingredient_name', label: t('ingConfig.ingredientName'), field: 'ingredient_name', sortable: true, align: 'left' },
+  { name: 'total_intake_vol', label: t('report.totalVolume'), field: 'total_intake_vol', sortable: true, format: (val: number) => val.toFixed(2) },
+  { name: 'total_package_intake', label: t('report.totalPackages'), field: 'total_package_intake', sortable: true },
+  { name: 'intake_count', label: t('report.noIntakes'), field: 'intake_count', sortable: true },
+])
 
 const fetchReport = async () => {
   if (!startDate.value || !endDate.value) {
     $q.notify({
       type: 'warning',
-      message: 'Please select both start and end dates',
+      message: t('report.selectDates'),
       position: 'top'
     })
     return
@@ -62,7 +57,7 @@ const fetchReport = async () => {
     console.error('Report fetch error:', error)
     $q.notify({
       type: 'negative',
-      message: 'Failed to load report data',
+      message: t('report.failedLoad'),
       position: 'top'
     })
   } finally {
@@ -81,23 +76,23 @@ const grandTotalPackages = computed(() => {
 
 <template>
   <q-page class="q-pa-md">
-    <div class="text-h5 q-mb-md">Ingredient Intake Summary Report</div>
+    <div class="text-h5 q-mb-md">{{ t('report.title') }}</div>
 
     <!-- Filters -->
     <q-card class="q-mb-md">
       <q-card-section>
         <div class="row q-col-gutter-md items-center">
           <div class="col-12 col-md-3">
-            <q-input filled v-model="startDate" label="Start Date" type="date" stack-label />
+            <q-input filled v-model="startDate" :label="t('report.startDate')" type="date" stack-label />
           </div>
           <div class="col-12 col-md-3">
-            <q-input filled v-model="endDate" label="End Date" type="date" stack-label />
+            <q-input filled v-model="endDate" :label="t('report.endDate')" type="date" stack-label />
           </div>
           <div class="col-12 col-md-2">
             <q-btn 
               color="primary" 
               icon="search" 
-              label="Generate Report" 
+              :label="t('report.generateReport')" 
               @click="fetchReport" 
               :loading="loading"
               class="full-width"
@@ -109,7 +104,7 @@ const grandTotalPackages = computed(() => {
 
     <!-- Report Table -->
     <q-table
-      title="Summary by Ingredient"
+      :title="t('report.summaryByIngredient')"
       :rows="reportData"
       :columns="columns"
       row-key="ingredient_id"
@@ -120,7 +115,7 @@ const grandTotalPackages = computed(() => {
     >
       <template v-slot:bottom-row>
         <q-tr class="bg-grey-2 text-weight-bold">
-          <q-td colspan="2" class="text-right">Grand Total:</q-td>
+          <q-td colspan="2" class="text-right">{{ t('report.grandTotal') }}</q-td>
           <q-td class="text-right">{{ grandTotalVolume.toFixed(2) }}</q-td>
           <q-td class="text-right">{{ grandTotalPackages }}</q-td>
           <q-td></q-td>

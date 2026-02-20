@@ -22,6 +22,7 @@ interface Ingredient {
 
 const $q = useQuasar()
 const { getAuthHeader, user } = useAuth()
+const { t } = useI18n()
 
 // --- State ---
 const ingredients = ref<Ingredient[]>([])
@@ -46,11 +47,11 @@ const fetchIngredients = async () => {
     if (response.ok) {
       ingredients.value = await response.json()
     } else {
-      $q.notify({ type: 'negative', message: 'Failed to fetch ingredients' })
+      $q.notify({ type: 'negative', message: t('ingConfig.failedFetch') })
     }
   } catch (error) {
     console.error('Fetch error:', error)
-    $q.notify({ type: 'negative', message: 'Network error' })
+    $q.notify({ type: 'negative', message: t('ingConfig.networkError') })
   } finally {
     loading.value = false
   }
@@ -94,72 +95,18 @@ const form = ref<Ingredient>({
   std_prebatch_batch_size: 0.0,
 })
 
-const columns: QTableColumn[] = [
-  {
-    name: 'mat_sap_code',
-    label: 'MAT.SAP Code',
-    field: 'mat_sap_code',
-    align: 'left',
-    sortable: true,
-  },
-  {
-    name: 're_code',
-    label: 'Re-Code',
-    field: 're_code',
-    align: 'left',
-    sortable: true,
-  },
-  {
-    name: 'ingredient_id',
-    label: 'Ingredient ID',
-    field: 'ingredient_id',
-    align: 'left',
-    sortable: true,
-  },
-  {
-    name: 'name',
-    label: 'Ingredient Name',
-    field: 'name',
-    align: 'left',
-    sortable: true,
-  },
-  {
-    name: 'unit',
-    label: 'Unit',
-    field: 'unit',
-    align: 'left',
-    sortable: true,
-  },
-  {
-    name: 'std_package_size',
-    label: 'Batch Prepare Package Size',
-    field: 'std_package_size',
-    align: 'left',
-    sortable: true,
-  },
-  {
-    name: 'Group',
-    label: 'Group',
-    field: 'Group',
-    align: 'left',
-    sortable: true,
-  },
-  {
-    name: 'status',
-    label: 'Status',
-    field: 'status',
-    align: 'center',
-    sortable: true,
-  },
-  {
-    name: 'update_by',
-    label: 'Edit By',
-    field: 'update_by',
-    align: 'left',
-    sortable: true,
-  },
-  { name: 'actions', label: 'Actions', field: 'actions', align: 'right' },
-]
+const columns = computed((): QTableColumn[] => [
+  { name: 'mat_sap_code', label: t('ingConfig.matSapCode'), field: 'mat_sap_code', align: 'left', sortable: true },
+  { name: 're_code', label: t('ingConfig.reCode'), field: 're_code', align: 'left', sortable: true },
+  { name: 'ingredient_id', label: t('ingConfig.ingredientId'), field: 'ingredient_id', align: 'left', sortable: true },
+  { name: 'name', label: t('ingConfig.ingredientName'), field: 'name', align: 'left', sortable: true },
+  { name: 'unit', label: t('ingConfig.unit'), field: 'unit', align: 'left', sortable: true },
+  { name: 'std_package_size', label: t('ingConfig.batchPrepPkgSize'), field: 'std_package_size', align: 'left', sortable: true },
+  { name: 'Group', label: t('ingConfig.group'), field: 'Group', align: 'left', sortable: true },
+  { name: 'status', label: t('common.status'), field: 'status', align: 'center', sortable: true },
+  { name: 'update_by', label: t('ingConfig.editBy'), field: 'update_by', align: 'left', sortable: true },
+  { name: 'actions', label: t('common.actions'), field: 'actions', align: 'right' },
+])
 
 // --- Actions ---
 const openAddDialog = () => {
@@ -260,8 +207,8 @@ const printLabel = async (row: Ingredient) => {
 
 const onDelete = (ingredientId: number) => {
   $q.dialog({
-    title: 'Confirm',
-    message: 'Are you sure you want to delete this ingredient?',
+    title: t('common.confirm'),
+    message: t('ingConfig.confirmDelete'),
     cancel: true,
     persistent: true,
   }).onOk(async () => {
@@ -271,22 +218,22 @@ const onDelete = (ingredientId: number) => {
         headers: getHeaders(),
       })
       if (response.ok) {
-        $q.notify({ type: 'positive', message: 'Ingredient deleted' })
+        $q.notify({ type: 'positive', message: t('ingConfig.ingredientDeleted') })
         await fetchIngredients()
         showDialog.value = false
       } else {
-        $q.notify({ type: 'negative', message: 'Failed to delete ingredient' })
+        $q.notify({ type: 'negative', message: t('ingConfig.failedDelete') })
       }
     } catch (error) {
       console.error('Delete error:', error)
-      $q.notify({ type: 'negative', message: 'Network error' })
+      $q.notify({ type: 'negative', message: t('ingConfig.networkError') })
     }
   })
 }
 
 const onSave = async () => {
   if (!form.value.mat_sap_code || !form.value.name) {
-    $q.notify({ type: 'warning', message: 'MAT.SAP Code and Name are required' })
+    $q.notify({ type: 'warning', message: t('ingConfig.matSapRequired') })
     return
   }
 
@@ -312,7 +259,7 @@ const onSave = async () => {
     if (response.ok) {
       $q.notify({
         type: 'positive',
-        message: isEditing.value ? 'Ingredient updated' : 'Ingredient added',
+        message: isEditing.value ? t('ingConfig.ingredientUpdated') : t('ingConfig.ingredientAdded'),
       })
       showDialog.value = false
       await fetchIngredients()
@@ -320,12 +267,12 @@ const onSave = async () => {
       const error = await response.json()
       $q.notify({
         type: 'negative',
-        message: error.detail || 'Failed to save ingredient',
+        message: error.detail || t('ingConfig.failedSave'),
       })
     }
   } catch (error) {
     console.error('Save error:', error)
-    $q.notify({ type: 'negative', message: 'Network error' })
+    $q.notify({ type: 'negative', message: t('ingConfig.networkError') })
   }
 }
 </script>
@@ -334,11 +281,11 @@ const onSave = async () => {
   <q-page class="q-pa-md">
     <q-card>
       <q-card-section class="bg-primary text-white row items-center justify-between">
-        <div class="text-h6">Ingredient</div>
+        <div class="text-h6">{{ t('ingConfig.title') }}</div>
         <div class="row items-center q-gutter-sm">
           <q-btn
             icon="filter_alt_off"
-            label="Reset"
+            :label="t('common.reset')"
             flat
             dense
             color="white"
@@ -346,7 +293,7 @@ const onSave = async () => {
           />
           <q-btn
             icon="filter_alt"
-            :label="showFilters ? 'Hide' : 'Show'"
+            :label="showFilters ? t('common.close') : t('common.view')"
             flat
             dense
             color="white"
@@ -359,10 +306,10 @@ const onSave = async () => {
             dense
             color="white"
             @click="fetchIngredients"
-            title="Refresh List"
+            :title="t('ingConfig.refreshList')"
           />
           <q-btn
-            label="Add Ingredient"
+            :label="t('ingConfig.addIngredient')"
             color="white"
             text-color="primary"
             unelevated
@@ -394,7 +341,7 @@ const onSave = async () => {
                     dense
                     outlined
                     bg-color="white"
-                    placeholder="Search"
+                    :placeholder="t('common.search')"
                     @click.stop
                   />
                 </div>
@@ -422,7 +369,7 @@ const onSave = async () => {
                 class="q-mr-xs"
                 @click="printLabel(props.row)"
               >
-                <q-tooltip>Print Label</q-tooltip>
+                <q-tooltip>{{ t('ingConfig.printLabel') }}</q-tooltip>
               </q-btn>
               <q-btn
                 icon="edit"
@@ -434,7 +381,7 @@ const onSave = async () => {
                 class="q-mr-xs"
                 @click="openEditDialog(props.row)"
               >
-                <q-tooltip>Edit</q-tooltip>
+                <q-tooltip>{{ t('common.edit') }}</q-tooltip>
               </q-btn>
               <q-btn
                 icon="delete"
@@ -445,7 +392,7 @@ const onSave = async () => {
                 size="sm"
                 @click="onDelete(props.row.id)"
               >
-                <q-tooltip>Delete</q-tooltip>
+                <q-tooltip>{{ t('common.delete') }}</q-tooltip>
               </q-btn>
             </q-td>
           </template>
@@ -457,41 +404,41 @@ const onSave = async () => {
     <q-dialog v-model="showDialog" persistent>
       <q-card style="min-width: 400px">
         <q-card-section>
-          <div class="text-h6">{{ isEditing ? 'Edit Ingredient' : 'Add New Ingredient' }}</div>
+          <div class="text-h6">{{ isEditing ? t('ingConfig.editIngredient') : t('ingConfig.addNewIngredient') }}</div>
         </q-card-section>
 
         <q-card-section class="q-pt-none">
           <q-input
             v-model="form.mat_sap_code"
-            label="MAT.SAP Code *"
+            :label="t('ingConfig.matSapCode') + ' *'"
             dense
             autofocus
             :readonly="isEditing"
             class="q-mb-md"
           />
-          <q-input v-model="form.re_code" label="Re-Code" dense class="q-mb-md" />
-          <q-input v-model="form.ingredient_id" label="Ingredient ID *" dense class="q-mb-md" />
-          <q-input v-model="form.name" label="Ingredient Name *" dense class="q-mb-md" />
-          <q-input v-model="form.unit" label="Unit" dense class="q-mb-md" />
+          <q-input v-model="form.re_code" :label="t('ingConfig.reCode')" dense class="q-mb-md" />
+          <q-input v-model="form.ingredient_id" :label="t('ingConfig.ingredientId') + ' *'" dense class="q-mb-md" />
+          <q-input v-model="form.name" :label="t('ingConfig.ingredientName') + ' *'" dense class="q-mb-md" />
+          <q-input v-model="form.unit" :label="t('ingConfig.unit')" dense class="q-mb-md" />
           <q-input
             v-model.number="form.std_package_size"
-            label="Batch Prepare Package Size (kg)"
+            :label="t('ingConfig.batchPrepPkgSize') + ' (kg)'"
             dense
             type="number"
             class="q-mb-md"
           />
           <q-input
             v-model.number="form.std_prebatch_batch_size"
-            label="Standard Prebatch Batch Size (kg)"
+            :label="t('ingConfig.stdPrebatchSize')"
             dense
             type="number"
             class="q-mb-md"
           />
-          <q-input v-model="form.Group" label="Group (Colour/Flavor)" dense class="q-mb-md" />
+          <q-input v-model="form.Group" :label="t('ingConfig.groupColorFlavor')" dense class="q-mb-md" />
           <q-select
             v-model="form.status"
             :options="['Active', 'Inactive']"
-            label="Status"
+            :label="t('common.status')"
             dense
             class="q-mb-md"
           />
@@ -501,13 +448,13 @@ const onSave = async () => {
           <q-btn
             v-if="isEditing"
             flat
-            label="Delete"
+            :label="t('common.delete')"
             color="negative"
             @click="onDelete(form.id!)"
           />
           <q-space />
-          <q-btn flat label="Cancel" v-close-popup />
-          <q-btn flat label="Save" @click="onSave" />
+          <q-btn flat :label="t('common.cancel')" v-close-popup />
+          <q-btn flat :label="t('common.save')" @click="onSave" />
         </q-card-actions>
       </q-card>
     </q-dialog>
