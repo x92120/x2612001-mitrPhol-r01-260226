@@ -13,11 +13,21 @@ interface ReportItem {
   intake_count: number
 }
 
+const formatDateForInput = (date: any) => {
+  if (!date) return ''
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return ''
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
 const $q = useQuasar()
 const { getAuthHeader } = useAuth()
 const { t } = useI18n()
-const startDate = ref('')
-const endDate = ref('')
+const startDate = ref(formatDateForInput(new Date()))
+const endDate = ref(formatDateForInput(new Date()))
 const reportData = ref<ReportItem[]>([])
 const loading = ref(false)
 
@@ -35,13 +45,22 @@ const parseInputDate = (val: string | null | undefined) => {
   return isNaN(d.getTime()) ? null : d
 }
 
-const formatDateToApi = (val: string) => {
-  const d = parseInputDate(val)
-  if (!d) return ''
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+const formatDateToApi = (val: string | null | undefined) => {
+  if (!val || val === '--/--/----') return null
+  const parts = val.split('/')
+  if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+    const day = parts[0].padStart(2, '0')
+    const month = parts[1].padStart(2, '0')
+    const year = parts[2]
+    return `${year}-${month}-${day}`
+  }
+  // Try fallback for other formats
+  const d = new Date(val)
+  if (isNaN(d.getTime())) return null
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const da = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${da}`
 }
 const columns = computed((): QTableColumn[] => [
   { name: 'ingredient_id', label: t('ingConfig.ingredientId'), field: 'ingredient_id', sortable: true, align: 'left' },

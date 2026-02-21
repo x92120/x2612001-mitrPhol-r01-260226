@@ -32,18 +32,22 @@ const formatDateForInput = (date: any) => {
   return `${day}/${month}/${year}`
 }
 
-const parseInputDate = (val: string | null | undefined) => {
+const formatDateToApi = (val: string | null | undefined) => {
   if (!val || val === '--/--/----') return null
   const parts = val.split('/')
   if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
-    const day = parseInt(parts[0])
-    const month = parseInt(parts[1]) - 1
-    const year = parseInt(parts[2])
-    const d = new Date(year, month, day)
-    return isNaN(d.getTime()) ? null : d
+    const day = parts[0].padStart(2, '0')
+    const month = parts[1].padStart(2, '0')
+    const year = parts[2]
+    return `${year}-${month}-${day}`
   }
+  // Try fallback for other formats
   const d = new Date(val)
-  return isNaN(d.getTime()) ? null : d
+  if (isNaN(d.getTime())) return null
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const da = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${da}`
 }
 
 interface IngredientIntakeHistory {
@@ -136,9 +140,9 @@ const columns = computed<QTableColumn[]>(() => [
   { name: 're_code', align: 'center', label: t('ingredient.reCode'), field: 're_code', sortable: true },
   { name: 'material_description', align: 'left', label: t('ingredient.materialDesc'), field: 'material_description', sortable: true },
   { name: 'uom', align: 'center', label: t('ingredient.uom'), field: 'uom', sortable: true },
-  { name: 'intake_vol', align: 'center', label: t('ingredient.intakeVolume'), field: 'intake_vol', sortable: true },
-  { name: 'remain_vol', align: 'center', label: t('ingredient.remainVolume'), field: 'remain_vol', sortable: true, classes: 'text-negative text-weight-bold' },
-  { name: 'intake_package_vol', align: 'center', label: t('ingredient.pkgVol'), field: 'intake_package_vol', sortable: true },
+  { name: 'intake_vol', align: 'center', label: t('ingredient.intakeVolume'), field: 'intake_vol', sortable: true, format: (val: number) => val?.toFixed(4) || '-' },
+  { name: 'remain_vol', align: 'center', label: t('ingredient.remainVolume'), field: 'remain_vol', sortable: true, classes: 'text-negative text-weight-bold', format: (val: number) => val?.toFixed(4) || '-' },
+  { name: 'intake_package_vol', align: 'center', label: t('ingredient.pkgVol'), field: 'intake_package_vol', sortable: true, format: (val: number) => val?.toFixed(4) || '-' },
   { name: 'package_intake', align: 'center', label: t('ingredient.pkgs'), field: 'package_intake', sortable: true },
   { name: 'expire_date', align: 'center', label: t('ingredient.expiryDate'), field: 'expire_date', sortable: true, format: (val: string) => formatDate(val) },
   { name: 'po_number', align: 'center', label: t('ingredient.poNo'), field: 'po_number', sortable: true },
@@ -206,7 +210,7 @@ const lookupIngredient = async (query: string) => {
         ingredientId.value = ingredient.ingredient_id
       }
 
-      packageVol.value = Number(ingredient.std_package_size || 25).toFixed(3)
+      packageVol.value = Number(ingredient.std_package_size || 25).toFixed(4)
 
       $q.notify({
         type: 'positive',
@@ -334,11 +338,11 @@ const onSave = async () => {
           : parseFloat(intakeVol.value),
       intake_package_vol: packageVol.value ? parseFloat(packageVol.value) : null,
       package_intake: numberOfPackages.value ? parseInt(numberOfPackages.value) : null,
-      expire_date: expireDate.value ? parseInputDate(expireDate.value)?.toISOString() : null,
+      expire_date: expireDate.value ? formatDateToApi(expireDate.value) : null,
       status: isEditing.value ? originalStatus.value : 'Active',
       intake_by: user.value?.username || 'cj',
       edit_by: user.value?.username || 'cj',
-      manufacturing_date: manufacturingDate.value ? parseInputDate(manufacturingDate.value)?.toISOString() : null,
+      manufacturing_date: manufacturingDate.value ? formatDateToApi(manufacturingDate.value) : null,
       po_number: poNumber.value || null,
     }
 
@@ -713,8 +717,8 @@ const printLabel = async (record: IngredientIntake) => {
       .replace(/\{\{ExpireDate\}\}/g, formatDate(record.expire_date))
       .replace(/\{\{MenufacturingDate\}\}/g, formatDate(record.manufacturing_date))
       .replace(/\{\{PackageString\}\}/g, `${i} / ${numPackages}`)
-      .replace(/\{\{IntakeVol\}\}/g, record.intake_vol?.toFixed(2) || '0.00')
-      .replace(/\{\{PackageVol\}\}/g, currentPkgVol.toFixed(3) || '0.000')
+      .replace(/\{\{IntakeVol\}\}/g, record.intake_vol?.toFixed(4) || '0.0000')
+      .replace(/\{\{PackageVol\}\}/g, currentPkgVol.toFixed(4) || '0.0000')
       .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="18.897638" y="115.16535" width="134.01466" height="134.01468" />`)
       .replace(/\{\{Operator\}\}/g, record.intake_by || 'Operator')
       .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
@@ -806,8 +810,8 @@ const printSinglePackageLabel = async (record: IngredientIntake, pkg: { package_
     .replace(/\{\{ExpireDate\}\}/g, formatDate(record.expire_date))
     .replace(/\{\{MenufacturingDate\}\}/g, formatDate(record.manufacturing_date))
     .replace(/\{\{PackageString\}\}/g, `${pkg.package_no} / ${numPackages}`)
-    .replace(/\{\{IntakeVol\}\}/g, record.intake_vol?.toFixed(2) || '0.00')
-    .replace(/\{\{PackageVol\}\}/g, pkg.weight.toFixed(3) || '0.000')
+    .replace(/\{\{IntakeVol\}\}/g, record.intake_vol?.toFixed(4) || '0.0000')
+    .replace(/\{\{PackageVol\}\}/g, pkg.weight.toFixed(4) || '0.0000')
     .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="18.897638" y="115.16535" width="134.01466" height="134.01468" />`)
     .replace(/\{\{Operator\}\}/g, record.intake_by || 'Operator')
     .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
@@ -1381,17 +1385,17 @@ const onFileSelected = async (event: Event) => {
                     </div>
                     
                     <div v-else class="row q-col-gutter-sm">
-                      <div v-for="pkg in props.row.packages" :key="pkg.id" class="col-12 col-sm-6 col-md-3">
+                      <div v-for="pkg in [...props.row.packages].sort((a, b) => a.package_no - b.package_no)" :key="pkg.id || pkg.package_no" class="col-12">
                         <q-card flat bordered class="bg-white">
                           <q-item dense>
+                            <q-item-section side>
+                              <q-btn icon="print" flat round dense size="sm" color="primary" @click="printSinglePackageLabel(props.row, pkg)" />
+                            </q-item-section>
                             <q-item-section avatar>
                               <q-avatar color="primary" text-color="white" size="xs">{{ pkg.package_no }}</q-avatar>
                             </q-item-section>
                             <q-item-section>
-                              <q-item-label class="text-weight-bold">{{ pkg.weight.toFixed(3) }} kg</q-item-label>
-                            </q-item-section>
-                            <q-item-section side>
-                              <q-btn icon="print" flat round dense size="xs" color="grey-7" @click="printSinglePackageLabel(props.row, pkg)" />
+                              <q-item-label class="text-weight-bold">{{ pkg.weight.toFixed(4) }} kg</q-item-label>
                             </q-item-section>
                           </q-item>
                         </q-card>

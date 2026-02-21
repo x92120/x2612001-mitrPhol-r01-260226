@@ -2304,7 +2304,7 @@ const onSelectBatch = (index: number) => {
                         <div class="row q-col-gutter-lg q-mb-md">
                             <div class="col">
                                 <div class="text-caption text-weight-bold text-grey-7">INTAKE VOL</div>
-                                <div class="text-h4 text-weight-bolder">{{ (intakeLabelData?.intake_vol ?? 0).toFixed(2) }} <span class="text-h6">kg</span></div>
+                                <div class="text-h4 text-weight-bolder">{{ (intakeLabelData?.intake_vol ?? 0).toFixed(4) }} <span class="text-h6">kg</span></div>
                             </div>
                             <div class="col-auto text-right">
                                 <div class="text-caption text-weight-bold text-grey-7">PACKAGE</div>
@@ -2344,7 +2344,7 @@ const onSelectBatch = (index: number) => {
                                 </div>
                                 <div class="col-6">
                                     <div class="text-caption uppercase text-grey-8" style="font-size: 0.65rem;">Weight</div>
-                                    <div class="text-subtitle2 text-weight-bold">{{ (intakeLabelData?.intake_vol ?? 0).toFixed(2) }} kg</div>
+                                    <div class="text-subtitle2 text-weight-bold">{{ (intakeLabelData?.intake_vol ?? 0).toFixed(4) }} kg</div>
                                     <div class="text-caption text-grey-7" style="font-size: 0.6rem;">1 / {{ intakeLabelData?.package_intake }}</div>
                                 </div>
                              </div>
