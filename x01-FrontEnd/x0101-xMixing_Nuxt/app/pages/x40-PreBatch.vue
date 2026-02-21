@@ -188,20 +188,23 @@ const onBatchSelect = async (plan: any, batch: any, index: number) => {
 
 const fetchPrebatchItems = async (batchId: string) => {
   try {
-    // Calling the new summary endpoint
-    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-scans/summary/${batchId}`, {
+    // Fetch prebatch requirements (re_code + required_volume list) for this batch
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-reqs/by-batch/${batchId}`, {
       headers: getAuthHeader() as Record<string, string>
     })
     prebatchItems.value = data
   } catch (error) {
-    console.error('Error fetching prebatch (scans) summary:', error)
+    console.error('Error fetching prebatch requirements:', error)
     prebatchItems.value = []
   }
 }
 
 const updatePrebatchItemStatus = async (batchId: string, reCode: string, status: number) => {
   try {
-    await $fetch(`${appConfig.apiBaseUrl}/prebatch-items/${batchId}/${reCode}/status?status=${status}`, {
+    // Find the req_id for this re_code
+    const req = prebatchItems.value.find((r: any) => r.re_code === reCode)
+    if (!req) return
+    await $fetch(`${appConfig.apiBaseUrl}/prebatch-reqs/${req.id}/status?status=${status}`, {
       method: 'PUT',
       headers: getAuthHeader() as Record<string, string>
     })

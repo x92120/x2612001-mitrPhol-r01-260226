@@ -4,10 +4,13 @@
  */
 
 export const appConfig = {
-  // Base URL for API calls - defaults to port 8001 on the same host
+  // Base URL for API calls - always port 8001 on the same host the browser is using
   get apiBaseUrl(): string {
-    const hostname = (typeof window !== 'undefined' && window.location) ? window.location.hostname : 'localhost'
-    return `http://${hostname}:8001`
+    if (typeof window === 'undefined') return 'http://localhost:8001'
+    // Use the exact hostname the browser used to load this page.
+    // This ensures it works both on localhost and over network (IP or hostname).
+    const { protocol, hostname } = window.location
+    return `${protocol}//${hostname}:8001`
   }
 }
 

@@ -173,6 +173,17 @@ def get_prebatch_reqs_by_batch(batch_id: str, db: Session = Depends(get_db)):
     """Get prebatch requirements filtered by batch ID."""
     return crud.get_prebatch_reqs_by_batch(db, batch_id=batch_id)
 
+@router.put("/prebatch-reqs/{req_id}/status")
+def update_prebatch_req_status_by_id(req_id: int, status: int, db: Session = Depends(get_db)):
+    """Update the status of a prebatch requirement by its ID. 0=Pending, 1=In-Progress, 2=Completed."""
+    req = db.query(models.PreBatchReq).filter(models.PreBatchReq.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    req.status = status
+    db.commit()
+    db.refresh(req)
+    return {"id": req.id, "status": req.status}
+
 @router.get("/prebatch-recs/by-batch/{batch_id}", response_model=List[schemas.PreBatchRec])
 def get_prebatch_recs_by_batch(batch_id: str, db: Session = Depends(get_db)):
     """Get prebatch records filtered by batch ID."""

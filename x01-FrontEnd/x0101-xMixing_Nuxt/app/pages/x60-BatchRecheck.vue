@@ -371,9 +371,10 @@ const onSimSelectBatch = async (batch: any) => {
             } catch { /* skip if error */ }
         }
         otherBatchBagLabels.value = otherLabels
-    } catch (err) {
+    } catch (err: any) {
         console.error('Error generating labels:', err)
-        $q.notify({ type: 'negative', message: 'Error loading batch labels' })
+        const detail = err?.data?.detail || err?.message || String(err)
+        $q.notify({ type: 'negative', message: `Error loading batch labels: ${detail}`, timeout: 5000 })
     } finally {
         scannerLoading.value = false
     }
