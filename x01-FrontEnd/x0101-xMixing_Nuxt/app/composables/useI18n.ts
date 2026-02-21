@@ -1,116 +1,64 @@
-/**
- * useI18n Composable
- * ==================
- * Provides reactive language switching between English and Thai.
- * 
- * Data source priority:
- *   1. SQLite database via API (fetched on init)
- *   2. Key name (final fallback)
- * 
- * Usage:
- *   const { t, locale, toggleLocale, setLocale } = useI18n()
- *   
- *   // In template:
- *   {{ t('nav.home') }}        → "Home" or "หน้าหลัก"
- *   {{ t('common.save') }}     → "Save" or "บันทึก"
- */
-
 export type Locale = 'en' | 'th'
+import { ref, computed } from 'vue'
 import { appConfig } from '~/appConfig/config'
 
-// Shared reactive state across all components
-const locale = ref<Locale>((process.client ? localStorage.getItem('app_locale') : null) as Locale || 'en')
-
-// Live dictionary loaded from API (overrides static dictionary)
-const liveDictionary = ref<Record<string, Record<string, string>>>({})
-const isLoaded = ref(false)
-
 /**
- * Fetch translations from SQLite backend
- * Merges with static dictionary (API values take priority)
+ * useI18n Composable
  */
-const fetchTranslations = async () => {
-    if (!process.client) return
-
-    try {
-        const response = await fetch(`${appConfig.apiBaseUrl}/translations/`)
-        if (response.ok) {
-            const data = await response.json()
-            liveDictionary.value = data
-            isLoaded.value = true
-            console.log('✅ i18n: Loaded translations from database')
-        }
-    } catch (error) {
-        console.warn('⚠️ i18n: Could not fetch from API, using built-in dictionary', error)
-    }
-}
-
-// Fetch on first load (client-side only)
-if (process.client && !isLoaded.value) {
-    fetchTranslations()
-}
-
 export const useI18n = () => {
+    // Shared state using Nuxt useCookie for SSR-safe persistence
+    const locale = useCookie<Locale>('app_locale', { default: () => 'en', watch: true })
+
+    // Dictionary state - using useState to share across components and sync SSR/Client
+    const liveDictionary = useState<Record<string, Record<string, string>>>('i18n_dictionary', () => ({}))
+    const isLoaded = useState('i18n_loaded', () => false)
 
     /**
-     * Translate a key to the current locale
-     * Priority: API dictionary → static dictionary → key itself
+     * Fetch translations from API
+     */
+    const fetchTranslations = async () => {
+        try {
+            const data = await $fetch<Record<string, Record<string, string>>>(`${appConfig.apiBaseUrl}/translations/`)
+            if (data) {
+                liveDictionary.value = data
+                isLoaded.value = true
+                console.log('✅ i18n: Loaded translations')
+            }
+        } catch (error) {
+            console.warn('⚠️ i18n: Fetch failed', error)
+        }
+    }
+
+    // Initial fetch is now handled by plugins/i18n.init.ts for better SSR support
+
+    /**
+     * Translate a key
      */
     const t = (key: string, params?: Record<string, string | number>): string => {
-        // Try live dictionary (from SQLite)
         let text =
             liveDictionary.value[locale.value]?.[key] ||
             liveDictionary.value['en']?.[key] ||
             key
 
-        // Simple parameter interpolation: {name} → value
         if (params) {
             Object.entries(params).forEach(([k, v]) => {
                 text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v))
             })
         }
-
         return text
     }
 
-    /**
-     * Toggle between English and Thai
-     */
     const toggleLocale = () => {
         locale.value = locale.value === 'en' ? 'th' : 'en'
-        if (process.client) {
-            localStorage.setItem('app_locale', locale.value)
-        }
     }
 
-    /**
-     * Set a specific locale
-     */
     const setLocale = (newLocale: Locale) => {
         locale.value = newLocale
-        if (process.client) {
-            localStorage.setItem('app_locale', locale.value)
-        }
     }
 
-    /**
-     * Reload translations from API
-     */
     const reloadTranslations = () => fetchTranslations()
-
-    /**
-     * Get current locale display name
-     */
     const localeName = computed(() => locale.value === 'en' ? 'English' : 'ไทย')
-
-    /**
-     * Get the flag/icon for the current locale
-     */
     const localeFlag = computed(() => locale.value === 'en' ? '🇬🇧' : '🇹🇭')
-
-    /**
-     * Check if current locale is Thai
-     */
     const isThai = computed(() => locale.value === 'th')
 
     return {

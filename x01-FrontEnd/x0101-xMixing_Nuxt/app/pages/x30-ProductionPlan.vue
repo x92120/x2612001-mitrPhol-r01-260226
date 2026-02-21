@@ -8,6 +8,20 @@ const $q = useQuasar()
 const { t } = useI18n()
 const { generateQrDataUrl } = useQrCode()
 
+const formatDate = (date: any) => {
+  if (!date) return '-'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return date
+  return d.toLocaleDateString('en-GB')
+}
+
+const formatDateTime = (date: any) => {
+  if (!date) return '-'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return date
+  return d.toLocaleString('en-GB')
+}
+
 // --- State ---
 const skuId = ref('')
 const skuName = ref('')
@@ -133,8 +147,8 @@ const columns = computed<QTableColumn[]>(() => [
     align: 'right',
     sortable: true,
   },
-  { name: 'start_date', label: t('prodPlan.startDate'), field: 'start_date', align: 'center', sortable: true },
-  { name: 'finish_date', label: t('prodPlan.finishDate'), field: 'finish_date', align: 'center', sortable: true },
+  { name: 'start_date', label: t('prodPlan.startDate'), field: 'start_date', align: 'center', sortable: true, format: (val: any) => formatDate(val) },
+  { name: 'finish_date', label: t('prodPlan.finishDate'), field: 'finish_date', align: 'center', sortable: true, format: (val: any) => formatDate(val) },
   { name: 'flavour_house', label: t('prodPlan.flavourHouse'), field: 'flavour_house', align: 'center' },
   { name: 'spp', label: t('prodPlan.spp'), field: 'spp', align: 'center' },
   { name: 'batch_prepare', label: t('prodPlan.batchPrepare'), field: 'batch_prepare', align: 'center' },
@@ -260,7 +274,7 @@ const showHistory = async (plan: any) => {
     const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/production-plans/${plan.id}/history`)
     const historyText = data.length > 0 
       ? data.map((h: any) => {
-          const date = new Date(h.changed_at).toLocaleString()
+          const date = new Date(h.changed_at).toLocaleString('en-GB')
           const statusChange = h.old_status && h.new_status 
             ? `${h.old_status} → ${h.new_status}` 
             : h.new_status || 'N/A'
@@ -332,7 +346,7 @@ const printBatchLabel = async (plan: any, batch: any) => {
       .replace(/\{\{PlanSize\}\}/g, plan.total_plan_volume?.toString() || '0')
       .replace(/\{\{PlantId\}\}/g, plan.plant || '-')
       .replace(/\{\{PlantName\}\}/g, plantName)
-      .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString())
+      .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
       .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="231.028" y="391.028" width="148.972" height="148.972" />`)
 
     const html = `
@@ -439,7 +453,7 @@ const printAllBatchLabels = async (plan: any) => {
         .replace(/\{\{PlanSize\}\}/g, plan.total_plan_volume?.toString() || '0')
         .replace(/\{\{PlantId\}\}/g, plan.plant || '-')
         .replace(/\{\{PlantName\}\}/g, plantName)
-        .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString())
+        .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
         .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="231.028" y="391.028" width="148.972" height="148.972" />`)
 
       labelsHtml += `<div class="label-container">${svgContent}</div>`
@@ -531,13 +545,13 @@ const printPlan = (plan: any) => {
           <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">${t('prodPlan.totalPlanVol')}</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.total_plan_volume || '0'} kg</td></tr>
           <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">${t('prodPlan.numBatches')}</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.num_batches || 0}</td></tr>
           <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">${t('prodPlan.batchSize')}</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.batch_size || '—'} kg</td></tr>
-          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">${t('prodPlan.startDate')} - ${t('prodPlan.finishDate')}</th><td style="border: 1px solid #ddd; padding: 12px;">${plan.start_date || '—'} to ${plan.finish_date || '—'}</td></tr>
+          <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">${t('prodPlan.startDate')} - ${t('prodPlan.finishDate')}</th><td style="border: 1px solid #ddd; padding: 12px;">${formatDate(plan.start_date)} to ${formatDate(plan.finish_date)}</td></tr>
           <tr><th style="background: #f5f5f5; border: 1px solid #ddd; padding: 12px; text-align: left;">${t('common.status')}</th><td style="border: 1px solid #ddd; padding: 12px;"><strong>${plan.status}</strong></td></tr>
         </table>
         
         <div style="margin-top: 40px; background: #f9f9f9; padding: 20px; border-radius: 8px; border-left: 5px solid #1976d2;">
           <h2 style="margin-top: 0; font-size: 16px;">${t('prodPlan.creationDetails')}</h2>
-          <p><strong>Created:</strong> ${new Date(plan.created_at).toLocaleString()}</p>
+          <p><strong>Created:</strong> ${formatDateTime(plan.created_at)}</p>
           <p><strong>Created By:</strong> ${plan.created_by || '—'}</p>
           ${plan.updated_by ? '<p><strong>Last Updated By:</strong> ' + plan.updated_by + '</p>' : ''}
         </div>
@@ -601,13 +615,13 @@ const printAllPlans = () => {
           <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">${t('prodPlan.plant')}</th><td style="border: 1px solid #ddd; padding: 8px;">${plantNames.value[plan.plant] || plan.plant}</td></tr>
           <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">${t('prodPlan.totalPlanVol')}</th><td style="border: 1px solid #ddd; padding: 8px;">${plan.total_plan_volume || '—'} kg</td></tr>
           <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">${t('prodPlan.numBatches')}</th><td style="border: 1px solid #ddd; padding: 8px;">${plan.num_batches || 0}</td></tr>
-          <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">${t('prodPlan.startDate')} - ${t('prodPlan.finishDate')}</th><td style="border: 1px solid #ddd; padding: 8px;">${plan.start_date || '—'} to ${plan.finish_date || '—'}</td></tr>
+          <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">${t('prodPlan.startDate')} - ${t('prodPlan.finishDate')}</th><td style="border: 1px solid #ddd; padding: 8px;">${formatDate(plan.start_date)} to ${formatDate(plan.finish_date)}</td></tr>
           <tr><th style="border: 1px solid #ddd; padding: 8px; background: #f2f2f2;">${t('common.status')}</th><td style="border: 1px solid #ddd; padding: 8px;"><strong>${plan.status}</strong></td></tr>
         </table>
         
         <div style="margin-top: 30px; background: #f9f9f9; padding: 15px; border-radius: 5px; border-left: 5px solid #1976d2;">
           <h3 style="margin-top: 0; font-size: 12px;">${t('prodPlan.creationDetails')}</h3>
-          <p style="margin: 5px 0;"><strong>Created:</strong> ${new Date(plan.created_at).toLocaleString()}</p>
+          <p style="margin: 5px 0;"><strong>Created:</strong> ${formatDateTime(plan.created_at)}</p>
           <p style="margin: 5px 0;"><strong>Created By:</strong> ${plan.created_by || '—'}</p>
           ${plan.updated_by ? `<p style="margin: 5px 0;"><strong>Last Updated By:</strong> ${plan.updated_by}</p>` : ''}
         </div>

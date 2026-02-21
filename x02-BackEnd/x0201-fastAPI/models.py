@@ -82,8 +82,9 @@ class IngredientIntakeList(Base):
     batch_prepare_vol = Column(Float) # Merged from Receipt
     std_package_size = Column(Float, default=25.0) # Merged from Receipt
 
-    # Relationship to history
+    # Relationship to history and packages
     history = relationship("IngredientIntakeHistory", back_populates="intake_record", cascade="all, delete-orphan")
+    packages = relationship("IntakePackageReceive", back_populates="intake_record", cascade="all, delete-orphan")
 
 # Ingredient Intake History Model
 class IngredientIntakeHistory(Base):
@@ -100,6 +101,20 @@ class IngredientIntakeHistory(Base):
 
     # Relationship back to the main intake record
     intake_record = relationship("IngredientIntakeList", back_populates="history")
+
+# Intake Package Receive Model
+class IntakePackageReceive(Base):
+    __tablename__ = "intake_package_receive"
+
+    id = Column(Integer, primary_key=True, index=True)
+    intake_list_id = Column(Integer, ForeignKey("ingredient_intake_lists.id"), nullable=False)
+    package_no = Column(Integer, nullable=False)
+    weight = Column(Float, nullable=False)
+    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    created_by = Column(String(50))
+
+    # Relationship back to the main intake record
+    intake_record = relationship("IngredientIntakeList", back_populates="packages")
 
 # Sku Model (formerly Recipe)
 class Sku(Base):

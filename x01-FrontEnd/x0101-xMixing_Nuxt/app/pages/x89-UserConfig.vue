@@ -21,6 +21,14 @@ interface User {
 const $q = useQuasar()
 const { getAuthHeader } = useAuth()
 const { t } = useI18n()
+
+const formatDateTime = (date: any) => {
+  if (!date) return '-'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return date
+  return d.toLocaleString('en-GB')
+}
+
 const selectedUser = ref<User | null>(null)
 const isCreateDialogOpen = ref(false)
 const newUser = ref<User>({
@@ -312,6 +320,7 @@ const deleteUser = (user: User) => {
               { name: 'role', label: t('userConfig.role'), field: 'role', align: 'left' },
               { name: 'department', label: t('userConfig.department'), field: 'department', align: 'left' },
               { name: 'status', label: t('common.status'), field: 'status', align: 'center' },
+              { name: 'last_login', label: t('login.lastLogin'), field: 'last_login', align: 'center', format: (val: any) => formatDateTime(val) },
               { name: 'actions', label: t('common.actions'), field: 'actions', align: 'center' },
             ]"
             row-key="id"
@@ -481,6 +490,11 @@ const deleteUser = (user: User) => {
                   dense
                   emit-value
                 />
+              </div>
+
+              <div class="q-mb-md">
+                <div class="text-caption">{{ t('login.lastLogin') }}</div>
+                <div class="text-subtitle2">{{ formatDateTime(selectedUser.last_login) }}</div>
               </div>
               
               <div class="q-mt-lg">

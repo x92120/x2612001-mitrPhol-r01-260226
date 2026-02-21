@@ -717,7 +717,7 @@ onMounted(() => {
               <td class="text-caption text-grey-7">
                 <span v-if="bag.recheck_by">
                   {{ bag.recheck_by }}<br />
-                  <span class="text-grey-5">{{ new Date(bag.recheck_at).toLocaleTimeString() }}</span>
+                  <span class="text-grey-5">{{ new Date(bag.recheck_at).toLocaleString('en-GB') }}</span>
                 </span>
                 <span v-else class="text-grey-4">—</span>
               </td>

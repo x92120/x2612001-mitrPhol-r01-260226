@@ -74,11 +74,11 @@ export const useLabelPrinter = () => {
         <head>
           <title>Print Label</title>
           <style>
-            @page { size: 4in 4in; margin: 0; }
+            @page { size: 4in 6in; margin: 0; }
             body { margin: 0; padding: 0; background: white; }
             .label-container { 
               width: 4in; 
-              height: 4in; 
+              height: 6in; 
               display: flex; 
               justify-content: center; 
               align-items: center; 

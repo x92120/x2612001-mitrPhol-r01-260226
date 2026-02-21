@@ -4,6 +4,13 @@ import type { QTableColumn } from 'quasar'
 import { useQuasar } from 'quasar'
 import { appConfig } from '~/appConfig/config'
 
+const formatDate = (date: any) => {
+  if (!date) return '-'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return date
+  return d.toLocaleDateString('en-GB')
+}
+
 // ============================================================================
 // INTERFACES
 // ============================================================================
@@ -794,7 +801,7 @@ const masterColumns = computed<QTableColumn[]>(() => [
   { name: 'phases', label: t('sku.phases'), field: 'total_phases', align: 'center' as const, sortable: true },
   { name: 'steps', label: t('sku.steps'), field: 'total_sub_steps', align: 'center' as const, sortable: true },
   { name: 'status', label: t('common.status'), field: 'status', align: 'center' as const, sortable: true },
-  { name: 'updated_at', label: t('sku.updated'), field: 'updated_at', align: 'center' as const, sortable: true },
+  { name: 'updated_at', label: t('sku.updated'), field: 'updated_at', align: 'center' as const, sortable: true, format: (val: any) => formatDate(val) },
   { name: 'actions', label: t('common.actions'), field: 'actions', align: 'center' as const, style: 'width: 140px' }
 ])
 

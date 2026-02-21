@@ -4,6 +4,23 @@ import type { QTableColumn } from 'quasar'
 import { useQuasar, exportFile } from 'quasar'
 import { appConfig } from '~/appConfig/config'
 import { useAuth } from '~/composables/useAuth'
+import { useMqttLocalDevice } from '~/composables/useMqttLocalDevice'
+
+const { isConnected: mqttConnected } = useMqttLocalDevice()
+
+const formatDate = (date: any) => {
+  if (!date) return '-'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return date
+  return d.toLocaleDateString('en-GB')
+}
+
+const formatDateTime = (date: any) => {
+  if (!date) return '-'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return date
+  return d.toLocaleString('en-GB')
+}
 
 interface IngredientIntakeHistory {
   id: number
@@ -35,6 +52,7 @@ interface IngredientIntake {
   edit_at?: string
   edit_by?: string
   history?: IngredientIntakeHistory[]
+  packages?: { package_no: number, weight: number }[]
   po_number?: string
   manufacturing_date?: string
 }
@@ -85,6 +103,7 @@ const focusScannerInput = () => {
 }
 
 const columns = computed<QTableColumn[]>(() => [
+  { name: 'expand', label: '', field: 'expand', align: 'center' },
   { name: 'id', align: 'center', label: 'ID', field: 'id', sortable: true },
   { name: 'intake_lot_id', align: 'center', label: t('ingredient.intakeLotId'), field: 'intake_lot_id', sortable: true },
   { name: 'warehouse_location', align: 'center', label: t('ingredient.warehouse'), field: 'warehouse_location', sortable: true },
@@ -97,9 +116,10 @@ const columns = computed<QTableColumn[]>(() => [
   { name: 'remain_vol', align: 'center', label: t('ingredient.remainVolume'), field: 'remain_vol', sortable: true, classes: 'text-negative text-weight-bold' },
   { name: 'intake_package_vol', align: 'center', label: t('ingredient.pkgVol'), field: 'intake_package_vol', sortable: true },
   { name: 'package_intake', align: 'center', label: t('ingredient.pkgs'), field: 'package_intake', sortable: true },
-  { name: 'expire_date', align: 'center', label: t('ingredient.expiryDate'), field: 'expire_date', sortable: true, format: (val: string) => (val ? val.split('T')[0] : '') || '' },
+  { name: 'expire_date', align: 'center', label: t('ingredient.expiryDate'), field: 'expire_date', sortable: true, format: (val: string) => formatDate(val) },
   { name: 'po_number', align: 'center', label: t('ingredient.poNo'), field: 'po_number', sortable: true },
-  { name: 'manufacturing_date', align: 'center', label: t('ingredient.mfgDate'), field: 'manufacturing_date', sortable: true, format: (val: string) => (val ? val.split('T')[0] : '') || '' },
+  { name: 'manufacturing_date', align: 'center', label: t('ingredient.mfgDate'), field: 'manufacturing_date', sortable: true, format: (val: string) => formatDate(val) },
+  { name: 'intake_at', align: 'center', label: t('ingredient.intakeAt'), field: 'intake_at', sortable: true, format: (val: string) => formatDateTime(val) },
   { name: 'status', align: 'center', label: t('common.status'), field: 'status', sortable: true },
   { name: 'xActions', align: 'center', label: t('common.actions'), field: 'xActions' },
 ])
@@ -631,13 +651,26 @@ const printLabel = async (record: IngredientIntake) => {
   let labelsHtml = ''
 
   for (let i = 1; i <= numPackages; i++) {
+    // Determine the weight for this specific package
+    let currentPkgVol = record.intake_package_vol || 0
+    if (record.packages && record.packages.length > 0) {
+      const pkgRec = record.packages.find(p => p.package_no === i)
+      if (pkgRec) currentPkgVol = pkgRec.weight
+    } else {
+      // On-the-fly calculation if not from DB (e.g. just saved)
+      const isLast = i === numPackages
+      if (isLast && record.intake_package_vol) {
+        currentPkgVol = record.intake_vol - (record.intake_package_vol * (numPackages - 1))
+      }
+    }
+
     // Construct full data object for QR
     const qrData = {
       intake_lot_id: record.intake_lot_id,
       lot_id: record.lot_id,
       mat_sap_code: record.mat_sap_code,
       re_code: record.re_code,
-      intake_package_vol: record.intake_package_vol,
+      intake_package_vol: currentPkgVol,
       package_no: i,
       total_packages: numPackages,
       expire_date: record.expire_date?.split('T')[0],
@@ -653,14 +686,14 @@ const printLabel = async (record: IngredientIntake) => {
       .replace(/\{\{ReCode\}\}/g, record.re_code || '-')
       .replace(/\{\{MatSapCode\}\}/g, record.mat_sap_code || '-')
       .replace(/\{\{SupplierLot\}\}/g, record.lot_id || '-')
-      .replace(/\{\{ExpireDate\}\}/g, (record.expire_date ? record.expire_date.split('T')[0] : '-') || '-')
-      .replace(/\{\{MenufacturingDate\}\}/g, (record.manufacturing_date ? record.manufacturing_date.split('T')[0] : '-') || '-')
+      .replace(/\{\{ExpireDate\}\}/g, formatDate(record.expire_date))
+      .replace(/\{\{MenufacturingDate\}\}/g, formatDate(record.manufacturing_date))
       .replace(/\{\{PackageString\}\}/g, `${i} / ${numPackages}`)
       .replace(/\{\{IntakeVol\}\}/g, record.intake_vol?.toFixed(2) || '0.00')
-      .replace(/\{\{PackageVol\}\}/g, record.intake_package_vol?.toFixed(2) || '0.00')
-      .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="226.77165" y="340.15747" width="151.18111" height="151.18111" />`)
+      .replace(/\{\{PackageVol\}\}/g, currentPkgVol.toFixed(3) || '0.000')
+      .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="18.897638" y="115.16535" width="134.01466" height="134.01468" />`)
       .replace(/\{\{Operator\}\}/g, record.intake_by || 'Operator')
-      .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString())
+      .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
 
     labelsHtml += `<div class="label-container">${formattedSvg}</div>`
   }
@@ -706,6 +739,88 @@ const printLabel = async (record: IngredientIntake) => {
       if (iframe.contentWindow) {
         iframe.contentWindow.focus()
         iframe.contentWindow.print()
+      }
+    }, 500)
+  }
+
+  const doc = iframe.contentWindow?.document
+  if (doc) {
+    doc.open()
+    doc.write(html)
+    doc.close()
+  }
+}
+
+/**
+ * Print a single label for a specific package from the expanded list
+ */
+const printSinglePackageLabel = async (record: IngredientIntake, pkg: { package_no: number, weight: number }) => {
+  const numPackages = record.package_intake || 1
+  const templateResponse = await fetch('/labels/ingredient_intake-label.svg')
+  const templateStr = await templateResponse.text()
+  
+  // Construct full data object for QR
+  const qrData = {
+    intake_lot_id: record.intake_lot_id,
+    lot_id: record.lot_id,
+    mat_sap_code: record.mat_sap_code,
+    re_code: record.re_code,
+    intake_package_vol: pkg.weight,
+    package_no: pkg.package_no,
+    total_packages: numPackages,
+    expire_date: record.expire_date?.split('T')[0],
+    intake_at: record.intake_at?.split('T')[0],
+  }
+  const qrString = JSON.stringify(qrData)
+  const qrLarge = await generateQrDataUrl(qrString, 150)
+
+  let formattedSvg = templateStr
+    .replace(/\{\{IntakeLotId\}\}/g, record.intake_lot_id || '-')
+    .replace(/\{\{ReCode\}\}/g, record.re_code || '-')
+    .replace(/\{\{MatSapCode\}\}/g, record.mat_sap_code || '-')
+    .replace(/\{\{SupplierLot\}\}/g, record.lot_id || '-')
+    .replace(/\{\{ExpireDate\}\}/g, formatDate(record.expire_date))
+    .replace(/\{\{MenufacturingDate\}\}/g, formatDate(record.manufacturing_date))
+    .replace(/\{\{PackageString\}\}/g, `${pkg.package_no} / ${numPackages}`)
+    .replace(/\{\{IntakeVol\}\}/g, record.intake_vol?.toFixed(2) || '0.00')
+    .replace(/\{\{PackageVol\}\}/g, pkg.weight.toFixed(3) || '0.000')
+    .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="18.897638" y="115.16535" width="134.01466" height="134.01468" />`)
+    .replace(/\{\{Operator\}\}/g, record.intake_by || 'Operator')
+    .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
+
+  const labelsHtml = `<div class="label-container">${formattedSvg}</div>`
+  
+  // Create iframe for printing
+  const iframe = document.createElement('iframe')
+  iframe.style.display = 'none'
+  document.body.appendChild(iframe)
+
+  const html = `
+    <html>
+      <head>
+        <title>Print Label - ${record.intake_lot_id} - Pkg ${pkg.package_no}</title>
+        <style>
+          @page { size: 4in 6in; margin: 0; }
+          body { margin: 0; padding: 0; background: white; }
+          .label-container { 
+            width: 4in; height: 6in; 
+            display: flex; justify-content: center; align-items: center; 
+          }
+          .label-container svg { width: 100%; height: 100%; }
+        </style>
+      </head>
+      <body>
+        ${labelsHtml}
+      </body>
+    </html>
+  `
+
+  iframe.onload = () => {
+    setTimeout(() => {
+      if (iframe.contentWindow) {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        setTimeout(() => document.body.removeChild(iframe), 1000)
       }
     }, 500)
   }
@@ -1138,51 +1253,105 @@ const onFileSelected = async (event: Event) => {
               </q-tr>
             </template>
 
-            <!-- Editable Status Chip -->
-            <template v-slot:body-cell-status="props">
-              <q-td :props="props">
-                <div
-                  :class="[
-                    'text-white',
-                    'row',
-                    'flex-center',
-                    'full-width',
-                    'rounded-borders',
-                    `bg-${getStatusColor(props.value)}`,
-                  ]"
-                  style="height: 36px; font-size: 14px"
+            <!-- Body Slot for Expansion -->
+            <template v-slot:body="props">
+              <q-tr :props="props">
+                <q-td
+                  v-for="col in props.cols"
+                  :key="col.name"
+                  :props="props"
                 >
-                  {{ props.value }}
-                </div>
-              </q-td>
-            </template>
+                  <template v-if="col.name === 'expand'">
+                    <q-btn
+                      size="sm"
+                      color="primary"
+                      round
+                      dense
+                      @click="props.expand = !props.expand"
+                      :icon="props.expand ? 'keyboard_arrow_down' : 'chevron_right'"
+                    />
+                  </template>
 
-            <template v-slot:body-cell-xActions="props">
-              <q-td align="center" :props="props">
-                <q-btn
-                  icon="print"
-                  color="primary"
-                  unelevated
-                  no-caps
-                  dense
-                  size="sm"
-                  class="q-mr-xs"
-                  @click="printLabel(props.row)"
-                >
-                  <q-tooltip>{{ t('ingredient.printLabel') }}</q-tooltip>
-                </q-btn>
-                <q-btn
-                  icon="settings"
-                  color="primary"
-                  unelevated
-                  no-caps
-                  dense
-                  size="sm"
-                  @click="openDetailDialog(props.row)"
-                >
-                  <q-tooltip>{{ t('ingredient.infoHistory') }}</q-tooltip>
-                </q-btn>
-              </q-td>
+                  <template v-else-if="col.name === 'status'">
+                    <div
+                      :class="[
+                        'text-white',
+                        'row',
+                        'flex-center',
+                        'rounded-borders',
+                        `bg-${getStatusColor(props.row.status)}`,
+                      ]"
+                      style="height: 28px; font-size: 12px; min-width: 80px;"
+                    >
+                      {{ props.row.status }}
+                    </div>
+                  </template>
+
+                  <template v-else-if="col.name === 'xActions'">
+                    <q-btn
+                      icon="print"
+                      color="primary"
+                      unelevated
+                      no-caps
+                      dense
+                      size="sm"
+                      class="q-mr-xs"
+                      @click="printLabel(props.row)"
+                    >
+                      <q-tooltip>{{ t('ingredient.printLabel') }}</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      icon="settings"
+                      color="primary"
+                      unelevated
+                      no-caps
+                      dense
+                      size="sm"
+                      @click="openDetailDialog(props.row)"
+                    >
+                      <q-tooltip>{{ t('ingredient.infoHistory') }}</q-tooltip>
+                    </q-btn>
+                  </template>
+
+                  <template v-else>
+                    {{ col.value }}
+                  </template>
+                </q-td>
+              </q-tr>
+
+              <!-- Expansion Row -->
+              <q-tr v-show="props.expand" :props="props" class="bg-grey-1">
+                <q-td colspan="100%">
+                  <div class="q-pa-md">
+                    <div class="text-subtitle2 q-mb-sm text-primary row items-center">
+                       <q-icon name="inventory_2" class="q-mr-xs" />
+                       Intake Package Details (Individual Weights)
+                    </div>
+                    
+                    <div v-if="!props.row.packages || props.row.packages.length === 0" class="text-grey-7 italic q-pl-md">
+                      No individual package data recorded for this lot.
+                    </div>
+                    
+                    <div v-else class="row q-col-gutter-sm">
+                      <div v-for="pkg in props.row.packages" :key="pkg.id" class="col-12 col-sm-6 col-md-3">
+                        <q-card flat bordered class="bg-white">
+                          <q-item dense>
+                            <q-item-section avatar>
+                              <q-avatar color="primary" text-color="white" size="xs">{{ pkg.package_no }}</q-avatar>
+                            </q-item-section>
+                            <q-item-section>
+                              <q-item-label class="text-weight-bold">{{ pkg.weight.toFixed(3) }} kg</q-item-label>
+                            </q-item-section>
+                            <q-item-section side>
+                              <q-btn icon="print" flat round dense size="xs" color="grey-7" @click="printSinglePackageLabel(props.row, pkg)" />
+                            </q-item-section>
+                          </q-item>
+                        </q-card>
+                      </div>
+                    </div>
+                  </div>
+                </q-td>
+              </q-tr>
             </template>
           </q-table>
         </q-card>
@@ -1259,7 +1428,7 @@ const onFileSelected = async (event: Event) => {
             <div class="col-6">{{ selectedRecord?.po_number || '-' }}</div>
 
             <div class="col-6 text-weight-bold">{{ t('ingredient.mfgDate') }}:</div>
-            <div class="col-6">{{ selectedRecord?.manufacturing_date?.split('T')[0] || '-' }}</div>
+            <div class="col-6">{{ formatDate(selectedRecord?.manufacturing_date) }}</div>
 
             <div class="col-6 text-weight-bold">{{ t('ingredient.intakeVolume') }}:</div>
             <div class="col-6">{{ selectedRecord?.intake_vol }} kg</div>
@@ -1276,7 +1445,7 @@ const onFileSelected = async (event: Event) => {
             <div class="col-6">{{ selectedRecord?.package_intake || '-' }}</div>
 
             <div class="col-6 text-weight-bold">{{ t('ingredient.expiryDate') }}:</div>
-            <div class="col-6">{{ selectedRecord?.expire_date?.split('T')[0] }}</div>
+            <div class="col-6">{{ formatDate(selectedRecord?.expire_date) }}</div>
 
             <div class="col-6 text-weight-bold">{{ t('common.status') }}:</div>
             <div class="col-6">
@@ -1322,7 +1491,7 @@ const onFileSelected = async (event: Event) => {
 
             <div class="col-6 text-weight-bold">{{ t('ingredient.intakeAt') }}:</div>
             <div class="col-6">
-              {{ selectedRecord ? new Date(selectedRecord.intake_at).toLocaleString() : '' }}
+              {{ selectedRecord ? new Date(selectedRecord.intake_at).toLocaleString('en-GB') : '' }}
             </div>
 
             <div class="col-6 text-weight-bold">{{ t('ingredient.lastEditedBy') }}:</div>
@@ -1331,7 +1500,7 @@ const onFileSelected = async (event: Event) => {
             <div class="col-6 text-weight-bold">{{ t('ingredient.lastEditedAt') }}:</div>
             <div class="col-6">
               {{
-                selectedRecord?.edit_at ? new Date(selectedRecord.edit_at).toLocaleString() : '-'
+                selectedRecord?.edit_at ? new Date(selectedRecord.edit_at).toLocaleString('en-GB') : '-'
               }}
             </div>
           </div>
@@ -1359,7 +1528,7 @@ const onFileSelected = async (event: Event) => {
                     </span>
                   </q-item-label>
                   <q-item-label caption>
-                    By {{ h.update_by }} at {{ new Date(h.update_at).toLocaleString() }}
+                    By {{ h.update_by }} at {{ new Date(h.update_at).toLocaleString('en-GB') }}
                   </q-item-label>
                   <q-item-label v-if="h.remarks" caption italic> "{{ h.remarks }}" </q-item-label>
                 </q-item-section>

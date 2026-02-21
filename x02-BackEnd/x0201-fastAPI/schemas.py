@@ -127,12 +127,30 @@ class IngredientIntakeHistory(IngredientIntakeHistoryBase):
     class Config:
         from_attributes = True
 
+# Intake Package Receive Schemas
+class IntakePackageReceiveBase(BaseModel):
+    package_no: int
+    weight: float
+    created_by: Optional[str] = None
+
+class IntakePackageReceiveCreate(IntakePackageReceiveBase):
+    intake_list_id: int
+
+class IntakePackageReceive(IntakePackageReceiveBase):
+    id: int
+    intake_list_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 class IngredientIntakeList(IngredientIntakeListBase):
     """Ingredient intake list response model"""
     id: int
     intake_at: datetime
     edit_at: Optional[datetime] = None
     history: List[IngredientIntakeHistory] = []
+    packages: List[IntakePackageReceive] = []
 
     class Config:
         from_attributes = True

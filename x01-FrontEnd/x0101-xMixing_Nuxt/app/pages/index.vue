@@ -11,6 +11,20 @@ const $q = useQuasar()
 const { hasPermission, user, getAuthHeader } = useAuth()
 const { t } = useI18n()
 
+const formatDate = (date: any) => {
+  if (!date) return '-'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return date
+  return d.toLocaleDateString('en-GB')
+}
+
+const formatDateTime = (date: any) => {
+  if (!date) return '-'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return date
+  return d.toLocaleString('en-GB')
+}
+
 // Fetch dashboard statistics
 const activeSKUCount = ref('0')
 const ingredientStockCount = ref('0')
@@ -66,7 +80,7 @@ const fetchSystemStatus = async () => {
         storageUsed: data.disk_usage_gb || 0,
         storageTotal: data.disk_total_gb || 100,
         storagePercent: (data.disk_usage_gb || 0) / (data.disk_total_gb || 100),
-        lastBackup: data.last_backup ? timeAgo(data.last_backup) : '2 hours ago'
+        lastBackup: data.last_backup ? formatDateTime(data.last_backup) : '2 hours ago'
       }
     }
   } catch (e) {
@@ -166,7 +180,7 @@ const fetchDashboardStats = async () => {
     recentActivities.value = activities
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, 10)
-      .map(a => ({...a, time: timeAgo(a.time)}))
+      .map(a => ({...a, time: formatDateTime(a.time)}))
 
   } catch (error) {
     console.error('❌ Dashboard: Failed to fetch stats:', error)

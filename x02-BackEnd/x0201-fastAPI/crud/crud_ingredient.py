@@ -86,14 +86,19 @@ def delete_ingredient(db: Session, ingredient_id: int) -> Optional[models.Ingred
 # Ingredient Intake List CRUD
 def get_ingredient_intake_lists(db: Session, skip: int = 0, limit: int = 100) -> List[models.IngredientIntakeList]:
     """Get list of ingredient intake list with pagination"""
-    return db.query(models.IngredientIntakeList).options(joinedload(models.IngredientIntakeList.history)).order_by(models.IngredientIntakeList.intake_at.desc()).offset(skip).limit(limit).all()
+    return db.query(models.IngredientIntakeList)\
+        .options(joinedload(models.IngredientIntakeList.history), joinedload(models.IngredientIntakeList.packages))\
+        .order_by(models.IngredientIntakeList.intake_at.desc())\
+        .offset(skip).limit(limit).all()
 
 def get_ingredient_intake_list(db: Session, list_id: int) -> Optional[models.IngredientIntakeList]:
     """Get ingredient intake list by ID"""
-    return db.query(models.IngredientIntakeList).options(joinedload(models.IngredientIntakeList.history)).filter(models.IngredientIntakeList.id == list_id).first()
+    return db.query(models.IngredientIntakeList)\
+        .options(joinedload(models.IngredientIntakeList.history), joinedload(models.IngredientIntakeList.packages))\
+        .filter(models.IngredientIntakeList.id == list_id).first()
 
 def create_ingredient_intake_list(db: Session, list_data: schemas.IngredientIntakeListCreate) -> models.IngredientIntakeList:
-    """Create new ingredient intake list with error handling"""
+    """Create new ingredient intake list with error handling and individual package generation"""
     try:
         db_list = models.IngredientIntakeList(**list_data.dict())
         db.add(db_list)
@@ -109,8 +114,30 @@ def create_ingredient_intake_list(db: Session, list_data: schemas.IngredientInta
             remarks="Initial record creation"
         )
         db.add(db_history)
-        db.commit()
         
+        # Create individual package records if package info is provided
+        if db_list.intake_package_vol and db_list.package_intake and db_list.package_intake > 0:
+            total_vol = db_list.intake_vol
+            std_pkg_vol = db_list.intake_package_vol
+            num_pkgs = db_list.package_intake
+            
+            for i in range(1, num_pkgs + 1):
+                if i == num_pkgs:
+                    # Last package gets the residual weight
+                    pkg_weight = round(total_vol - (std_pkg_vol * (num_pkgs - 1)), 4)
+                else:
+                    pkg_weight = std_pkg_vol
+                
+                db_package = models.IntakePackageReceive(
+                    intake_list_id=db_list.id,
+                    package_no=i,
+                    weight=pkg_weight,
+                    created_by=db_list.intake_by
+                )
+                db.add(db_package)
+        
+        db.commit()
+        db.refresh(db_list)
         return db_list
     except IntegrityError as e:
         db.rollback()

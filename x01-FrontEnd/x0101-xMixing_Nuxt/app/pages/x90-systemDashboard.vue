@@ -7,6 +7,20 @@ import { appConfig } from '~/appConfig/config'
 const $q = useQuasar()
 const { t } = useI18n()
 
+const formatDate = (date: any) => {
+  if (!date) return '-'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return date
+  return d.toLocaleDateString('en-GB')
+}
+
+const formatDateTime = (date: any) => {
+  if (!date) return '-'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return date
+  return d.toLocaleString('en-GB')
+}
+
 interface MetricPoint {
   timestamp: string
   value: number
@@ -230,7 +244,7 @@ onUnmounted(() => {
               <q-card-section class="q-pt-none">
                 <div class="text-caption text-grey-5">{{ t('dashboard.bootTime') }}</div>
                 <div class="text-subtitle2">
-                  {{ new Date(status.boot_time * 1000).toLocaleString() }}
+                  {{ formatDateTime(status.boot_time * 1000) }}
                 </div>
                 <q-btn 
                   icon="refresh" 

@@ -11,6 +11,20 @@ const { getAuthHeader, user } = useAuth()
 const { generateLabelSvg, printLabel } = useLabelPrinter()
 const { t } = useI18n()
 
+const formatDate = (date: any) => {
+  if (!date) return '-'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return date
+  return d.toLocaleDateString('en-GB')
+}
+
+const formatDateTime = (date: any) => {
+  if (!date) return '-'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return date
+  return d.toLocaleString('en-GB')
+}
+
 // --- State ---
 const selectedProductionPlan = ref('')
 const selectedReCode = ref('')
@@ -469,7 +483,7 @@ const showHistoryDialog = ref(false)
 const showIntakeLabelDialog = ref(false)
 const selectedHistoryItem = ref<any>(null)
 const intakeLabelData = ref<any>(null)
-const selectedPrinter = ref('Zebra-Label-Printer')
+const selectedPrinter = ref('TSC_MB241')
 
 const printIntakeLabel = () => {
     window.print()
@@ -512,9 +526,9 @@ const inventoryColumns = computed<QTableColumn[]>(() => [
     { name: 'remain_vol', align: 'right', label: t('ingredient.remainVolume'), field: 'remain_vol', classes: 'text-red text-weight-bold' },
     { name: 'intake_package_vol', align: 'right', label: t('ingredient.pkgVol'), field: 'intake_package_vol' },
     { name: 'package_intake', align: 'center', label: t('ingredient.pkgs'), field: 'package_intake' },
-    { name: 'expire_date', align: 'center', label: t('ingredient.expiryDate'), field: 'expire_date', format: (val: any) => val ? val.split('T')[0] : '' },
+    { name: 'expire_date', align: 'center', label: t('ingredient.expiryDate'), field: 'expire_date', format: (val: any) => formatDate(val) },
     { name: 'po_number', align: 'left', label: t('ingredient.poNo'), field: 'po_number' },
-    { name: 'manufacturing_date', align: 'center', label: t('preBatch.mfgDate'), field: 'manufacturing_date', format: (val: any) => val ? val.split('T')[0] : '' },
+    { name: 'manufacturing_date', align: 'center', label: t('preBatch.mfgDate'), field: 'manufacturing_date', format: (val: any) => formatDate(val) },
     { name: 'status', align: 'center', label: t('common.status'), field: 'status' },
     { name: 'actions', align: 'center', label: t('common.actions'), field: 'id' }
 ])
@@ -552,8 +566,8 @@ const isFIFOCompliant = (item: InventoryItem) => {
     if (!fifoItem || !fifoItem.expire_date) return true 
     
     // Strict comparison: Date must be <= FIFO Date
-    const d1 = item.expire_date ? String(item.expire_date).split('T')[0] : ''
-    const fifoDate = fifoItem.expire_date ? String(fifoItem.expire_date).split('T')[0] : ''
+    const d1 = formatDate(item.expire_date)
+    const fifoDate = formatDate(fifoItem.expire_date)
     
     if (!d1 || !fifoDate) return true // Cannot strictly enforce if dates missing
     
@@ -581,7 +595,7 @@ watch(selectedIntakeLotId, (newVal) => {
         } else {
              // FIFO Violation
              const fifoItem = filteredInventory.value[0]
-             const expDate = (fifoItem && fifoItem.expire_date) ? fifoItem.expire_date.split('T')[0] : 'N/A'
+             const expDate = formatDate(fifoItem?.expire_date) || 'N/A'
              const expectedLot = fifoItem ? fifoItem.intake_lot_id : 'Unknown'
              
              $q.notify({
@@ -681,7 +695,7 @@ const onInventoryRowClick = (evt: any, row: InventoryItem) => {
          if (fifoItem) {
              $q.notify({
                  type: 'negative',
-                 message: `FIFO Violation! Expected Lot: ${fifoItem.intake_lot_id} (Exp: ${fifoItem.expire_date ? fifoItem.expire_date.split('T')[0] : 'N/A'})`,
+                 message: `FIFO Violation! Expected Lot: ${fifoItem.intake_lot_id} (Exp: ${formatDate(fifoItem.expire_date) || 'N/A'})`,
                  position: 'top',
                  timeout: 3000
              })
@@ -776,10 +790,7 @@ const labelDataMapping = computed(() => {
   const totalPkgs = requestBatch.value
   
     const now = new Date()
-  const timestamp = now.toLocaleString('en-GB', { 
-    day: '2-digit', month: '2-digit', year: 'numeric', 
-    hour: '2-digit', minute: '2-digit', second: '2-digit' 
-  }).replace(',', '')
+  const timestamp = formatDate(now.toISOString())
 
   return {
     SKU: selectedBatch.value.sku_id || '-',
@@ -823,7 +834,7 @@ const packingBoxLabelDataMapping = computed(() => {
     BagCount: bagCount,
     NetWeight: totalWeight.toFixed(2),
     Operator: user.value?.username || '-',
-    Timestamp: new Date().toLocaleString(),
+    Timestamp: new Date().toLocaleString('en-GB'),
     BoxQRCode: `${selectedBatch.value.plan_id},${selectedBatch.value.batch_id},BOX,${bagCount},${totalWeight.toFixed(2)}`
   }
 })
@@ -1237,6 +1248,8 @@ const onPrintLabel = async () => {
         throw new Error('Invalid package numbers')
     }
 
+    const ing = ingredients.value.find(i => i.re_code === selectedReCode.value)
+
     // Capture dynamic scale data for record
     const recordData = {
       req_id: selectedRequirementId.value,
@@ -1303,7 +1316,7 @@ const onReprintLabel = async (record: any) => {
       PlanFinishDate: selectedPlanDetails.value?.finish_date || '-',
       PlantId: selectedPlanDetails.value?.plant || '-',
       PlantName: '-',
-      Timestamp: new Date(record.created_at || Date.now()).toLocaleString(),
+      Timestamp: new Date(record.created_at || Date.now()).toLocaleString('en-GB'),
       PackageSize: record.net_volume.toFixed(4),
       BatchRequireSize: record.total_volume.toFixed(4),
       PackageNo: record.package_no,
@@ -2251,7 +2264,7 @@ const onSelectBatch = (index: number) => {
                         dense
                         :label="t('preBatch.defaultPrinter')"
                         v-model="selectedPrinter"
-                        :options="['Zebra-Label-Printer', 'Brother-QL-800', 'Microsoft Print to PDF']"
+                        :options="['TSC_MB241', 'Zebra-Label-Printer', 'Brother-QL-800', 'Microsoft Print to PDF']"
                         bg-color="white"
                     />
                 </div>
@@ -2303,7 +2316,7 @@ const onSelectBatch = (index: number) => {
                         <div class="row q-col-gutter-md">
                             <div class="col-6">
                                 <div class="text-caption text-weight-bold text-grey-7 uppercase">Expire Date</div>
-                                <div class="text-h6 text-weight-bold">{{ intakeLabelData?.expire_date?.split('T')[0] }}</div>
+                                <div class="text-h6 text-weight-bold">{{ formatDate(intakeLabelData?.expire_date) }}</div>
                             </div>
                             <div class="col-6">
                                 <div class="text-caption text-weight-bold text-grey-7 uppercase">Supplier Lot</div>
