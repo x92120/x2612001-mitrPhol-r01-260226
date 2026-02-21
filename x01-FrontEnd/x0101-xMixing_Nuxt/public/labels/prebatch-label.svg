@@ -23,9 +23,9 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      showgrid="true"
-     inkscape:zoom="4"
-     inkscape:cx="10.125"
-     inkscape:cy="24.625"
+     inkscape:zoom="2.8284271"
+     inkscape:cx="11.136932"
+     inkscape:cy="256.50299"
      inkscape:window-width="1920"
      inkscape:window-height="945"
      inkscape:window-x="0"
@@ -46,7 +46,7 @@
   <!-- Content Labels & Values -->
   <!-- Big QR Code (Lower Right Area of Upper Part) -->
   <g
-     transform="translate(230, 335) scale(1.5)"
+     transform="translate(226.80754, 386.80756) scale(1.48972)"
      id="g761">
     {{QRCode}}
   </g>
@@ -54,12 +54,6 @@
   <!-- ========================================== -->
   <!-- SMALL PART (4x1 inch / 400x100 area) -->
   <!-- ========================================== -->
-  <!-- Small QR -->
-  <g
-     transform="translate(325, 510) scale(0.6)"
-     id="g785">
-    {{SmallQRCode}}
-  </g>
   <rect
      x="0.7795276"
      y="0.7795276"
@@ -214,22 +208,6 @@
      font-family="Arial, sans-serif"
      id="text-date"
      style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:13.3333px;font-family:Arial, sans-serif;-inkscape-font-specification:'Arial, sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal">{{PlanStartDate}} // {{PlanFinishDate}}</text>
-  <line
-     x1="10.041246"
-     y1="230.30101"
-     x2="380.04126"
-     y2="230.30101"
-     stroke="#cccccc"
-     stroke-width="0.8"
-     id="line95" />
-  <line
-     x1="10.041246"
-     y1="278.30103"
-     x2="380.04126"
-     y2="278.30103"
-     stroke="#cccccc"
-     stroke-width="0.8"
-     id="line100" />
   <text
      x="13.93889"
      y="312.22229"
@@ -307,16 +285,16 @@
      font-weight="bold"
      font-family="Arial, sans-serif"
      id="text-vol-9-6"
-     style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:10.6667px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal">{{PackageNo}} kg</text>
+     style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:10.6667px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal">Package No: {{PackageNo}}</text>
   <text
-     x="14.079821"
-     y="125.37865"
+     x="14.520778"
+     y="133.37866"
      fill="#000000"
      font-size="18px"
      font-weight="bold"
      font-family="Arial, sans-serif"
      id="text-batchid-5-3-2"
-     style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.3333px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal">{{IngredientID}}</text>
+     style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.3333px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal">{{mat_sap_code}}</text>
   <text
      x="14.277208"
      y="99.195824"

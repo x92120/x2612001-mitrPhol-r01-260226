@@ -27,6 +27,7 @@ const authPassword = ref('')
 const selectedPreBatchLogs = ref<any[]>([])
 const showPackingBoxLabelDialog = ref(false)
 const renderedPackingBoxLabel = ref('')
+const expandedIngredients = ref<string[]>([])
 
 interface InventoryItem {
   id: number
@@ -246,10 +247,30 @@ const selectableIngredients = computed(() => {
              isDisabled: warehouse !== selectedWarehouse.value.toUpperCase(),
              isDone: task.status === 2,
              status: task.status,
-             req_id: task.id
+             req_id: task.id,
+             mat_sap_code: ingInfo?.mat_sap_code || ''
         }
     })
 })
+
+const toggleIngredientExpand = (reCode: string) => {
+    const index = expandedIngredients.value.indexOf(reCode)
+    if (index > -1) {
+        expandedIngredients.value.splice(index, 1)
+    } else {
+        expandedIngredients.value.push(reCode)
+    }
+}
+
+const isExpanded = (reCode: string) => expandedIngredients.value.includes(reCode)
+
+const getIngredientLogs = (reCode: string) => {
+    if (!selectedBatch.value) return []
+    return preBatchLogs.value.filter(log => 
+        log.re_code === reCode && 
+        log.batch_record_id.startsWith(selectedBatch.value.batch_id)
+    ).sort((a: any, b: any) => a.package_no - b.package_no)
+}
 
 const getIngredientRowClass = (ing: any) => {
     if (ing.isDisabled) return 'bg-grey-3 text-grey-5 cursor-not-allowed'
@@ -754,18 +775,28 @@ const labelDataMapping = computed(() => {
   const pkgNo = nextPackageNo.value
   const totalPkgs = requestBatch.value
   
+    const now = new Date()
+  const timestamp = now.toLocaleString('en-GB', { 
+    day: '2-digit', month: '2-digit', year: 'numeric', 
+    hour: '2-digit', minute: '2-digit', second: '2-digit' 
+  }).replace(',', '')
+
   return {
-    RecipeName: selectedBatch.value.sku_name || selectedBatch.value.sku_id || '-',
-    BaseQuantity: selectedBatch.value.batch_size || 0,
-    ItemNumber: ing?.index || '-',
-    RefCode: selectedReCode.value,
-    OrderCode: selectedBatch.value.plan_id || '-',
-    BatchSize: selectedBatch.value.batch_size || 0,
-    Weight: `${capturedScaleValue.value.toFixed(2)} / ${requireVolume.value.toFixed(2)}`,
-    Packages: `${pkgNo} / ${totalPkgs}`,
-    LotID: selectedIntakeLotId.value || '-',
-    QRCode: `${selectedBatch.value.plan_id},${selectedBatch.value.batch_id},${selectedReCode.value},${capturedScaleValue.value}`,
-    SmallQRCode: `${selectedBatch.value.plan_id},${selectedBatch.value.batch_id},${selectedReCode.value},${capturedScaleValue.value}`
+    SKU: selectedBatch.value.sku_id || '-',
+    PlanId: selectedProductionPlan.value || '-',
+    BatchId: selectedBatch.value.batch_id || '-',
+    IngredientID: ing?.ingredient_name || '-',
+    Ingredient_ReCode: selectedReCode.value || '-',
+    mat_sap_code: ing?.mat_sap_code || '-',
+    PlanStartDate: selectedPlanDetails.value?.start_date || '-',
+    PlanFinishDate: selectedPlanDetails.value?.finish_date || '-',
+    PlantId: selectedPlanDetails.value?.plant || '-',
+    PlantName: '-', // Plant Name not in model, using ID as fallback or '-'
+    Timestamp: timestamp,
+    PackageSize: capturedScaleValue.value.toFixed(4),
+    BatchRequireSize: requireVolume.value.toFixed(4),
+    PackageNo: pkgNo,
+    QRCode: `${selectedBatch.value.plan_id},${selectedBatch.value.batch_id},${selectedBatch.value.batch_id}${selectedReCode.value}${String(pkgNo).padStart(2, '0')},${selectedReCode.value},${capturedScaleValue.value}`
   }
 })
 
@@ -1217,7 +1248,9 @@ const onPrintLabel = async () => {
       net_volume: capturedScaleValue.value,
       total_volume: requireVolume.value,
       total_request_volume: targetWeight.value,
-      intake_lot_id: selectedIntakeLotId.value
+      intake_lot_id: selectedIntakeLotId.value,
+      mat_sap_code: ing?.mat_sap_code || null,
+      recode_batch_id: String(pkgNo).padStart(2, '0')
     }
 
     // 1. Save to Database
@@ -1260,17 +1293,21 @@ const onReprintLabel = async (record: any) => {
   
   try {
     const data = {
-      RecipeName: selectedBatch.value.sku_name || selectedBatch.value.sku_id || '-',
-      BaseQuantity: selectedBatch.value.batch_size || 0,
-      ItemNumber: record.item_number || '-',
-      RefCode: record.re_code || '-',
-      OrderCode: record.plan_id || selectedBatch.value.plan_id || '-',
-      BatchSize: selectedBatch.value.batch_size || 0,
-      Weight: `${record.net_volume.toFixed(2)} / ${record.total_volume.toFixed(2)}`,
-      Packages: `${record.package_no} / ${record.total_packages}`,
-      LotID: record.intake_lot_id || '-',
-      QRCode: `${selectedBatch.value.plan_id},${record.batch_record_id},${record.re_code},${record.net_volume}`,
-      SmallQRCode: `${selectedBatch.value.plan_id},${record.batch_record_id},${record.re_code},${record.net_volume}`
+      SKU: selectedBatch.value.sku_id || '-',
+      PlanId: record.plan_id || selectedProductionPlan.value || '-',
+      BatchId: selectedBatch.value.batch_id || '-',
+      IngredientID: record.ingredient_name || '-',
+      Ingredient_ReCode: record.re_code || '-',
+      mat_sap_code: record.mat_sap_code || '-',
+      PlanStartDate: selectedPlanDetails.value?.start_date || '-',
+      PlanFinishDate: selectedPlanDetails.value?.finish_date || '-',
+      PlantId: selectedPlanDetails.value?.plant || '-',
+      PlantName: '-',
+      Timestamp: new Date(record.created_at || Date.now()).toLocaleString(),
+      PackageSize: record.net_volume.toFixed(4),
+      BatchRequireSize: record.total_volume.toFixed(4),
+      PackageNo: record.package_no,
+      QRCode: `${selectedBatch.value.plan_id},${record.batch_record_id},${record.prebatch_id || ''},${record.re_code},${record.net_volume}`
     }
 
     const svg = await generateLabelSvg('prebatch-label', data)
@@ -1454,6 +1491,7 @@ const onSelectBatch = (index: number) => {
                 <q-markup-table dense flat square separator="cell" sticky-header>
                     <thead class="bg-orange-1 text-orange-10">
                         <tr>
+                            <th class="text-center" style="width: 30px"></th>
                             <th class="text-left" style="font-size: 0.7rem;">{{ t('preBatch.ingredient') }}</th>
                             <th class="text-center" style="font-size: 0.7rem;">{{ t('preBatch.wh') }}</th>
                             <th class="text-right" style="font-size: 0.7rem;">{{ t('preBatch.reqKg') }}</th>
@@ -1461,32 +1499,70 @@ const onSelectBatch = (index: number) => {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr 
-                            v-for="ing in selectableIngredients" 
-                            :key="ing.re_code"
-                            class="transition-all"
-                            :class="getIngredientRowClass(ing)"
-                            @click="onSelectIngredient(ing)"
-                        >
-                            <td class="text-weight-bold" style="font-size: 0.75rem;">
-                                {{ ing.re_code }}
-                                <q-tooltip>{{ ing.ingredient_name }}</q-tooltip>
-                            </td>
-                            <td class="text-center text-caption" style="font-size: 0.7rem;">{{ ing.from_warehouse }}</td>
-                            <td class="text-right text-weight-bold" style="font-size: 0.75rem;">{{ ing.batch_require ? ing.batch_require.toFixed(3) : '0' }}</td>
-                            <td class="text-center">
-                                <div v-if="ing.status === 2" class="row no-wrap items-center justify-center q-gutter-x-xs">
-                                    <q-badge color="green" :label="t('preBatch.complete')" size="sm" />
-                                    <q-btn flat round dense icon="print" size="xs" color="blue-7" @click.stop="quickReprint(ing)">
-                                        <q-tooltip>{{ t('preBatch.reprintTooltip') }}</q-tooltip>
-                                    </q-btn>
-                                </div>
-                                <q-badge v-else-if="ing.status === 1" color="orange" :label="t('preBatch.onBatch')" size="sm" />
-                                <q-badge v-else color="grey-6" label="Created" size="sm" />
-                            </td>
-                        </tr>
+                        <template v-for="ing in selectableIngredients" :key="ing.re_code">
+                            <tr 
+                                class="transition-all"
+                                :class="getIngredientRowClass(ing)"
+                                @click="onSelectIngredient(ing)"
+                            >
+                                <td class="text-center" style="padding: 0;">
+                                    <q-btn
+                                        flat round dense
+                                        :icon="isExpanded(ing.re_code) ? 'keyboard_arrow_down' : 'keyboard_arrow_right'"
+                                        color="orange-9"
+                                        size="sm"
+                                        @click.stop="toggleIngredientExpand(ing.re_code)"
+                                    />
+                                </td>
+                                <td class="text-weight-bold" style="font-size: 0.75rem;">
+                                    {{ ing.re_code }}
+                                    <q-tooltip>{{ ing.ingredient_name }}</q-tooltip>
+                                </td>
+                                <td class="text-center text-caption" style="font-size: 0.7rem;">{{ ing.from_warehouse }}</td>
+                                <td class="text-right text-weight-bold" style="font-size: 0.75rem;">{{ ing.batch_require ? ing.batch_require.toFixed(3) : '0' }}</td>
+                                <td class="text-center">
+                                    <div v-if="ing.status === 2" class="row no-wrap items-center justify-center q-gutter-x-xs">
+                                        <q-badge color="green" :label="t('preBatch.complete')" size="sm" />
+                                        <q-btn flat round dense icon="print" size="xs" color="blue-7" @click.stop="quickReprint(ing)">
+                                            <q-tooltip>{{ t('preBatch.reprintTooltip') }}</q-tooltip>
+                                        </q-btn>
+                                    </div>
+                                    <q-badge v-else-if="ing.status === 1" color="orange" :label="t('preBatch.onBatch')" size="sm" />
+                                    <q-badge v-else color="grey-6" label="Created" size="sm" />
+                                </td>
+                            </tr>
+                            
+                            <!-- Detailed expand row -->
+                            <tr v-if="isExpanded(ing.re_code)" class="bg-blue-grey-1">
+                                <td colspan="5" class="q-pa-none">
+                                    <div class="q-pl-lg q-pr-sm q-py-xs">
+                                        <div v-if="getIngredientLogs(ing.re_code).length === 0" class="text-grey text-italic q-pa-xs" style="font-size: 0.65rem;">
+                                            {{ t('preBatch.noRecordsYet') }}
+                                        </div>
+                                        <q-list dense separator class="bg-white rounded-borders shadow-1">
+                                            <q-item v-for="log in getIngredientLogs(ing.re_code)" :key="log.id" style="min-height: 28px;">
+                                                <q-item-section side>
+                                                    <q-badge color="grey-4" text-color="black" :label="'#' + log.package_no" size="sm" />
+                                                </q-item-section>
+                                                <q-item-section>
+                                                    <q-item-label style="font-size: 0.7rem;">
+                                                        <span class="text-weight-bold text-blue-9">{{ log.net_volume.toFixed(4) }}</span> kg
+                                                        <span class="text-grey-6 q-ml-sm">{{ log.batch_record_id }}</span>
+                                                    </q-item-label>
+                                                </q-item-section>
+                                                <q-item-section side>
+                                                     <q-btn flat round dense icon="print" size="xs" color="blue-5" @click.stop="onReprintLabel(log)">
+                                                         <q-tooltip>{{ t('common.print') }}</q-tooltip>
+                                                     </q-btn>
+                                                </q-item-section>
+                                            </q-item>
+                                        </q-list>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
                         <tr v-if="selectableIngredients.length === 0">
-                            <td colspan="4" class="text-center text-grey q-pa-md">
+                            <td colspan="5" class="text-center text-grey q-pa-md">
                                 <div v-if="selectedProductionPlan && isBatchSelected">{{ t('preBatch.noIngredientsFound') }}</div>
                                 <div v-else-if="selectedProductionPlan">{{ t('preBatch.selectBatchToView') }}</div>
                                 <div v-else>{{ t('preBatch.selectPlanToView') }}</div>

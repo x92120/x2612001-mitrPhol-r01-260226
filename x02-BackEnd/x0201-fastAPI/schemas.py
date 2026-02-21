@@ -250,6 +250,9 @@ class PreBatchRecBase(BaseModel):
     total_volume: Optional[float] = None
     total_request_volume: Optional[float] = None
     intake_lot_id: Optional[str] = Field(None, max_length=50)
+    mat_sap_code: Optional[str] = Field(None, max_length=50)
+    prebatch_id: Optional[str] = Field(None, max_length=100)
+    recode_batch_id: Optional[str] = Field(None, max_length=50)
     
     # Re-check fields
     recheck_status: Optional[int] = 0

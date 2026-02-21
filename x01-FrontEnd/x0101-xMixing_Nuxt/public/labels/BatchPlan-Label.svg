@@ -274,7 +274,8 @@
   <!-- QR Code Section -->
   <!-- ========================================== -->
   <g
-     id="rec_qrcode-batch">
+     id="rec_qrcode-batch"
+     transform="translate(231.028, 391.02802) scale(1.48972)">
     {{QRCode}}
   </g>
   <!-- ========================================== -->

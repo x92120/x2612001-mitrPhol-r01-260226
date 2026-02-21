@@ -263,6 +263,9 @@ class PreBatchRec(Base):
     total_volume = Column(Float)
     total_request_volume = Column(Float)
     intake_lot_id = Column(String(50), index=True)
+    mat_sap_code = Column(String(50), index=True)
+    prebatch_id = Column(String(100), index=True)
+    recode_batch_id = Column(String(50), index=True)
     
     # Re-check fields
     recheck_status = Column(Integer, default=0) # 0=Pending, 1=OK, 2=Error

@@ -58,6 +58,24 @@ def create_prebatch_rec(db: Session, record: schemas.PreBatchRecCreate) -> model
     """Create new PreBatch record (transaction) and update inventory"""
     try:
         db_record = models.PreBatchRec(**record.dict())
+        
+        # Auto-format prebatch_id: batch_id + re_code + recode_batch_id
+        if not db_record.prebatch_id and db_record.recode_batch_id and db_record.re_code:
+            # We need the string batch_id, which might be in PreBatchReq
+            batch_id_str = ""
+            if db_record.req_id:
+                req = db.query(models.PreBatchReq).filter(models.PreBatchReq.id == db_record.req_id).first()
+                if req:
+                    batch_id_str = req.batch_id
+            
+            if not batch_id_str and db_record.batch_record_id:
+                # Fallback: extract from batch_record_id if it's there
+                # batch_record_id is usually batch_id-re_code-pkg
+                batch_id_str = db_record.batch_record_id.split(f"-{db_record.re_code}")[0]
+
+            if batch_id_str:
+                db_record.prebatch_id = f"{batch_id_str}{db_record.re_code}{db_record.recode_batch_id}"
+
         db.add(db_record)
         
         # Update Inventory remain_vol
