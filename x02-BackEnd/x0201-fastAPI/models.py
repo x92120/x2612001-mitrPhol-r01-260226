@@ -52,6 +52,12 @@ class Ingredient(Base):
     update_by = Column(String(50))  # Username who last updated
     updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
+class IngredientIntakeFrom(Base):
+    __tablename__ = "ingredient_intake_from"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False)
+    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
 # Ingredient Intake List Model (formerly Ingredient Receive History / Ingredient Receipt)
 class IngredientIntakeList(Base):
     __tablename__ = "ingredient_intake_lists"
@@ -59,7 +65,8 @@ class IngredientIntakeList(Base):
     id = Column(Integer, primary_key=True, index=True)
     intake_lot_id = Column(String(50), nullable=False, index=True)
     lot_id = Column(String(50), nullable=False)
-    warehouse_location = Column(String(50))
+    intake_from = Column(String(50)) # Renamed from warehouse_location
+    intake_to = Column(String(50))   # Destination warehouse
     blind_code = Column(String(50), index=True)
     mat_sap_code = Column(String(50), nullable=False, index=True)
     re_code = Column(String(50))

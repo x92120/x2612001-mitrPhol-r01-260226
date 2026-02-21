@@ -51,6 +51,19 @@ class User(UserBase):
     class Config:
         from_attributes = True
 
+class IngredientIntakeFromBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+
+class IngredientIntakeFromCreate(IngredientIntakeFromBase):
+    pass
+
+class IngredientIntakeFrom(IngredientIntakeFromBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 # Ingredient Schemas
 class IngredientBase(BaseModel):
     """Base ingredient model"""
@@ -85,7 +98,8 @@ class IngredientIntakeListBase(BaseModel):
     """Base ingredient intake list model (merged with Receipt)"""
     intake_lot_id: str = Field(..., min_length=1, max_length=50)
     lot_id: str = Field(..., min_length=1, max_length=50)
-    warehouse_location: Optional[str] = Field(None, max_length=50)
+    intake_from: Optional[str] = Field(None, max_length=50) # Renamed from warehouse_location
+    intake_to: Optional[str] = Field(None, max_length=50) # Destination warehouse
     blind_code: Optional[str] = Field(None, max_length=50)
     mat_sap_code: str = Field(..., min_length=1, max_length=50)
     re_code: Optional[str] = Field(None, max_length=50)

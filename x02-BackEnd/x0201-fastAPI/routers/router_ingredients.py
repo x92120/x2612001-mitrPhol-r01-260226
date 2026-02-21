@@ -97,6 +97,36 @@ def delete_ingredient(ingredient_db_id: int, db: Session = Depends(get_db)):
 
 
 # =============================================================================
+# INTAKE FROM ENDPOINTS
+# =============================================================================
+
+@router.get("/intake-from/", response_model=List[schemas.IngredientIntakeFrom])
+def read_intake_from_all(db: Session = Depends(get_db)):
+    """Get all intake from locations."""
+    return crud.get_intake_from_all(db)
+
+@router.post("/intake-from/", response_model=schemas.IngredientIntakeFrom)
+def create_intake_from(data: schemas.IngredientIntakeFromCreate, db: Session = Depends(get_db)):
+    """Create new intake from location."""
+    return crud.create_intake_from(db, data)
+
+@router.put("/intake-from/{intake_from_id}", response_model=schemas.IngredientIntakeFrom)
+def update_intake_from(intake_from_id: int, data: schemas.IngredientIntakeFromCreate, db: Session = Depends(get_db)):
+    """Update intake from location."""
+    updated = crud.update_intake_from(db, intake_from_id, data)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Intake from location not found")
+    return updated
+
+@router.delete("/intake-from/{intake_from_id}")
+def delete_intake_from(intake_from_id: int, db: Session = Depends(get_db)):
+    """Delete intake from location."""
+    success = crud.delete_intake_from(db, intake_from_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Intake from location not found")
+    return {"status": "success"}
+
+# =============================================================================
 # INGREDIENT INTAKE LIST ENDPOINTS
 # =============================================================================
 
@@ -111,6 +141,18 @@ def get_ingredient_intake_lists(skip: int = 0, limit: int = 100, db: Session = D
 def get_next_intake_id(db: Session = Depends(get_db)):
     """Get next auto-generated intake ID."""
     return {"next_id": crud.get_next_intake_id(db)}
+
+
+@router.post("/migrate-add-intake-to")
+def migrate_add_intake_to(db: Session = Depends(get_db)):
+    """One-time migration: add intake_to column."""
+    from sqlalchemy import text
+    try:
+        db.execute(text("ALTER TABLE ingredient_intake_lists ADD COLUMN intake_to VARCHAR(50)"))
+        db.commit()
+        return {"status": "ok", "message": "intake_to column added"}
+    except Exception as e:
+        return {"status": "exists", "message": str(e)}
 
 
 @router.get("/ingredient-intake-lists/{list_id}", response_model=schemas.IngredientIntakeList)
@@ -208,7 +250,7 @@ async def bulk_import_ingredient_intake(file: UploadFile = File(...), db: Sessio
                 item = schemas.IngredientIntakeListCreate(
                     intake_lot_id=crud.get_next_intake_id(db),
                     lot_id=row_clean.get('Lot_ID') or row_clean.get('Material') or 'Unknown',
-                    warehouse_location=row_clean.get('Storage Location') or row_clean.get('Storage Loca'),
+                    intake_from=row_clean.get('Storage Location') or row_clean.get('Storage Loca'),
                     mat_sap_code=mat_code,
                     re_code=row_clean.get('Re-Code'),
                     material_description=row_clean.get('Material Description'),

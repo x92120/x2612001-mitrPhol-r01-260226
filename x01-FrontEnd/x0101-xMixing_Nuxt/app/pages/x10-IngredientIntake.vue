@@ -64,7 +64,8 @@ interface IngredientIntake {
   id: number
   intake_lot_id: string
   lot_id: string
-  warehouse_location?: string
+  intake_from?: string
+  intake_to?: string
   mat_sap_code: string
   re_code?: string
   material_description?: string
@@ -93,8 +94,11 @@ const { t } = useI18n()
 const ingredientCodeRef = ref<any>(null)
 const scannerReady = ref(true)
 
+const intakeFrom = ref('')
+const intakeTo = ref('')
+const intakeFromOptions = ref<{ label: string, value: string }[]>([])
+const intakeToOptions = ref<{ label: string, value: string }[]>([])
 const lotNumber = ref('')
-const warehouseLocation = ref('')
 const expireDate = ref('')
 const ingredientId = ref('')
 const xIngredientName = ref('')
@@ -107,6 +111,13 @@ const manufacturingDate = ref('')
 const poNumber = ref('')
 const intakeLotId = ref('') // Manual or Auto-generated ID
 const showIngredientDialog = ref(false)
+const showIntakeFromDialog = ref(false)
+const showIntakeToDialog = ref(false)
+const intakeFromList = ref<any[]>([])
+const intakeToList = ref<any[]>([])
+const newIntakeFromName = ref('')
+const newIntakeToId = ref('')
+const newIntakeToName = ref('')
 const tempIngredientId = ref('')
 
 // Editing state
@@ -134,7 +145,7 @@ const columns = computed<QTableColumn[]>(() => [
   { name: 'expand', label: '', field: 'expand', align: 'center' },
   { name: 'id', align: 'center', label: 'ID', field: 'id', sortable: true },
   { name: 'intake_lot_id', align: 'center', label: t('ingredient.intakeLotId'), field: 'intake_lot_id', sortable: true },
-  { name: 'warehouse_location', align: 'center', label: t('ingredient.warehouse'), field: 'warehouse_location', sortable: true },
+  { name: 'intake_from', align: 'center', label: 'Intake From', field: 'intake_from', sortable: true },
   { name: 'lot_id', align: 'center', label: t('ingredient.lotId'), field: 'lot_id', sortable: true },
   { name: 'mat_sap_code', align: 'center', label: t('ingredient.matSapCode'), field: 'mat_sap_code', sortable: true },
   { name: 're_code', align: 'center', label: t('ingredient.reCode'), field: 're_code', sortable: true },
@@ -169,6 +180,103 @@ const showAll = ref(false)
 const getHeaders = (extraHeaders: Record<string, string> = {}) => {
   const authHeader = getAuthHeader() as Record<string, string>
   return { ...authHeader, ...extraHeaders }
+}
+
+const fetchIntakeFromOptions = async () => {
+  try {
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/intake-from/`, {
+      headers: getAuthHeader() as Record<string, string>,
+    })
+    intakeFromOptions.value = data.map(item => ({
+      label: item.name,
+      value: item.name
+    }))
+    intakeFromList.value = data
+  } catch (error) {
+    console.error('Failed to fetch intake-from:', error)
+  }
+}
+
+const fetchIntakeToOptions = async () => {
+  try {
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/warehouses/`, {
+      headers: getAuthHeader() as Record<string, string>,
+    })
+    intakeToOptions.value = data.map(item => ({
+      label: `${item.warehouse_id} - ${item.name}`,
+      value: item.warehouse_id
+    }))
+    intakeToList.value = data
+  } catch (error) {
+    console.error('Failed to fetch warehouses:', error)
+  }
+}
+
+const addIntakeFrom = async () => {
+  if (!newIntakeFromName.value) return
+  try {
+    const response = await fetch(`${appConfig.apiBaseUrl}/intake-from/`, {
+      method: 'POST',
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ name: newIntakeFromName.value }),
+    })
+    if (response.ok) {
+      newIntakeFromName.value = ''
+      await fetchIntakeFromOptions()
+    }
+  } catch (err) {
+    console.error('Failed to add intake source:', err)
+  }
+}
+
+const deleteIntakeFrom = async (id: number) => {
+  try {
+    const response = await fetch(`${appConfig.apiBaseUrl}/intake-from/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeader() as Record<string, string>,
+    })
+    if (response.ok) {
+      await fetchIntakeFromOptions()
+    }
+  } catch (err) {
+    console.error('Failed to delete intake source:', err)
+  }
+}
+
+const addWarehouse = async () => {
+  if (!newIntakeToName.value || !newIntakeToId.value) return
+  try {
+    const response = await fetch(`${appConfig.apiBaseUrl}/warehouses/`, {
+      method: 'POST',
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ 
+        warehouse_id: newIntakeToId.value.toUpperCase(),
+        name: newIntakeToName.value,
+        description: 'Added via Intake page'
+      }),
+    })
+    if (response.ok) {
+      newIntakeToName.value = ''
+      newIntakeToId.value = ''
+      await fetchIntakeToOptions()
+    }
+  } catch (err) {
+    console.error('Failed to add warehouse:', err)
+  }
+}
+
+const deleteWarehouse = async (id: string) => {
+  try {
+    const response = await fetch(`${appConfig.apiBaseUrl}/warehouses/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeader() as Record<string, string>,
+    })
+    if (response.ok) {
+      await fetchIntakeToOptions()
+    }
+  } catch (err) {
+    console.error('Failed to delete warehouse:', err)
+  }
 }
 
 // Fetch Receipt History
@@ -208,9 +316,10 @@ const lookupIngredient = async (query: string) => {
 
       if (ingredientId.value !== ingredient.ingredient_id) {
         ingredientId.value = ingredient.ingredient_id
+        intakeVol.value = ''
+        packageVol.value = Number(ingredient.std_package_size || 25).toFixed(4)
+        intakeFrom.value = 'Warehouse' // Default
       }
-
-      packageVol.value = Number(ingredient.std_package_size || 25).toFixed(4)
 
       $q.notify({
         type: 'positive',
@@ -277,7 +386,7 @@ const onSave = async () => {
   const missingFields: string[] = []
   if (!ingredientId.value && !xMatSapCode.value) missingFields.push('Ingredient ID')
   if (!lotNumber.value) missingFields.push('Lot Number')
-  if (!warehouseLocation.value) missingFields.push('Warehouse Location')
+  if (!intakeFrom.value) missingFields.push('Intake From')
   if (!intakeVol.value) missingFields.push('Intake Volume')
   if (!expireDate.value) missingFields.push('Expire Date')
 
@@ -326,7 +435,8 @@ const onSave = async () => {
     const payload = {
       intake_lot_id: intakeLotId.value,
       lot_id: lotNumber.value,
-      warehouse_location: warehouseLocation.value,
+      intake_from: intakeFrom.value,
+      intake_to: intakeTo.value,
       mat_sap_code: xMatSapCode.value,
       re_code: xReCode.value,
       material_description: xIngredientName.value,
@@ -412,7 +522,8 @@ const onEdit = (row: IngredientIntake) => {
   // Populate form
   intakeLotId.value = row.intake_lot_id
   lotNumber.value = row.lot_id
-  warehouseLocation.value = row.warehouse_location || ''
+  intakeFrom.value = row.intake_from || ''
+  intakeTo.value = row.intake_to || ''
   xMatSapCode.value = row.mat_sap_code
   xReCode.value = row.re_code || ''
   intakeVol.value = row.intake_vol.toString()
@@ -539,6 +650,8 @@ onMounted(() => {
   fetchReceipts()
   generateIntakeLotId() // Generate initial ID
   fetchAllIngredients() // Fetch list of ingredients for the autocomplete dropdown
+  fetchIntakeFromOptions()
+  fetchIntakeToOptions()
 
   // Auto-focus scanner input on mount
   focusScannerInput()
@@ -568,7 +681,8 @@ const onClear = () => {
   // remainVol removed
   packageVol.value = ''
   numberOfPackages.value = ''
-  warehouseLocation.value = ''
+  intakeFrom.value = ''
+  intakeTo.value = ''
   originalRemainVol.value = null
   originalStatus.value = 'Active'
   generateIntakeLotId() // Get fresh ID after clear/save
@@ -719,9 +833,13 @@ const printLabel = async (record: IngredientIntake) => {
       .replace(/\{\{PackageString\}\}/g, `${i} / ${numPackages}`)
       .replace(/\{\{IntakeVol\}\}/g, record.intake_vol?.toFixed(4) || '0.0000')
       .replace(/\{\{PackageVol\}\}/g, currentPkgVol.toFixed(4) || '0.0000')
-      .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="18.897638" y="115.16535" width="134.01466" height="134.01468" />`)
+      .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="18.9" y="115.2" width="134" height="134" />`)
       .replace(/\{\{Operator\}\}/g, record.intake_by || 'Operator')
       .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
+
+    // Replace fixed width/height in SVG with 100% so it scales to container via viewBox
+    formattedSvg = formattedSvg.replace(/(<svg[\s\S]*?)width="[^"]*"/, '$1width="100%"')
+                               .replace(/(<svg[\s\S]*?)height="[^"]*"/, '$1height="100%"')
 
     labelsHtml += `<div class="label-container">${formattedSvg}</div>`
   }
@@ -745,13 +863,12 @@ const printLabel = async (record: IngredientIntake) => {
             width: 4in;
             height: 6in;
             page-break-after: always;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            overflow: hidden;
           }
           .label-container svg {
-            width: 100%;
-            height: 100%;
+            width: 4in;
+            height: 6in;
+            display: block;
           }
         </style>
       </head>
@@ -812,9 +929,13 @@ const printSinglePackageLabel = async (record: IngredientIntake, pkg: { package_
     .replace(/\{\{PackageString\}\}/g, `${pkg.package_no} / ${numPackages}`)
     .replace(/\{\{IntakeVol\}\}/g, record.intake_vol?.toFixed(4) || '0.0000')
     .replace(/\{\{PackageVol\}\}/g, pkg.weight.toFixed(4) || '0.0000')
-    .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="18.897638" y="115.16535" width="134.01466" height="134.01468" />`)
+    .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="18.9" y="115.2" width="134" height="134" />`)
     .replace(/\{\{Operator\}\}/g, record.intake_by || 'Operator')
     .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
+
+  // Replace fixed width/height in SVG with 100%
+  formattedSvg = formattedSvg.replace(/(<svg[\s\S]*?)width="[^"]*"/, '$1width="100%"')
+                             .replace(/(<svg[\s\S]*?)height="[^"]*"/, '$1height="100%"')
 
   const labelsHtml = `<div class="label-container">${formattedSvg}</div>`
   
@@ -832,9 +953,9 @@ const printSinglePackageLabel = async (record: IngredientIntake, pkg: { package_
           body { margin: 0; padding: 0; background: white; }
           .label-container { 
             width: 4in; height: 6in; 
-            display: flex; justify-content: center; align-items: center; 
+            overflow: hidden;
           }
-          .label-container svg { width: 100%; height: 100%; }
+          .label-container svg { width: 4in; height: 6in; display: block; }
         </style>
       </head>
       <body>
@@ -992,7 +1113,10 @@ const onFileSelected = async (event: Event) => {
           <q-icon name="local_shipping" size="sm" />
           <div class="text-h6 text-weight-bolder">{{ t('ingredient.title') }}</div>
         </div>
-        <div class="text-caption text-blue-2">{{ t('ingredient.subtitle') }}</div>
+        <div class="row items-center q-gutter-sm">
+          <q-btn icon="save" round flat text-color="white" @click="onSave" :loading="isSaving" title="Save Intake" />
+          <q-btn icon="clear_all" round flat text-color="white" @click="onClear" title="Clear Form" />
+        </div>
       </div>
     </div>
     <!-- Ingredient Intake Form -->
@@ -1000,9 +1124,19 @@ const onFileSelected = async (event: Event) => {
       <div class="col-12">
         <q-card class="shadow-1">
           <q-form class="q-pa-md">
-            <!-- Row 1: Ingredient ID + Blind Code -->
+            <!-- Row 1: Intake ID + Ingredient ID + MAT SAP + Re-Code -->
             <div class="row q-col-gutter-md">
-              <div class="col-12 col-md-4">
+              <div class="col-12 col-md-3">
+                <q-input
+                  outlined
+                  v-model="intakeLotId"
+                  :label="t('ingredient.intakeId')"
+                  readonly
+                  bg-color="grey-2"
+                  :hint="t('ingredient.autoGenId')"
+                />
+              </div>
+              <div class="col-12 col-md-3">
                 <q-select
                   ref="ingredientCodeRef"
                   outlined
@@ -1044,7 +1178,7 @@ const onFileSelected = async (event: Event) => {
                   </template>
                 </q-select>
               </div>
-              <div class="col-12 col-md-4">
+              <div class="col-12 col-md-3">
                 <q-input
                   outlined
                   v-model="xMatSapCode"
@@ -1053,15 +1187,14 @@ const onFileSelected = async (event: Event) => {
                   bg-color="grey-2"
                 />
               </div>
-              <div class="col-12 col-md-4">
-                 <!-- Re-Code with Settings Icon Wrapper -->
+              <div class="col-12 col-md-3">
                 <q-input outlined v-model="xReCode" :label="t('ingredient.reCode')" readonly bg-color="grey-2" />
               </div>
             </div>
 
-            <!-- Row 1.5: Ingredient Name -->
+            <!-- Row 1.5: Ingredient Name, Mfg Date, Expire Date -->
             <div class="row q-col-gutter-md q-mt-sm">
-                <div class="col-12">
+                <div class="col-12 col-md-6">
                      <q-input
                         outlined
                         v-model="xIngredientName"
@@ -1081,41 +1214,7 @@ const onFileSelected = async (event: Event) => {
                         </template>
                     </q-input>
                 </div>
-            </div>
-
-            <!-- Row 3: Warehouse, Lot Number, Expire Date (swapped from row 2) -->
-            <div class="row q-col-gutter-md q-mt-sm">
-              <div class="col-12 col-md-4">
-                <q-select
-                  outlined
-                  v-model="warehouseLocation"
-                  :options="['WH-001', 'WH-002', 'WH-003', 'WH-Cooling', 'Re Claim from Process']"
-                  :label="t('ingredient.warehouseLocation')"
-                  dropdown-icon="arrow_drop_down"
-                >
-                  <template v-slot:after>
-                    <q-btn
-                      icon="settings"
-                      color="primary"
-                      round
-                      flat
-                      to="/x12-WarehouseConfig"
-                      title="Config Warehouse"
-                    />
-                  </template>
-                </q-select>
-              </div>
-              <div class="col-12 col-md-4">
-                <q-input outlined v-model="lotNumber" :label="t('ingredient.lotNumber')" />
-              </div>
-              <div class="col-12 col-md-4">
-                <q-input outlined v-model="poNumber" :label="t('ingredient.poNumber')" />
-              </div>
-            </div>
-
-            <!-- New Row: Mfg Date, Expire Date -->
-            <div class="row q-col-gutter-md q-mt-sm">
-              <div class="col-12 col-md-4">
+              <div class="col-12 col-md-2">
                 <q-input outlined v-model="manufacturingDate" :label="t('ingredient.manufacturingDate')" mask="##/##/####" placeholder="DD/MM/YYYY">
                   <template v-slot:append>
                     <q-icon name="event" class="cursor-pointer">
@@ -1130,7 +1229,7 @@ const onFileSelected = async (event: Event) => {
                   </template>
                 </q-input>
               </div>
-              <div class="col-12 col-md-4">
+              <div class="col-12 col-md-2">
                 <q-input outlined v-model="expireDate" :label="t('ingredient.expiryDate') + ' *'" mask="##/##/####" placeholder="DD/MM/YYYY">
                   <template v-slot:append>
                     <q-icon name="event" class="cursor-pointer">
@@ -1147,26 +1246,72 @@ const onFileSelected = async (event: Event) => {
               </div>
             </div>
 
+            <!-- Row 3: *Intake From, *Intake To, *Lot Number, PO Number -->
             <div class="row q-col-gutter-md q-mt-sm">
               <div class="col-12 col-md-3">
-                <q-input
+                <q-select
                   outlined
-                  v-model="intakeLotId"
-                  :label="t('ingredient.intakeId')"
-                  readonly
-                  bg-color="grey-2"
-                  :hint="t('ingredient.autoGenId')"
-                />
+                  v-model="intakeFrom"
+                  :options="intakeFromOptions"
+                  label="Intake From *"
+                  map-options
+                  emit-value
+                  dropdown-icon="arrow_drop_down"
+                  bg-color="white"
+                >
+                  <template v-slot:after>
+                    <q-btn
+                      icon="settings"
+                      color="primary"
+                      round
+                      flat
+                      size="sm"
+                      @click="showIntakeFromDialog = true"
+                      title="Config Intake Destination"
+                    />
+                  </template>
+                </q-select>
               </div>
-              <div class="col-12 col-md-4">
-                <q-input outlined v-model="intakeVol" :label="t('ingredient.intakeVolume')" />
+              <div class="col-12 col-md-3">
+                <q-select
+                  outlined
+                  v-model="intakeTo"
+                  :options="intakeToOptions"
+                  label="Intake To *"
+                  map-options
+                  emit-value
+                  dropdown-icon="arrow_drop_down"
+                  bg-color="white"
+                >
+                  <template v-slot:after>
+                    <q-btn
+                      icon="settings"
+                      color="primary"
+                      round
+                      flat
+                      size="sm"
+                      @click="showIntakeToDialog = true"
+                      title="Config Intake Destination"
+                    />
+                  </template>
+                </q-select>
               </div>
+              <div class="col-12 col-md-3">
+                <q-input outlined v-model="lotNumber" :label="t('ingredient.lotNumber') + ' *'" />
+              </div>
+              <div class="col-12 col-md-3">
+                <q-input outlined v-model="poNumber" :label="t('ingredient.poNumber')" />
+              </div>
+            </div>
 
-              <!-- Remain Vol input removed -->
+            <div class="row q-col-gutter-md q-mt-sm">
+              <div class="col-12 col-md-3">
+                <q-input outlined v-model="intakeVol" :label="t('ingredient.intakeVolume') + ' *'" />
+              </div>
               <div class="col-12 col-md-3">
                 <q-input outlined v-model="packageVol" :label="t('ingredient.packageVol')" />
               </div>
-              <div class="col-12 col-md-2">
+              <div class="col-12 col-md-3">
                 <q-input
                   outlined
                   v-model="numberOfPackages"
@@ -1174,22 +1319,11 @@ const onFileSelected = async (event: Event) => {
                   readonly
                   bg-color="grey-2"
                   input-class="text-right"
-                  :hint="t('ingredient.autoCalc')"
                 />
               </div>
             </div>
 
-            <div class="q-mt-md">
-              <q-btn
-                :label="isEditing ? t('ingredient.updateIntake') : t('ingredient.saveIntake')"
-                color="info"
-                class="q-mr-md"
-                style="min-width: 130px"
-                @click="onSave"
-                :loading="isSaving"
-              />
-              <q-btn :label="t('ingredient.clear')" color="grey" outline style="min-width: 130px" @click="onClear" />
-            </div>
+
           </q-form>
         </q-card>
       </div>
@@ -1375,7 +1509,78 @@ const onFileSelected = async (event: Event) => {
               <q-tr v-show="props.expand" :props="props" class="bg-grey-1">
                 <q-td colspan="100%">
                   <div class="q-pa-md">
-                    <div class="text-subtitle2 q-mb-sm text-primary row items-center">
+                    <!-- Intake Summary Info -->
+                    <div class="row q-col-gutter-lg q-mb-md">
+                      <div class="col-12 col-md-4">
+                        <div class="text-subtitle2 q-mb-xs text-primary row items-center">
+                          <q-icon name="info" class="q-mr-xs" />
+                          General Info
+                        </div>
+                        <q-list bordered dense separator class="bg-white rounded-borders">
+                          <q-item>
+                            <q-item-section class="text-grey-7">{{ t('ingredient.intakeLotId') }}</q-item-section>
+                            <q-item-section side class="text-weight-bold">{{ props.row.intake_lot_id }}</q-item-section>
+                          </q-item>
+                          <q-item>
+                            <q-item-section class="text-grey-7">Material</q-item-section>
+                            <q-item-section side>{{ props.row.material_description }}</q-item-section>
+                          </q-item>
+                          <q-item>
+                            <q-item-section class="text-grey-7">RE Code</q-item-section>
+                            <q-item-section side class="text-weight-bold text-blue-9">{{ props.row.re_code || '-' }}</q-item-section>
+                          </q-item>
+                        </q-list>
+                      </div>
+
+                      <div class="col-12 col-md-4">
+                        <div class="text-subtitle2 q-mb-xs text-primary row items-center">
+                          <q-icon name="assignment" class="q-mr-xs" />
+                          Logistics
+                        </div>
+                        <q-list bordered dense separator class="bg-white rounded-borders">
+                          <q-item>
+                            <q-item-section class="text-grey-7">{{ t('ingredient.lotId') }}</q-item-section>
+                            <q-item-section side>{{ props.row.lot_id }}</q-item-section>
+                          </q-item>
+                          <q-item>
+                            <q-item-section class="text-grey-7">{{ t('ingredient.poNo') }}</q-item-section>
+                            <q-item-section side>{{ props.row.po_number || '-' }}</q-item-section>
+                          </q-item>
+                          <q-item>
+                            <q-item-section class="text-grey-7">Intake From</q-item-section>
+                            <q-item-section side>{{ props.row.intake_from || '-' }}</q-item-section>
+                          </q-item>
+                        </q-list>
+                      </div>
+
+                      <div class="col-12 col-md-4">
+                         <div class="text-subtitle2 q-mb-xs text-primary row items-center">
+                          <q-icon name="history" class="q-mr-xs" />
+                          Dates & Tracking
+                        </div>
+                        <q-list bordered dense separator class="bg-white rounded-borders">
+                          <q-item>
+                            <q-item-section class="text-grey-7">{{ t('ingredient.mfgDate') }}</q-item-section>
+                            <q-item-section side>{{ formatDate(props.row.manufacturing_date) }}</q-item-section>
+                          </q-item>
+                          <q-item>
+                            <q-item-section class="text-grey-7">{{ t('ingredient.expiryDate') }}</q-item-section>
+                            <q-item-section side>{{ formatDate(props.row.expire_date) }}</q-item-section>
+                          </q-item>
+                          <q-item>
+                            <q-item-section class="text-grey-7">{{ t('ingredient.intakeAt') }}</q-item-section>
+                            <q-item-section side>{{ formatDateTime(props.row.intake_at) }}</q-item-section>
+                          </q-item>
+                          <q-item>
+                            <q-item-section class="text-grey-7">Intake By</q-item-section>
+                            <q-item-section side class="text-blue-7">{{ props.row.intake_by }}</q-item-section>
+                          </q-item>
+                        </q-list>
+                      </div>
+                    </div>
+
+                    <!-- Package Details -->
+                    <div class="text-subtitle2 q-mb-xs text-primary row items-center">
                        <q-icon name="inventory_2" class="q-mr-xs" />
                        Intake Package Details (Individual Weights)
                     </div>
@@ -1473,8 +1678,8 @@ const onFileSelected = async (event: Event) => {
             <div class="col-6 text-weight-bold">{{ t('ingredient.reCode') }}:</div>
             <div class="col-6">{{ selectedRecord?.re_code || '-' }}</div>
 
-            <div class="col-6 text-weight-bold">{{ t('ingredient.warehouse') }}:</div>
-            <div class="col-6">{{ selectedRecord?.warehouse_location }}</div>
+            <div class="col-6 text-weight-bold">Intake From:</div>
+            <div class="col-6">{{ selectedRecord?.intake_from || '-' }}</div>
 
             <div class="col-6 text-weight-bold">{{ t('ingredient.poNo') }}:</div>
             <div class="col-6">{{ selectedRecord?.po_number || '-' }}</div>
@@ -1603,6 +1808,100 @@ const onFileSelected = async (event: Event) => {
             @click="printLabel(selectedRecord!)"
           />
           <q-btn flat :label="t('common.close')" color="primary" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Intake From Config Dialog (ingredient_intake_from table) -->
+    <q-dialog v-model="showIntakeFromDialog">
+      <q-card style="min-width: 400px">
+        <q-card-section class="bg-primary text-white row items-center">
+          <div class="text-h6">Manage Intake Source</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section>
+          <div class="row q-col-gutter-sm items-center q-mb-md">
+            <div class="col">
+              <q-input
+                v-model="newIntakeFromName"
+                label="Source Name (e.g. Supplier)"
+                outlined
+                dense
+                @keyup.enter="addIntakeFrom"
+              />
+            </div>
+            <div class="col-auto">
+              <q-btn icon="add" color="primary" round @click="addIntakeFrom" :disable="!newIntakeFromName" />
+            </div>
+          </div>
+
+          <q-list bordered separator>
+            <q-item v-for="item in intakeFromList" :key="item.id">
+              <q-item-section>
+                <q-item-label>{{ item.name }}</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-btn icon="delete" color="negative" flat round dense @click="deleteIntakeFrom(item.id)" />
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Close" color="primary" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Intake To Config Dialog (warehouses table) -->
+    <q-dialog v-model="showIntakeToDialog">
+      <q-card style="min-width: 400px">
+        <q-card-section class="bg-primary text-white row items-center">
+          <div class="text-h6">Manage Intake Destination (Warehouses)</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section>
+          <div class="row q-col-gutter-sm items-center q-mb-md">
+            <div class="col-12 col-md-5">
+              <q-input
+                v-model="newIntakeToId"
+                label="Warehouse ID (e.g. FH)"
+                outlined
+                dense
+              />
+            </div>
+            <div class="col-12 col-md-5">
+              <q-input
+                v-model="newIntakeToName"
+                label="Name (e.g. Flavour House)"
+                outlined
+                dense
+                @keyup.enter="addWarehouse"
+              />
+            </div>
+            <div class="col-auto">
+              <q-btn icon="add" color="primary" round @click="addWarehouse" :disable="!newIntakeToId || !newIntakeToName" />
+            </div>
+          </div>
+
+          <q-list bordered separator>
+            <q-item v-for="wh in intakeToList" :key="wh.warehouse_id">
+              <q-item-section>
+                <q-item-label>{{ wh.warehouse_id }} - {{ wh.name }}</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-btn icon="delete" color="negative" flat round dense @click="deleteWarehouse(wh.warehouse_id)" />
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Close" color="primary" v-close-popup />
         </q-card-actions>
       </q-card>
     </q-dialog>

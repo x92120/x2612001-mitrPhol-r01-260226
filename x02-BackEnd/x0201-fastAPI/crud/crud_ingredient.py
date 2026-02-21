@@ -83,6 +83,37 @@ def delete_ingredient(db: Session, ingredient_id: int) -> Optional[models.Ingred
         db.rollback()
         raise RuntimeError(f"Database error: {str(e)}")
 
+# Ingredient Intake From CRUD
+def get_intake_from_all(db: Session) -> List[models.IngredientIntakeFrom]:
+    """Get all intake from locations"""
+    return db.query(models.IngredientIntakeFrom).order_by(models.IngredientIntakeFrom.name).all()
+
+def create_intake_from(db: Session, data: schemas.IngredientIntakeFromCreate) -> models.IngredientIntakeFrom:
+    """Create new intake from location"""
+    db_obj = models.IngredientIntakeFrom(**data.dict())
+    db.add(db_obj)
+    db.commit()
+    db.refresh(db_obj)
+    return db_obj
+
+def update_intake_from(db: Session, intake_from_id: int, data: schemas.IngredientIntakeFromCreate) -> Optional[models.IngredientIntakeFrom]:
+    """Update intake from location"""
+    db_obj = db.query(models.IngredientIntakeFrom).filter(models.IngredientIntakeFrom.id == intake_from_id).first()
+    if db_obj:
+        db_obj.name = data.name
+        db.commit()
+        db.refresh(db_obj)
+    return db_obj
+
+def delete_intake_from(db: Session, intake_from_id: int) -> bool:
+    """Delete intake from location"""
+    db_obj = db.query(models.IngredientIntakeFrom).filter(models.IngredientIntakeFrom.id == intake_from_id).first()
+    if db_obj:
+        db.delete(db_obj)
+        db.commit()
+        return True
+    return False
+
 # Ingredient Intake List CRUD
 def get_ingredient_intake_lists(db: Session, skip: int = 0, limit: int = 100) -> List[models.IngredientIntakeList]:
     """Get list of ingredient intake list with pagination"""
