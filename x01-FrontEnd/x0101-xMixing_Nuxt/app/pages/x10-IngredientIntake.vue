@@ -22,6 +22,30 @@ const formatDateTime = (date: any) => {
   return d.toLocaleString('en-GB')
 }
 
+const formatDateForInput = (date: any) => {
+  if (!date) return ''
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return ''
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
+const parseInputDate = (val: string | null | undefined) => {
+  if (!val || val === '--/--/----') return null
+  const parts = val.split('/')
+  if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+    const day = parseInt(parts[0])
+    const month = parseInt(parts[1]) - 1
+    const year = parseInt(parts[2])
+    const d = new Date(year, month, day)
+    return isNaN(d.getTime()) ? null : d
+  }
+  const d = new Date(val)
+  return isNaN(d.getTime()) ? null : d
+}
+
 interface IngredientIntakeHistory {
   id: number
   action: string
@@ -310,11 +334,11 @@ const onSave = async () => {
           : parseFloat(intakeVol.value),
       intake_package_vol: packageVol.value ? parseFloat(packageVol.value) : null,
       package_intake: numberOfPackages.value ? parseInt(numberOfPackages.value) : null,
-      expire_date: expireDate.value ? new Date(expireDate.value).toISOString() : null,
+      expire_date: expireDate.value ? parseInputDate(expireDate.value)?.toISOString() : null,
       status: isEditing.value ? originalStatus.value : 'Active',
       intake_by: user.value?.username || 'cj',
       edit_by: user.value?.username || 'cj',
-      manufacturing_date: manufacturingDate.value ? new Date(manufacturingDate.value).toISOString() : null,
+      manufacturing_date: manufacturingDate.value ? parseInputDate(manufacturingDate.value)?.toISOString() : null,
       po_number: poNumber.value || null,
     }
 
@@ -391,8 +415,8 @@ const onEdit = (row: IngredientIntake) => {
   // remainVol removed
   packageVol.value = row.intake_package_vol ? row.intake_package_vol.toString() : ''
   numberOfPackages.value = row.package_intake ? row.package_intake.toString() : ''
-  expireDate.value = row.expire_date ? row.expire_date.split('T')[0] || '' : ''
-  manufacturingDate.value = row.manufacturing_date ? row.manufacturing_date.split('T')[0] || '' : ''
+  expireDate.value = row.expire_date ? formatDateForInput(row.expire_date) : ''
+  manufacturingDate.value = row.manufacturing_date ? formatDateForInput(row.manufacturing_date) : ''
   poNumber.value = row.po_number || ''
 
   // We need to fetch ingredient details to show name and fill ingredientId
@@ -1088,10 +1112,34 @@ const onFileSelected = async (event: Event) => {
             <!-- New Row: Mfg Date, Expire Date -->
             <div class="row q-col-gutter-md q-mt-sm">
               <div class="col-12 col-md-4">
-                <q-input outlined v-model="manufacturingDate" :label="t('ingredient.manufacturingDate')" type="date" stack-label />
+                <q-input outlined v-model="manufacturingDate" :label="t('ingredient.manufacturingDate')" mask="##/##/####" placeholder="DD/MM/YYYY">
+                  <template v-slot:append>
+                    <q-icon name="event" class="cursor-pointer">
+                      <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                        <q-date v-model="manufacturingDate" mask="DD/MM/YYYY">
+                          <div class="row items-center justify-end">
+                            <q-btn v-close-popup :label="t('common.close')" color="primary" flat />
+                          </div>
+                        </q-date>
+                      </q-popup-proxy>
+                    </q-icon>
+                  </template>
+                </q-input>
               </div>
               <div class="col-12 col-md-4">
-                <q-input outlined v-model="expireDate" :label="t('ingredient.expiryDate') + ' *'" type="date" stack-label />
+                <q-input outlined v-model="expireDate" :label="t('ingredient.expiryDate') + ' *'" mask="##/##/####" placeholder="DD/MM/YYYY">
+                  <template v-slot:append>
+                    <q-icon name="event" class="cursor-pointer">
+                      <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                        <q-date v-model="expireDate" mask="DD/MM/YYYY">
+                          <div class="row items-center justify-end">
+                            <q-btn v-close-popup :label="t('common.close')" color="primary" flat />
+                          </div>
+                        </q-date>
+                      </q-popup-proxy>
+                    </q-icon>
+                  </template>
+                </q-input>
               </div>
             </div>
 

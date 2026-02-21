@@ -22,6 +22,39 @@ const formatDateTime = (date: any) => {
   return d.toLocaleString('en-GB')
 }
 
+const formatDateForInput = (date: any) => {
+  if (!date) return ''
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return ''
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
+const parseInputDate = (val: string | null | undefined) => {
+  if (!val || val === '--/--/----') return null
+  const parts = val.split('/')
+  if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+    const day = parseInt(parts[0])
+    const month = parseInt(parts[1]) - 1
+    const year = parseInt(parts[2])
+    const d = new Date(year, month, day)
+    return isNaN(d.getTime()) ? null : d
+  }
+  const d = new Date(val)
+  return isNaN(d.getTime()) ? null : d
+}
+
+const formatDateToApi = (val: string) => {
+  const d = parseInputDate(val)
+  if (!d) return ''
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 // --- State ---
 const skuId = ref('')
 const skuName = ref('')
@@ -198,8 +231,8 @@ const resetForm = () => {
   productionRequire.value = null
   batchStandard.value = null
   numberOfBatch.value = 0
-  startDate.value = new Date().toISOString().slice(0, 10)
-  finishDate.value = new Date().toISOString().slice(0, 10)
+  startDate.value = formatDateForInput(new Date())
+  finishDate.value = formatDateForInput(new Date())
 }
 
 const onCreatePlan = async () => {
@@ -217,8 +250,8 @@ const onCreatePlan = async () => {
       total_volume: Number(productionRequire.value),
       batch_size: Number(batchStandard.value),
       num_batches: Number(numberOfBatch.value),
-      start_date: startDate.value,
-      finish_date: finishDate.value,
+      start_date: formatDateToApi(startDate.value),
+      finish_date: formatDateToApi(finishDate.value),
     }
 
     await $fetch(`${appConfig.apiBaseUrl}/production-plans/`, {
@@ -856,11 +889,35 @@ onMounted(() => {
             </div>
             <div class="col-6 col-md-2">
               <div class="text-caption text-weight-bold q-mb-xs">{{ t('prodPlan.startDate') }}</div>
-              <q-input outlined v-model="startDate" dense bg-color="white" type="date" />
+              <q-input outlined v-model="startDate" dense bg-color="white" mask="##/##/####" placeholder="DD/MM/YYYY">
+                <template v-slot:append>
+                  <q-icon name="event" class="cursor-pointer">
+                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                      <q-date v-model="startDate" mask="DD/MM/YYYY">
+                        <div class="row items-center justify-end">
+                          <q-btn v-close-popup :label="t('common.close')" color="primary" flat />
+                        </div>
+                      </q-date>
+                    </q-popup-proxy>
+                  </q-icon>
+                </template>
+              </q-input>
             </div>
             <div class="col-6 col-md-2">
               <div class="text-caption text-weight-bold q-mb-xs">{{ t('prodPlan.finishDate') }}</div>
-              <q-input outlined v-model="finishDate" dense bg-color="white" type="date" />
+              <q-input outlined v-model="finishDate" dense bg-color="white" mask="##/##/####" placeholder="DD/MM/YYYY">
+                <template v-slot:append>
+                  <q-icon name="event" class="cursor-pointer">
+                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                      <q-date v-model="finishDate" mask="DD/MM/YYYY">
+                        <div class="row items-center justify-end">
+                          <q-btn v-close-popup :label="t('common.close')" color="primary" flat />
+                        </div>
+                      </q-date>
+                    </q-popup-proxy>
+                  </q-icon>
+                </template>
+              </q-input>
             </div>
           </div>
 

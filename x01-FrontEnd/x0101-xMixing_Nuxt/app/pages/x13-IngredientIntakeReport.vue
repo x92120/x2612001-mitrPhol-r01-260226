@@ -20,6 +20,29 @@ const startDate = ref('')
 const endDate = ref('')
 const reportData = ref<ReportItem[]>([])
 const loading = ref(false)
+
+const parseInputDate = (val: string | null | undefined) => {
+  if (!val || val === '--/--/----') return null
+  const parts = val.split('/')
+  if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+    const day = parseInt(parts[0])
+    const month = parseInt(parts[1]) - 1
+    const year = parseInt(parts[2])
+    const d = new Date(year, month, day)
+    return isNaN(d.getTime()) ? null : d
+  }
+  const d = new Date(val)
+  return isNaN(d.getTime()) ? null : d
+}
+
+const formatDateToApi = (val: string) => {
+  const d = parseInputDate(val)
+  if (!d) return ''
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 const columns = computed((): QTableColumn[] => [
   { name: 'ingredient_id', label: t('ingConfig.ingredientId'), field: 'ingredient_id', sortable: true, align: 'left' },
   { name: 'ingredient_name', label: t('ingConfig.ingredientName'), field: 'ingredient_name', sortable: true, align: 'left' },
@@ -41,7 +64,7 @@ const fetchReport = async () => {
   loading.value = true
   try {
     const response = await fetch(
-      `${appConfig.apiBaseUrl}/reports/ingredient-intake-summary?start_date=${startDate.value}&end_date=${endDate.value}`,
+      `${appConfig.apiBaseUrl}/reports/ingredient-intake-summary?start_date=${formatDateToApi(startDate.value)}&end_date=${formatDateToApi(endDate.value)}`,
       {
         headers: getAuthHeader() as Record<string, string>,
       }
@@ -83,10 +106,34 @@ const grandTotalPackages = computed(() => {
       <q-card-section>
         <div class="row q-col-gutter-md items-center">
           <div class="col-12 col-md-3">
-            <q-input filled v-model="startDate" :label="t('report.startDate')" type="date" stack-label />
+            <q-input filled v-model="startDate" :label="t('report.startDate')" mask="##/##/####" placeholder="DD/MM/YYYY">
+              <template v-slot:append>
+                <q-icon name="event" class="cursor-pointer">
+                  <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                    <q-date v-model="startDate" mask="DD/MM/YYYY">
+                      <div class="row items-center justify-end">
+                        <q-btn v-close-popup :label="t('common.close')" color="primary" flat />
+                      </div>
+                    </q-date>
+                  </q-popup-proxy>
+                </q-icon>
+              </template>
+            </q-input>
           </div>
           <div class="col-12 col-md-3">
-            <q-input filled v-model="endDate" :label="t('report.endDate')" type="date" stack-label />
+            <q-input filled v-model="endDate" :label="t('report.endDate')" mask="##/##/####" placeholder="DD/MM/YYYY">
+              <template v-slot:append>
+                <q-icon name="event" class="cursor-pointer">
+                  <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                    <q-date v-model="endDate" mask="DD/MM/YYYY">
+                      <div class="row items-center justify-end">
+                        <q-btn v-close-popup :label="t('common.close')" color="primary" flat />
+                      </div>
+                    </q-date>
+                  </q-popup-proxy>
+                </q-icon>
+              </template>
+            </q-input>
           </div>
           <div class="col-12 col-md-2">
             <q-btn 
