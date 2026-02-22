@@ -556,11 +556,11 @@ const scales = ref([
     id: 2,
     label: 'Scale 2 (30 Kg +/- 0.02)',
     value: 0.0,
-    displayValue: '0.0000',
+    displayValue: '0.000',
     targetScaleId: 'scale-02',
     connected: false,
     tolerance: 0.02,
-    precision: 4,
+    precision: 3,
     isStable: true,
     isError: false
   },
@@ -568,11 +568,11 @@ const scales = ref([
     id: 3,
     label: 'Scale 3 (150 Kg +/- 0.5)',
     value: 0.0,
-    displayValue: '0.0000',
+    displayValue: '0.00',
     targetScaleId: 'scale-03',
     connected: false,
     tolerance: 0.5,
-    precision: 4,
+    precision: 2,
     isStable: true,
     isError: false
   },
@@ -1618,12 +1618,6 @@ const printAllBatchLabels = async (batchId: string, reCode: string, requiredVolu
   }
 }
 
-// Done button disabled unless packaged volume is in green (within tolerance)
-const isDoneDisabled = computed(() => {
-  if (!selectedIntakeLotId.value) return true
-  if (!selectedReCode.value) return true
-  return !isPackagedVolumeInTol.value
-})
 
 const onDone = async () => {
   if (!selectedReCode.value) {
@@ -1963,7 +1957,7 @@ const onSelectBatch = (index: number) => {
 
           <q-card-section class="q-py-sm">
             <div class="row q-col-gutter-sm">
-              <div v-for="scale in scales" :key="scale.id" class="col-12 col-md-4">
+              <div v-for="scale in scales" :key="scale.id" class="col">
                 <q-card flat :bordered="selectedScale !== scale.id" class="q-pa-xs column" :class="getScaleClass(scale)">
                   <div class="row justify-between items-center q-mb-xs">
                     <div class="text-caption text-weight-bold">{{ scale.label }}</div>
@@ -1977,6 +1971,7 @@ const onSelectBatch = (index: number) => {
                   <div
                     class="relative-position text-right q-pa-xs text-h4 text-weight-bold rounded-borders flex items-center justify-end"
                     :class="getDisplayClass(scale)"
+                    style="min-height: 80px;"
                   >
                     <div class="absolute-top-left q-ma-xs row items-center no-wrap" style="pointer-events: none;">
                       <div 
@@ -1990,7 +1985,7 @@ const onSelectBatch = (index: number) => {
                       type="number"
                       dense
                       borderless
-                      input-class="text-right text-h4 text-weight-bold"
+                      input-class="text-right scale-value"
                       style="width: 100%;"
                     />
                   </div>
@@ -2000,112 +1995,25 @@ const onSelectBatch = (index: number) => {
           </q-card-section>
         </q-card>
 
-        <!-- INVENTORY SECTION (compact) -->
-        <q-card bordered flat class="q-mb-md">
-            <q-card-section class="q-py-xs row items-center">
-              <div class="text-subtitle1 text-weight-bold">{{ t('preBatch.onHandInventory') }}</div>
-              <q-space />
-              <q-btn flat round dense icon="refresh" color="primary" @click="fetchInventory" size="sm" class="q-mr-xs">
-                  <q-tooltip>{{ t('preBatch.refreshInventory') }}</q-tooltip>
-              </q-btn>
-              <q-checkbox v-model="showAllInventory" :label="t('preBatch.showAllInv')" dense class="text-caption" />
-            </q-card-section>
-           <q-card-section class="q-py-sm">
-              <q-table
-                 flat
-                 bordered
-                 dense
-                 :rows="filteredInventory"
-                 :columns="inventoryColumns"
-                 row-key="id"
-                 :loading="inventoryLoading"
-                 separator="cell"
-                 :pagination="{ rowsPerPage: 5 }"
-                 selection="single"
-                 v-model:selected="selectedInventoryItem"
-                 @row-click="onInventoryRowClick"
-              >
-                <!-- Status Slot -->
-                 <template v-slot:body-cell-status="props">
-                    <q-td :props="props" class="text-center">
-                        <q-badge :color="props.value === 'Active' ? 'green' : (props.value === 'Hold' ? 'orange' : 'red')">
-                            {{ props.value }}
-                        </q-badge>
-                    </q-td>
-                </template>
-
-                <!-- Actions Slot -->
-                <template v-slot:body-cell-actions="props">
-                    <q-td :props="props" class="text-center">
-                        <div class="row no-wrap q-gutter-xs justify-center">
-                            <q-btn 
-                                round dense flat size="sm" 
-                                color="blue" icon="print" 
-                                @click.stop="openIntakeLabelDialog(props.row)"
-                            >
-                                <q-tooltip>{{ t('preBatch.printIntakeLabel') }}</q-tooltip>
-                            </q-btn>
-                            <q-btn 
-                                round dense flat size="sm" 
-                                color="blue" icon="history" 
-                                @click.stop="onViewHistory(props.row)"
-                            >
-                                <q-tooltip>{{ t('preBatch.viewHistoryMonitor') }}</q-tooltip>
-                            </q-btn>
-                        </div>
-                    </q-td>
-                </template>
-
-                <!-- Summary Row -->
-                <template v-slot:bottom-row>
-                    <q-tr class="bg-grey-2 text-weight-bold">
-                        <q-td colspan="9" class="text-right">{{ t('preBatch.total') }}</q-td>
-                        <q-td class="text-right">{{ inventorySummary.remain_vol.toFixed(3) }}</q-td>
-                        <q-td></q-td>
-                        <q-td class="text-center">{{ inventorySummary.pkgs }}</q-td>
-                        <q-td colspan="5"></q-td>
-                    </q-tr>
-                </template>
-                
-                <template v-slot:no-data>
-                   <div class="full-width row flex-center q-pa-md text-grey">
-                      <span v-if="!selectedReCode">Select an ingredient to view inventory</span>
-                      <span v-else>No inventory found for {{ selectedReCode }}</span>
-                   </div>
-                </template>
-             </q-table>
-           </q-card-section>
-        </q-card>
 
         <!-- Package Batching Prepare Section -->
-        <q-card bordered flat class="q-mb-md bg-grey-1">
-            <q-card-section class="q-pb-sm">
-                <div class="row q-col-gutter-md items-center">
-                    <!-- Title -->
-                    <div class="col-auto">
-                        <div class="text-h6">{{ t('preBatch.packagePrepareFor') }}</div>
-                    </div>
-                    
-                    <!-- Batch Planning ID -->
-                    <div class="col">
-                        <q-input
+        <q-card bordered flat class="q-mb-md">
+            <q-card-section class="q-py-xs row items-center">
+                <div class="text-subtitle1 text-weight-bold">{{ t('preBatch.packagePrepareFor') }}</div>
+                <div class="col-4 q-ml-sm">
+                    <q-input
                         outlined
                         :model-value="selectedBatch ? selectedBatch.batch_id : ''"
                         dense
                         bg-color="grey-2"
                         readonly
                         :placeholder="t('preBatch.batchPlanningId')"
-                        />
-                    </div>
-
-                    <!-- From Intake Lot ID Label -->
-                    <div class="col-auto">
-                        <div class="text-h6">{{ t('preBatch.fromIntakeLotId') }}</div>
-                    </div>
-
-                    <!-- Selected Intake Lot ID -->
-                    <div class="col">
-                        <q-input
+                    />
+                </div>
+                <q-space />
+                <div class="text-subtitle1 text-weight-bold q-mr-sm">{{ t('preBatch.fromIntakeLotId') }}</div>
+                <div class="col-4">
+                    <q-input
                         ref="intakeLotInputRef"
                         outlined
                         v-model="selectedIntakeLotId"
@@ -2115,8 +2023,7 @@ const onSelectBatch = (index: number) => {
                         clearable
                         autofocus
                         @keyup.enter="onIntakeLotScanEnter"
-                        />
-                    </div>
+                    />
                 </div>
             </q-card-section>
 
@@ -2263,11 +2170,88 @@ const onSelectBatch = (index: number) => {
                     size="md"
                     unelevated
                     @click="onDone"
-                    :disable="isDoneDisabled"
+                    :disable="!selectedIntakeLotId"
                     />
                 </div>
                 </div>
             </q-card-section>
+        </q-card>
+
+        <!-- INVENTORY SECTION (compact) -->
+        <q-card bordered flat class="q-mb-md">
+            <q-card-section class="q-py-xs row items-center">
+              <div class="text-subtitle1 text-weight-bold">{{ t('preBatch.onHandInventory') }}</div>
+              <q-space />
+              <q-btn flat round dense icon="refresh" color="primary" @click="fetchInventory" size="sm" class="q-mr-xs">
+                  <q-tooltip>{{ t('preBatch.refreshInventory') }}</q-tooltip>
+              </q-btn>
+              <q-checkbox v-model="showAllInventory" :label="t('preBatch.showAllInv')" dense class="text-caption" />
+            </q-card-section>
+           <q-card-section class="q-py-sm">
+              <q-table
+                 flat
+                 bordered
+                 dense
+                 :rows="filteredInventory"
+                 :columns="inventoryColumns"
+                 row-key="id"
+                 :loading="inventoryLoading"
+                 separator="cell"
+                 :pagination="{ rowsPerPage: 5 }"
+                 selection="single"
+                 v-model:selected="selectedInventoryItem"
+                 @row-click="onInventoryRowClick"
+              >
+                <!-- Status Slot -->
+                 <template v-slot:body-cell-status="props">
+                    <q-td :props="props" class="text-center">
+                        <q-badge :color="props.value === 'Active' ? 'green' : (props.value === 'Hold' ? 'orange' : 'red')">
+                            {{ props.value }}
+                        </q-badge>
+                    </q-td>
+                </template>
+
+                <!-- Actions Slot -->
+                <template v-slot:body-cell-actions="props">
+                    <q-td :props="props" class="text-center">
+                        <div class="row no-wrap q-gutter-xs justify-center">
+                            <q-btn 
+                                round dense flat size="sm" 
+                                color="blue" icon="print" 
+                                @click.stop="openIntakeLabelDialog(props.row)"
+                            >
+                                <q-tooltip>{{ t('preBatch.printIntakeLabel') }}</q-tooltip>
+                            </q-btn>
+                            <q-btn 
+                                round dense flat size="sm" 
+                                color="blue" icon="history" 
+                                @click.stop="onViewHistory(props.row)"
+                            >
+                                <q-tooltip>{{ t('preBatch.viewHistoryMonitor') }}</q-tooltip>
+                            </q-btn>
+                        </div>
+                    </q-td>
+                </template>
+
+                <!-- Summary Row -->
+                <template v-slot:bottom-row>
+                    <q-tr class="bg-grey-2 text-weight-bold">
+                        <q-td colspan="9" class="text-right">{{ t('preBatch.total') }}</q-td>
+                        <q-td class="text-right">{{ inventorySummary.remain_vol.toFixed(3) }}</q-td>
+                        <q-td></q-td>
+                        <q-td class="text-center">{{ inventorySummary.pkgs }}</q-td>
+                        <q-td colspan="5"></q-td>
+                    </q-tr>
+                </template>
+                
+                <template v-slot:no-data>
+                   <div class="full-width row flex-center q-pa-md text-grey">
+                      <span v-if="!selectedReCode">Select an ingredient to view inventory</span>
+                      <span v-else>No inventory found for {{ selectedReCode }}</span>
+                   </div>
+                </template>
+             </q-table>
+           </q-card-section>
         </q-card>
 
         <!-- PreBatch List (Filtered by selected batch) -->
@@ -2754,6 +2738,13 @@ const onSelectBatch = (index: number) => {
 </template>
 
 <style scoped>
+.scale-value,
+:deep(.scale-value) {
+  font-weight: bold !important;
+  font-size: 48px !important;
+  line-height: 1.1 !important;
+}
+
 .batch-list-container {
   border: 1px solid #ccc;
   border-radius: 4px;
