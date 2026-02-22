@@ -14,6 +14,8 @@ def get_production_plans(db: Session, skip: int = 0, limit: int = 100) -> List[m
 
 def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate) -> models.ProductionPlan:
     try:
+        from sqlalchemy import func as sa_func
+
         # Calculate Number of Batches if Total Volume and Batch Size are provided
         num_batches = plan_data.num_batches
         if not num_batches and plan_data.total_volume and plan_data.batch_size and plan_data.batch_size > 0:
@@ -30,17 +32,47 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
         date_str = today.strftime("%Y-%m-%d")
         plant_str = plan_data.plant.replace(" ", "") if plan_data.plant else "Unknown"
         
-        # Count existing plans for today to generate sequence
-        # We can loosely filter by date string in plan_id or query by start_date/created_at
-        # A simple robust way is:
-        count = db.query(models.ProductionPlan).filter(
-            models.ProductionPlan.created_at >= datetime.combine(today, datetime.min.time()),
-            models.ProductionPlan.created_at <= datetime.combine(today, datetime.max.time())
-        ).count()
+        # Find the max existing sequence by checking BOTH production_plans AND
+        # production_batches tables. This handles orphaned records from failed
+        # creations or deletions that didn't cascade properly.
+        prefix = f"plan-{plant_str}-{date_str}-"
+
+        # Check max sequence in production_plans
+        max_plan_id = db.query(sa_func.max(models.ProductionPlan.plan_id)).filter(
+            models.ProductionPlan.plan_id.like(f"{prefix}%")
+        ).scalar()
         
-        sequence = count + 1
+        seq_from_plans = 0
+        if max_plan_id:
+            try:
+                # plan_id = "plan-Line-1-2026-02-23-001"
+                # We need the sequence part after the date: split on prefix to get "001"
+                suffix = max_plan_id[len(prefix):]
+                seq_from_plans = int(suffix)
+            except (ValueError, IndexError):
+                seq_from_plans = 0
+
+        # Also check max sequence in production_batches (orphaned batch_ids)
+        # batch_id format: "plan-Line-1-2026-02-23-001-001" (plan_id + "-" + batch_seq)
+        max_batch_id = db.query(sa_func.max(models.ProductionBatch.batch_id)).filter(
+            models.ProductionBatch.batch_id.like(f"{prefix}%")
+        ).scalar()
+
+        seq_from_batches = 0
+        if max_batch_id:
+            try:
+                # batch_id = "plan-Line-1-2026-02-23-003-001"
+                # Extract plan sequence: remove prefix -> "003-001", take first part
+                suffix = max_batch_id[len(prefix):]
+                plan_seq_part = suffix.split("-")[0]
+                seq_from_batches = int(plan_seq_part)
+            except (ValueError, IndexError):
+                seq_from_batches = 0
+
+        sequence = max(seq_from_plans, seq_from_batches) + 1
         plan_id_str = f"plan-{plant_str}-{date_str}-{sequence:03d}"
 
+        # === SINGLE TRANSACTION: Plan + History + Batches + Requirements ===
         db_plan = models.ProductionPlan(
             plan_id=plan_id_str,
             sku_id=plan_data.sku_id,
@@ -56,8 +88,7 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
             created_by=plan_data.created_by or "system"
         )
         db.add(db_plan)
-        db.commit()
-        db.refresh(db_plan)
+        db.flush()  # Get db_plan.id without committing
 
         # Create history record for plan creation
         history = models.ProductionPlanHistory(
@@ -69,7 +100,6 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
             changed_by=plan_data.created_by or "system"
         )
         db.add(history)
-        db.commit()
 
         # Automatically Create Batches and Requirements
         if num_batches and num_batches > 0:
@@ -94,7 +124,6 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
                 db.flush() # Ensure db_batch.id is available
 
                 # 2. Create requirements for each ingredient in the recipe
-                # We group by re_code because a recipe might have the same ingredient in multiple steps
                 ingredient_info = {} # {re_code: {'qty': total, 'name': name}}
                 for step in recipe_steps:
                     if not step.re_code:
@@ -135,9 +164,10 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
                         status=0 # 0=Pending
                     )
                     db.add(db_req)
-            
-            db.commit()
-            db.refresh(db_plan) # Refresh to get batches
+
+        # Single commit for everything: plan + history + batches + requirements
+        db.commit()
+        db.refresh(db_plan)
             
         return db_plan
 

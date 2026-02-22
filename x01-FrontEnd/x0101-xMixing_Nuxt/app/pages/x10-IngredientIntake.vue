@@ -800,19 +800,8 @@ const printLabel = async (record: IngredientIntake) => {
       }
     }
 
-    // Construct full data object for QR
-    const qrData = {
-      intake_lot_id: record.intake_lot_id,
-      lot_id: record.lot_id,
-      mat_sap_code: record.mat_sap_code,
-      re_code: record.re_code,
-      intake_package_vol: currentPkgVol,
-      package_no: i,
-      total_packages: numPackages,
-      expire_date: record.expire_date?.split('T')[0],
-      intake_at: record.intake_at?.split('T')[0],
-    }
-    const qrString = JSON.stringify(qrData)
+    // QR contains only: intake_lot_id, package_no/total_packages
+    const qrString = `${record.intake_lot_id},${i}/${numPackages}`
 
     // Generate QR codes locally
     const qrLarge = await generateQrDataUrl(qrString, 150)
@@ -898,19 +887,8 @@ const printSinglePackageLabel = async (record: IngredientIntake, pkg: { package_
   const templateResponse = await fetch('/labels/ingredient_intake-label.svg')
   const templateStr = await templateResponse.text()
   
-  // Construct full data object for QR
-  const qrData = {
-    intake_lot_id: record.intake_lot_id,
-    lot_id: record.lot_id,
-    mat_sap_code: record.mat_sap_code,
-    re_code: record.re_code,
-    intake_package_vol: pkg.weight,
-    package_no: pkg.package_no,
-    total_packages: numPackages,
-    expire_date: record.expire_date?.split('T')[0],
-    intake_at: record.intake_at?.split('T')[0],
-  }
-  const qrString = JSON.stringify(qrData)
+  // QR contains only: intake_lot_id, package_no/total_packages
+  const qrString = `${record.intake_lot_id},${pkg.package_no}/${numPackages}`
   const qrLarge = await generateQrDataUrl(qrString, 150)
 
   let formattedSvg = templateStr
