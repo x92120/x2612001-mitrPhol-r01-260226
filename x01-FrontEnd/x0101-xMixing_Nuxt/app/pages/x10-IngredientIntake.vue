@@ -143,23 +143,17 @@ const focusScannerInput = () => {
 
 const columns = computed<QTableColumn[]>(() => [
   { name: 'expand', label: '', field: 'expand', align: 'center' },
-  { name: 'id', align: 'center', label: 'ID', field: 'id', sortable: true },
   { name: 'intake_lot_id', align: 'center', label: t('ingredient.intakeLotId'), field: 'intake_lot_id', sortable: true },
   { name: 'intake_from', align: 'center', label: 'Intake From', field: 'intake_from', sortable: true },
+  { name: 'intake_to', align: 'center', label: 'Intake To', field: 'intake_to', sortable: true },
   { name: 'lot_id', align: 'center', label: t('ingredient.lotId'), field: 'lot_id', sortable: true },
   { name: 'mat_sap_code', align: 'center', label: t('ingredient.matSapCode'), field: 'mat_sap_code', sortable: true },
   { name: 're_code', align: 'center', label: t('ingredient.reCode'), field: 're_code', sortable: true },
   { name: 'material_description', align: 'left', label: t('ingredient.materialDesc'), field: 'material_description', sortable: true },
-  { name: 'uom', align: 'center', label: t('ingredient.uom'), field: 'uom', sortable: true },
   { name: 'intake_vol', align: 'center', label: t('ingredient.intakeVolume'), field: 'intake_vol', sortable: true, format: (val: number) => val?.toFixed(4) || '-' },
-  { name: 'remain_vol', align: 'center', label: t('ingredient.remainVolume'), field: 'remain_vol', sortable: true, classes: 'text-negative text-weight-bold', format: (val: number) => val?.toFixed(4) || '-' },
-  { name: 'intake_package_vol', align: 'center', label: t('ingredient.pkgVol'), field: 'intake_package_vol', sortable: true, format: (val: number) => val?.toFixed(4) || '-' },
-  { name: 'package_intake', align: 'center', label: t('ingredient.pkgs'), field: 'package_intake', sortable: true },
-  { name: 'expire_date', align: 'center', label: t('ingredient.expiryDate'), field: 'expire_date', sortable: true, format: (val: string) => formatDate(val) },
-  { name: 'po_number', align: 'center', label: t('ingredient.poNo'), field: 'po_number', sortable: true },
+  { name: 'package_intake', align: 'center', label: 'Package of Intake', field: 'package_intake', sortable: true },
   { name: 'manufacturing_date', align: 'center', label: t('ingredient.mfgDate'), field: 'manufacturing_date', sortable: true, format: (val: string) => formatDate(val) },
-  { name: 'intake_at', align: 'center', label: t('ingredient.intakeAt'), field: 'intake_at', sortable: true, format: (val: string) => formatDateTime(val) },
-  { name: 'status', align: 'center', label: t('common.status'), field: 'status', sortable: true },
+  { name: 'expire_date', align: 'center', label: t('ingredient.expiryDate'), field: 'expire_date', sortable: true, format: (val: string) => formatDate(val) },
   { name: 'xActions', align: 'center', label: t('common.actions'), field: 'xActions' },
 ])
 
@@ -1125,10 +1119,12 @@ const onFileSelected = async (event: Event) => {
         <q-card class="shadow-1">
           <q-form class="q-pa-md">
             <!-- Row 1: Intake ID + Ingredient ID + MAT SAP + Re-Code -->
-            <div class="row q-col-gutter-md">
+            <div class="row q-col-gutter-sm">
               <div class="col-12 col-md-3">
                 <q-input
                   outlined
+                  dense
+                  hide-bottom-space
                   v-model="intakeLotId"
                   :label="t('ingredient.intakeId')"
                   readonly
@@ -1140,6 +1136,8 @@ const onFileSelected = async (event: Event) => {
                 <q-select
                   ref="ingredientCodeRef"
                   outlined
+                  dense
+                  hide-bottom-space
                   v-model="ingredientId"
                   use-input
                   hide-selected
@@ -1181,6 +1179,8 @@ const onFileSelected = async (event: Event) => {
               <div class="col-12 col-md-3">
                 <q-input
                   outlined
+                  dense
+                  hide-bottom-space
                   v-model="xMatSapCode"
                   :label="t('ingredient.matSapCode')"
                   readonly
@@ -1188,15 +1188,17 @@ const onFileSelected = async (event: Event) => {
                 />
               </div>
               <div class="col-12 col-md-3">
-                <q-input outlined v-model="xReCode" :label="t('ingredient.reCode')" readonly bg-color="grey-2" />
+                <q-input outlined dense hide-bottom-space v-model="xReCode" :label="t('ingredient.reCode')" readonly bg-color="grey-2" />
               </div>
             </div>
 
             <!-- Row 1.5: Ingredient Name, Mfg Date, Expire Date -->
-            <div class="row q-col-gutter-md q-mt-sm">
+            <div class="row q-col-gutter-sm q-mt-xs">
                 <div class="col-12 col-md-6">
                      <q-input
                         outlined
+                        dense
+                        hide-bottom-space
                         v-model="xIngredientName"
                         :label="t('ingredient.ingredientName')"
                         readonly
@@ -1214,8 +1216,8 @@ const onFileSelected = async (event: Event) => {
                         </template>
                     </q-input>
                 </div>
-              <div class="col-12 col-md-2">
-                <q-input outlined v-model="manufacturingDate" :label="t('ingredient.manufacturingDate')" mask="##/##/####" placeholder="DD/MM/YYYY">
+              <div class="col-12 col-md-3">
+                <q-input outlined dense hide-bottom-space v-model="manufacturingDate" :label="t('ingredient.manufacturingDate')" mask="##/##/####" placeholder="DD/MM/YYYY">
                   <template v-slot:append>
                     <q-icon name="event" class="cursor-pointer">
                       <q-popup-proxy cover transition-show="scale" transition-hide="scale">
@@ -1229,8 +1231,8 @@ const onFileSelected = async (event: Event) => {
                   </template>
                 </q-input>
               </div>
-              <div class="col-12 col-md-2">
-                <q-input outlined v-model="expireDate" :label="t('ingredient.expiryDate') + ' *'" mask="##/##/####" placeholder="DD/MM/YYYY">
+              <div class="col-12 col-md-3">
+                <q-input outlined dense hide-bottom-space v-model="expireDate" :label="t('ingredient.expiryDate') + ' *'" mask="##/##/####" placeholder="DD/MM/YYYY">
                   <template v-slot:append>
                     <q-icon name="event" class="cursor-pointer">
                       <q-popup-proxy cover transition-show="scale" transition-hide="scale">
@@ -1247,10 +1249,12 @@ const onFileSelected = async (event: Event) => {
             </div>
 
             <!-- Row 3: *Intake From, *Intake To, *Lot Number, PO Number -->
-            <div class="row q-col-gutter-md q-mt-sm">
+            <div class="row q-col-gutter-sm q-mt-xs">
               <div class="col-12 col-md-3">
                 <q-select
                   outlined
+                  dense
+                  hide-bottom-space
                   v-model="intakeFrom"
                   :options="intakeFromOptions"
                   label="Intake From *"
@@ -1275,6 +1279,8 @@ const onFileSelected = async (event: Event) => {
               <div class="col-12 col-md-3">
                 <q-select
                   outlined
+                  dense
+                  hide-bottom-space
                   v-model="intakeTo"
                   :options="intakeToOptions"
                   label="Intake To *"
@@ -1297,23 +1303,25 @@ const onFileSelected = async (event: Event) => {
                 </q-select>
               </div>
               <div class="col-12 col-md-3">
-                <q-input outlined v-model="lotNumber" :label="t('ingredient.lotNumber') + ' *'" />
+                <q-input outlined dense hide-bottom-space v-model="lotNumber" :label="t('ingredient.lotNumber') + ' *'" />
               </div>
               <div class="col-12 col-md-3">
-                <q-input outlined v-model="poNumber" :label="t('ingredient.poNumber')" />
+                <q-input outlined dense hide-bottom-space v-model="poNumber" :label="t('ingredient.poNumber')" />
               </div>
             </div>
 
-            <div class="row q-col-gutter-md q-mt-sm">
-              <div class="col-12 col-md-3">
-                <q-input outlined v-model="intakeVol" :label="t('ingredient.intakeVolume') + ' *'" />
+            <div class="row q-col-gutter-sm q-mt-xs">
+              <div class="col-12 col-md-4">
+                <q-input outlined dense hide-bottom-space v-model="intakeVol" :label="t('ingredient.intakeVolume') + ' *'" />
               </div>
-              <div class="col-12 col-md-3">
-                <q-input outlined v-model="packageVol" :label="t('ingredient.packageVol')" />
+              <div class="col-12 col-md-4">
+                <q-input outlined dense hide-bottom-space v-model="packageVol" :label="t('ingredient.packageVol')" />
               </div>
-              <div class="col-12 col-md-3">
+              <div class="col-12 col-md-4">
                 <q-input
                   outlined
+                  dense
+                  hide-bottom-space
                   v-model="numberOfPackages"
                   :label="t('ingredient.numPackages')"
                   readonly
@@ -1487,10 +1495,10 @@ const onFileSelected = async (event: Event) => {
                       <q-tooltip>{{ t('ingredient.printLabel') }}</q-tooltip>
                     </q-btn>
                     <q-btn
-                      icon="settings"
-                      color="primary"
+                      icon="info"
+                      color="info"
                       unelevated
-                      no-caps
+                      round
                       dense
                       size="sm"
                       @click="openDetailDialog(props.row)"
@@ -1510,29 +1518,49 @@ const onFileSelected = async (event: Event) => {
                 <q-td colspan="100%">
                   <div class="q-pa-md">
                     <!-- Intake Summary Info -->
-                    <div class="row q-col-gutter-lg q-mb-md">
-                      <div class="col-12 col-md-4">
+                    <div class="row q-col-gutter-sm q-mb-md">
+                      <div class="col-12 col-md-3">
                         <div class="text-subtitle2 q-mb-xs text-primary row items-center">
                           <q-icon name="info" class="q-mr-xs" />
                           General Info
                         </div>
                         <q-list bordered dense separator class="bg-white rounded-borders">
                           <q-item>
+                            <q-item-section class="text-grey-7">ID</q-item-section>
+                            <q-item-section side>{{ props.row.id }}</q-item-section>
+                          </q-item>
+                          <q-item>
                             <q-item-section class="text-grey-7">{{ t('ingredient.intakeLotId') }}</q-item-section>
                             <q-item-section side class="text-weight-bold">{{ props.row.intake_lot_id }}</q-item-section>
                           </q-item>
                           <q-item>
-                            <q-item-section class="text-grey-7">Material</q-item-section>
+                            <q-item-section class="text-grey-7">Material Description</q-item-section>
                             <q-item-section side>{{ props.row.material_description }}</q-item-section>
+                          </q-item>
+                          <q-item>
+                            <q-item-section class="text-grey-7">{{ t('ingredient.matSapCode') }}</q-item-section>
+                            <q-item-section side>{{ props.row.mat_sap_code }}</q-item-section>
                           </q-item>
                           <q-item>
                             <q-item-section class="text-grey-7">RE Code</q-item-section>
                             <q-item-section side class="text-weight-bold text-blue-9">{{ props.row.re_code || '-' }}</q-item-section>
                           </q-item>
+                          <q-item>
+                            <q-item-section class="text-grey-7">{{ t('ingredient.uom') }}</q-item-section>
+                            <q-item-section side>{{ props.row.uom }}</q-item-section>
+                          </q-item>
+                          <q-item>
+                            <q-item-section class="text-grey-7">Status</q-item-section>
+                            <q-item-section side>
+                              <q-chip :color="getStatusColor(props.row.status)" text-color="white" dense size="sm">
+                                {{ props.row.status }}
+                              </q-chip>
+                            </q-item-section>
+                          </q-item>
                         </q-list>
                       </div>
 
-                      <div class="col-12 col-md-4">
+                      <div class="col-12 col-md-3">
                         <div class="text-subtitle2 q-mb-xs text-primary row items-center">
                           <q-icon name="assignment" class="q-mr-xs" />
                           Logistics
@@ -1550,10 +1578,39 @@ const onFileSelected = async (event: Event) => {
                             <q-item-section class="text-grey-7">Intake From</q-item-section>
                             <q-item-section side>{{ props.row.intake_from || '-' }}</q-item-section>
                           </q-item>
+                          <q-item>
+                            <q-item-section class="text-grey-7">Intake To</q-item-section>
+                            <q-item-section side>{{ props.row.intake_to || '-' }}</q-item-section>
+                          </q-item>
                         </q-list>
                       </div>
 
-                      <div class="col-12 col-md-4">
+                      <div class="col-12 col-md-3">
+                        <div class="text-subtitle2 q-mb-xs text-primary row items-center">
+                          <q-icon name="scale" class="q-mr-xs" />
+                          Volumes
+                        </div>
+                        <q-list bordered dense separator class="bg-white rounded-borders">
+                          <q-item>
+                            <q-item-section class="text-grey-7">{{ t('ingredient.intakeVolume') }}</q-item-section>
+                            <q-item-section side>{{ props.row.intake_vol }} kg</q-item-section>
+                          </q-item>
+                          <q-item>
+                            <q-item-section class="text-grey-7">{{ t('ingredient.remainVolume') }}</q-item-section>
+                            <q-item-section side class="text-negative text-weight-bolder">{{ props.row.remain_vol }} kg</q-item-section>
+                          </q-item>
+                          <q-item>
+                            <q-item-section class="text-grey-7">{{ t('ingredient.pkgVol') }}</q-item-section>
+                            <q-item-section side>{{ props.row.intake_package_vol || '-' }} kg</q-item-section>
+                          </q-item>
+                          <q-item>
+                            <q-item-section class="text-grey-7">{{ t('ingredient.pkgs') }}</q-item-section>
+                            <q-item-section side>{{ props.row.package_intake || '-' }}</q-item-section>
+                          </q-item>
+                        </q-list>
+                      </div>
+
+                      <div class="col-12 col-md-3">
                          <div class="text-subtitle2 q-mb-xs text-primary row items-center">
                           <q-icon name="history" class="q-mr-xs" />
                           Dates & Tracking
@@ -1589,15 +1646,15 @@ const onFileSelected = async (event: Event) => {
                       No individual package data recorded for this lot.
                     </div>
                     
-                    <div v-else class="row q-col-gutter-sm">
-                      <div v-for="pkg in [...props.row.packages].sort((a, b) => a.package_no - b.package_no)" :key="pkg.id || pkg.package_no" class="col-12">
+                    <div v-else style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;">
+                      <div v-for="pkg in [...props.row.packages].sort((a, b) => a.package_no - b.package_no)" :key="pkg.id || pkg.package_no">
                         <q-card flat bordered class="bg-white">
-                          <q-item dense>
-                            <q-item-section side>
+                          <q-item dense class="q-px-sm">
+                            <q-item-section side class="q-pr-xs">
                               <q-btn icon="print" flat round dense size="sm" color="primary" @click="printSinglePackageLabel(props.row, pkg)" />
                             </q-item-section>
-                            <q-item-section avatar>
-                              <q-avatar color="primary" text-color="white" size="xs">{{ pkg.package_no }}</q-avatar>
+                            <q-item-section side class="q-pr-xs">
+                              <span class="text-subtitle1 text-weight-medium">{{ pkg.package_no }}.</span>
                             </q-item-section>
                             <q-item-section>
                               <q-item-label class="text-weight-bold">{{ pkg.weight.toFixed(4) }} kg</q-item-label>

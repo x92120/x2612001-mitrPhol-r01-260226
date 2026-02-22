@@ -2,6 +2,9 @@ import { fileURLToPath } from 'node:url'
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
+  css: [
+    '~/assets/fonts.css'
+  ],
   app: {
     head: {
       title: 'xMixing 2025',
@@ -12,7 +15,11 @@ export default defineNuxtConfig({
         { name: 'application-name', content: 'xMixing 2025' },
       ],
       link: [
-        { rel: 'icon', type: 'image/svg+xml', href: '/images/logo-icon.svg' }
+        { rel: 'icon', type: 'image/svg+xml', href: '/x_logo.svg' },
+        { rel: 'icon', type: 'image/png', sizes: '48x48', href: '/x_logo-48.png' },
+        { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/x_logo-192.png' },
+        { rel: 'apple-touch-icon', href: '/x_logo-192.png' },
+        { rel: 'manifest', href: '/manifest.json' }
       ]
     }
   },

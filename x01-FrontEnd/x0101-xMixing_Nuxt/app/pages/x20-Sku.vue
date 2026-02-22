@@ -126,6 +126,7 @@ const selectedSkus = ref<SkuMaster[]>([])
 const showAllIncludingInactive = ref(false)
 const showFilters = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+const skuTableExpanded = ref(true)
 
 const groupedSteps = computed<{ phaseNum: string, steps: SkuStep[], firstStep: SkuStep | undefined }[]>(() => {
   if (!selectedSkuId.value) return []
@@ -331,6 +332,16 @@ const filteredSkus = computed(() => {
   }
 
   return skus
+})
+
+// When collapsed, show only the selected row
+const displayedSkus = computed(() => {
+  if (skuTableExpanded.value) return filteredSkus.value
+  if (selectedSkuId.value) {
+    const selected = filteredSkus.value.find(s => s.sku_id === selectedSkuId.value)
+    return selected ? [selected] : filteredSkus.value.slice(0, 1)
+  }
+  return filteredSkus.value.slice(0, 1)
 })
 
 const filteredSkuActions = computed(() => {
@@ -830,6 +841,150 @@ const refreshAll = async () => {
 }
 
 onMounted(refreshAll)
+
+// ============================================================================
+// SKU PRINT / PDF REPORT
+// ============================================================================
+const printSkuReport = async (sku: SkuMaster) => {
+  // Ensure steps are loaded
+  if (!skuStepsMap.value[sku.sku_id]) {
+    await fetchSkuSteps(sku.sku_id)
+  }
+  const steps = skuStepsMap.value[sku.sku_id] || []
+
+  // Group steps by phase
+  const phaseMap: { [key: string]: SkuStep[] } = {}
+  steps.forEach(s => {
+    if (!phaseMap[s.phase_number]) phaseMap[s.phase_number] = []
+    phaseMap[s.phase_number].push(s)
+  })
+  const phases = Object.keys(phaseMap).sort()
+
+  const qcFlags = (step: SkuStep) => {
+    const flags: string[] = []
+    if (step.qc_temp) flags.push('🌡️ Temp')
+    if (step.record_steam_pressure) flags.push('💨 Steam')
+    if (step.record_ctw) flags.push('💧 CTW')
+    if (step.operation_brix_record) flags.push('📊 Brix')
+    if (step.operation_ph_record) flags.push('🧪 pH')
+    return flags.join(', ') || '-'
+  }
+
+  const now = new Date().toLocaleString()
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SKU Report - ${sku.sku_id}</title>
+  <style>
+    @page { size: A4; margin: 15mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Courier Prime', 'Courier New', Courier, monospace; font-size: 11px; color: #222; line-height: 1.4; }
+    .header { background: #0384fc; color: white; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; margin-bottom: 16px; }
+    .header h1 { font-size: 20px; margin: 0; }
+    .header .meta { font-size: 10px; text-align: right; opacity: 0.9; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+    .info-box { background: #f5f7fa; border: 1px solid #dde; border-radius: 4px; padding: 8px 12px; }
+    .info-box .label { font-size: 9px; color: #666; text-transform: uppercase; font-weight: bold; }
+    .info-box .value { font-size: 13px; font-weight: bold; color: #1a237e; margin-top: 2px; }
+    .phase-header { background: #e8eaf6; padding: 8px 14px; font-weight: bold; font-size: 12px; color: #283593; border-left: 4px solid #3f51b5; margin-top: 14px; margin-bottom: 2px; border-radius: 2px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 10px; }
+    th { background: #37474f; color: white; padding: 5px 6px; text-align: left; font-weight: bold; font-size: 9px; text-transform: uppercase; }
+    td { padding: 4px 6px; border-bottom: 1px solid #e0e0e0; }
+    tr:nth-child(even) td { background: #fafafa; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .footer { margin-top: 20px; padding-top: 10px; border-top: 2px solid #0384fc; font-size: 9px; color: #888; display: flex; justify-content: space-between; }
+    .badge { display: inline-block; background: #e3f2fd; color: #1565c0; padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; }
+    @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>📋 SKU Report: ${sku.sku_id}</h1>
+      <div style="margin-top:4px;">${sku.sku_name}</div>
+    </div>
+    <div class="meta">
+      <div>Generated: ${now}</div>
+      <div>xMixing 2025</div>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box"><div class="label">SKU ID</div><div class="value">${sku.sku_id}</div></div>
+    <div class="info-box"><div class="label">SKU Name</div><div class="value">${sku.sku_name}</div></div>
+    <div class="info-box"><div class="label">Std Batch Size</div><div class="value">${sku.std_batch_size || '-'} ${sku.uom || ''}</div></div>
+    <div class="info-box"><div class="label">Status</div><div class="value">${sku.status}</div></div>
+    <div class="info-box"><div class="label">Total Phases</div><div class="value">${sku.total_phases || 0}</div></div>
+    <div class="info-box"><div class="label">Total Steps</div><div class="value">${sku.total_sub_steps || 0}</div></div>
+    <div class="info-box"><div class="label">Created</div><div class="value">${sku.created_at ? new Date(sku.created_at).toLocaleDateString() : '-'}</div></div>
+    <div class="info-box"><div class="label">Updated</div><div class="value">${sku.updated_at ? new Date(sku.updated_at).toLocaleDateString() : '-'}</div></div>
+  </div>
+
+  <h2 style="font-size:14px; color:#1a237e; margin-bottom:4px;">Process Steps Detail</h2>
+
+  ${phases.map(phaseNum => {
+    const phaseSteps = phaseMap[phaseNum]
+    const firstStep = phaseSteps[0]
+    const phaseDesc = firstStep?.action || ''
+    const phaseId = firstStep?.phase_id || ''
+    return `
+      <div class="phase-header">
+        ${phaseNum} ${phaseDesc ? '- ' + phaseDesc : ''}
+        ${phaseId ? '<span class="badge">' + phaseId + '</span>' : ''}
+        (${phaseSteps.length} steps)
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px;">Sub</th>
+            <th style="width:55px;">Code</th>
+            <th>Description</th>
+            <th>Ingredient / Component</th>
+            <th class="text-right" style="width:60px;">Amount</th>
+            <th class="text-center" style="width:35px;">UOM</th>
+            <th class="text-right" style="width:45px;">Temp°C</th>
+            <th class="text-right" style="width:50px;">RPM</th>
+            <th class="text-right" style="width:50px;">Time(m)</th>
+            <th style="width:90px;">QC Records</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${phaseSteps.map(s => `
+            <tr>
+              <td class="text-center">${s.sub_step}</td>
+              <td><span class="badge">${s.action_code || '-'}</span></td>
+              <td>${s.action_description || '-'}</td>
+              <td>${s.ingredient_name || '-'}</td>
+              <td class="text-right">${s.require || '-'}</td>
+              <td class="text-center">${s.uom || s.ingredient_unit || '-'}</td>
+              <td class="text-right">${s.temperature || '-'}</td>
+              <td class="text-right">${s.agitator_rpm || '-'}</td>
+              <td class="text-right">${s.step_time ? (s.step_time / 60).toFixed(1) : '-'}</td>
+              <td>${qcFlags(s)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `
+  }).join('')}
+
+  <div class="footer">
+    <span>xDev.co.th - xMixing Control System 2025</span>
+    <span>SKU: ${sku.sku_id} | ${sku.sku_name}</span>
+  </div>
+</body>
+</html>`
+
+  const printWindow = window.open('', '_blank')
+  if (printWindow) {
+    printWindow.document.write(html)
+    printWindow.document.close()
+    printWindow.onload = () => { printWindow.print() }
+  }
+}
 </script>
 
 <template>
@@ -941,17 +1096,30 @@ onMounted(refreshAll)
       </div>
     </div>
 
-    <!-- Master Table -->
+    <!-- Master Table Toggle -->
+    <div class="row items-center q-mb-xs">
+      <q-btn
+        flat
+        dense
+        :icon="skuTableExpanded ? 'expand_less' : 'expand_more'"
+        :label="skuTableExpanded ? t('sku.collapseTable', 'Collapse Table') : t('sku.expandTable', 'Expand Table')"
+        color="primary"
+        size="sm"
+        @click="skuTableExpanded = !skuTableExpanded"
+      />
+    </div>
     <q-table
-      :rows="filteredSkus"
+      :rows="displayedSkus"
       :columns="masterColumns"
       row-key="sku_id"
-      :rows-per-page-options="[10, 25, 50, 100]"
-      :pagination="{ rowsPerPage: 25 }"
+      :rows-per-page-options="skuTableExpanded ? [10, 25, 50, 100] : [0]"
+      :pagination="skuTableExpanded ? { rowsPerPage: 25 } : { rowsPerPage: 0 }"
       flat
       bordered
       :loading="isLoading"
       class="master-table q-mb-lg"
+      :style="skuTableExpanded ? 'max-height: 50vh; overflow: auto;' : ''"
+      :hide-bottom="!skuTableExpanded"
     >
       <!-- Custom Row Template for Selection -->
       <template v-slot:body="props">
@@ -988,6 +1156,16 @@ onMounted(refreshAll)
             </template>
             <template v-else-if="col.name === 'actions'">
               <div class="row items-center justify-center q-gutter-xs">
+                <q-btn 
+                  size="sm" 
+                  color="deep-purple" 
+                  flat 
+                  round
+                  icon="print" 
+                  @click.stop="printSkuReport(props.row)"
+                >
+                  <q-tooltip>Print SKU Report</q-tooltip>
+                </q-btn>
                 <q-btn 
                   size="sm" 
                   color="info" 

@@ -3,6 +3,20 @@ const { hasPermission, user, logout } = useAuth()
 const { t, toggleLocale, localeFlag, localeName } = useI18n()
 const $q = useQuasar()
 
+// Zoom control
+const ZOOM_KEY = 'app-zoom-level'
+const zoomLevel = ref(parseFloat(localStorage.getItem(ZOOM_KEY) || '1.5'))
+
+const applyZoom = () => {
+  document.documentElement.style.zoom = String(zoomLevel.value)
+  localStorage.setItem(ZOOM_KEY, String(zoomLevel.value))
+}
+
+const zoomLabel = computed(() => `${Math.round(zoomLevel.value * 100)}%`)
+
+watch(zoomLevel, applyZoom)
+onMounted(applyZoom)
+
 const handleLogout = async () => {
   await logout()
   $q.notify({
@@ -20,28 +34,27 @@ const handleLogout = async () => {
       <q-toolbar>
         <q-toolbar-title>
           <div class="row items-center q-gutter-sm">
-            <svg width="120" height="36" viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg" style="display: block;">
-              <!-- Rounded Rectangle: Yellow Fill (#FFB800), Red Border (#8B1A1A) -->
-              <rect x="5" y="5" width="190" height="50" rx="10" ry="10" 
-                    fill="#FFB800" 
-                    stroke="#8B1A1A" 
-                    stroke-width="4" />
-              <!-- "xMixing" Text: Courier New, Bold, Red (#8B1A1A) -->
-              <text x="100" y="38" 
-                    font-family="'Courier New', Courier, monospace" 
-                    font-size="34" 
-                    font-weight="bold" 
-                    fill="#8B1A1A" 
-                    text-anchor="middle" 
-                    letter-spacing="1">xMixing</text>
-              <!-- Underline: Red (#8B1A1A) -->
-              <line x1="40" y1="46" x2="160" y2="46" 
-                    stroke="#8B1A1A" 
-                    stroke-width="3" 
-                    stroke-linecap="round" />
-            </svg>
+            <img src="/labels/xMixingLogo.svg" alt="xMixing" style="height: 32px; display: block;" />
           </div>
         </q-toolbar-title>
+
+        <!-- Zoom Slider -->
+        <div class="row items-center q-mr-md" style="min-width: 180px;">
+          <q-icon name="zoom_out" size="xs" class="q-mr-xs" />
+          <q-slider
+            v-model="zoomLevel"
+            :min="0.8"
+            :max="2.5"
+            :step="0.1"
+            color="white"
+            thumb-color="white"
+            track-color="blue-3"
+            dense
+            style="flex: 1;"
+          />
+          <q-icon name="zoom_in" size="xs" class="q-ml-xs" />
+          <span class="text-caption q-ml-sm" style="min-width: 35px; text-align: center;">{{ zoomLabel }}</span>
+        </div>
 
         <!-- Language Toggle -->
         <q-btn flat round dense @click="toggleLocale" class="q-mr-sm">

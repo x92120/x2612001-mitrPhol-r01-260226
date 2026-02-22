@@ -24,15 +24,16 @@
      inkscape:deskcolor="#d1d1d1"
      showgrid="true"
      showguides="true"
-     inkscape:zoom="3.4836794"
-     inkscape:cx="21.385435"
-     inkscape:cy="164.33774"
+     inkscape:zoom="1.2316667"
+     inkscape:cx="-82.814614"
+     inkscape:cy="353.58593"
      inkscape:window-width="1920"
      inkscape:window-height="945"
      inkscape:window-x="0"
      inkscape:window-y="32"
      inkscape:window-maximized="1"
-     inkscape:current-layer="svg473">
+     inkscape:current-layer="svg473"
+     inkscape:document-units="in">
     <inkscape:grid
        type="xygrid"
        id="grid479"
@@ -173,14 +174,14 @@
   <!-- Values at the bottom -->
   <text
      x="26.456694"
-     y="521.57483"
+     y="509.07489"
      fill="#000000"
      font-size="10px"
      font-family="Arial, sans-serif"
      id="text449">Packages</text>
   <text
      x="26.976223"
-     y="540.95563"
+     y="528.45575"
      font-weight="bold"
      font-size="24px"
      font-family="Arial, sans-serif"
@@ -189,14 +190,14 @@
      style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:16px;font-family:Arial, sans-serif;-inkscape-font-specification:'Arial, sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000">{{PackageString}}</text>
   <text
      x="26.354155"
-     y="561.13232"
+     y="548.63245"
      fill="#000000"
      font-size="10px"
      font-family="Arial, sans-serif"
      id="text453">Lot Intake Volume</text>
   <text
      x="27.019194"
-     y="580.59808"
+     y="568.09821"
      font-weight="bold"
      font-size="24px"
      font-family="Arial, sans-serif"
@@ -205,14 +206,14 @@
      style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:16px;font-family:Arial, sans-serif;-inkscape-font-specification:'Arial, sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal">{{IntakeVol}}</text>
   <text
      x="150.82031"
-     y="561.13232"
+     y="548.63245"
      fill="#000000"
      font-size="10px"
      font-family="Arial, sans-serif"
      id="text453_pkg">Package Vol</text>
   <text
      x="150.82031"
-     y="580.59808"
+     y="568.09821"
      font-weight="bold"
      font-size="24px"
      font-family="Arial, sans-serif"
@@ -244,20 +245,20 @@
      style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:16px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal">{{ExpireDate}}</text>
   <text
      x="386.11182"
-     y="588.12726"
+     y="575.62738"
      text-anchor="end"
      id="text18-7"
-     style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:8px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-anchor:end;fill:#000000">xDev.co.th</text>
+     style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:8px;font-family:'Courier Prime', 'Courier New', Courier, monospace;-inkscape-font-specification:'Courier Prime, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-anchor:end;fill:#000000">xDev.co.th</text>
   <text
      x="260"
-     y="561.13232"
+     y="548.63245"
      fill="#000000"
      font-size="10px"
      font-family="Arial, sans-serif"
      id="text453_op">Operator</text>
   <text
      x="260"
-     y="580.59808"
+     y="568.09821"
      font-weight="bold"
      font-size="14px"
      font-family="Arial, sans-serif"
@@ -266,7 +267,7 @@
      style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:14px;font-family:Arial, sans-serif;-inkscape-font-specification:'Arial, sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal">{{Operator}}</text>
   <text
      x="200"
-     y="595"
+     y="582.50012"
      fill="#000000"
      font-size="8px"
      font-family="Arial, sans-serif"

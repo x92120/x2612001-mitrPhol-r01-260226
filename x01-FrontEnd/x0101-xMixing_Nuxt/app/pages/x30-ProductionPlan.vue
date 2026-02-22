@@ -280,35 +280,53 @@ const onCreatePlan = async () => {
 }
 
 
+// Cancel reason options
+const cancelReasonOptions = [
+  'Plan Change',
+  'Customer Request',
+  'Quality Issue',
+  'Material Shortage',
+  'Equipment Failure',
+  'Schedule Conflict',
+  'Duplicate Plan',
+  'Other'
+]
 
-const onCancelPlan = async (plan: any) => {
-  $q.dialog({
-    title: t('prodPlan.cancelConfirmTitle'),
-    message: t('prodPlan.cancelConfirmMessage'),
-    prompt: {
-      model: '',
-      type: 'text',
-      label: t('prodPlan.cancelReasonLabel'),
-      outlined: true
-    },
-    cancel: true,
-    persistent: true
-  }).onOk(async (comment: string) => {
-    try {
-      await $fetch(`${appConfig.apiBaseUrl}/production-plans/${plan.id}/cancel`, {
-        method: 'POST',
-        body: {
-          comment: comment || null,
-          changed_by: 'user'
-        }
-      })
-      $q.notify({ type: 'positive', message: t('prodPlan.cancelSuccess') })
-      fetchPlans()
-    } catch (e) {
-      console.error(e)
-      $q.notify({ type: 'negative', message: t('prodPlan.networkErrorCancel') })
-    }
-  })
+const showCancelDialog = ref(false)
+const cancelPlanTarget = ref<any>(null)
+const cancelReason = ref('')
+const cancelCustomReason = ref('')
+
+const onCancelPlan = (plan: any) => {
+  cancelPlanTarget.value = plan
+  cancelReason.value = ''
+  cancelCustomReason.value = ''
+  showCancelDialog.value = true
+}
+
+const confirmCancelPlan = async () => {
+  const plan = cancelPlanTarget.value
+  if (!plan) return
+
+  const comment = cancelReason.value === 'Other'
+    ? cancelCustomReason.value || 'Other'
+    : cancelReason.value || null
+
+  try {
+    await $fetch(`${appConfig.apiBaseUrl}/production-plans/${plan.id}`, {
+      method: 'DELETE',
+      body: {
+        comment,
+        changed_by: 'user'
+      }
+    })
+    $q.notify({ type: 'positive', message: t('prodPlan.cancelSuccess') })
+    showCancelDialog.value = false
+    fetchPlans()
+  } catch (e) {
+    console.error(e)
+    $q.notify({ type: 'negative', message: t('prodPlan.networkErrorCancel') })
+  }
 }
 
 const showHistory = async (plan: any) => {
@@ -362,18 +380,11 @@ const printBatchLabel = async (plan: any, batch: any) => {
     const templateResponse = await fetch('/labels/BatchPlan-Label.svg')
     const templateStr = await templateResponse.text()
 
-    // Determine batch index within the plan's batches array
-    const batchIndex = (plan.batches?.findIndex((b: any) => b.batch_id === batch.batch_id) ?? 0) + 1
-    const totalBatches = plan.batches?.length ?? 1
+    // Determine batch index from the batch_id string (e.g. plan-Line-1-2026-02-23-001-003 -> 3)
+    const batchIndex = batch.batch_id ? parseInt(batch.batch_id.split('-').pop() || '1', 10) : 1
+    const totalBatches = plan.num_batches || plan.batches?.length || 1
 
-    const qrData = {
-      plan_id: plan.plan_id,
-      batch_id: batch.batch_id,
-      sku_id: plan.sku_id,
-      batch_no: batchIndex,
-    }
-    const qrString = JSON.stringify(qrData)
-    const qrLarge = await generateQrDataUrl(qrString, 150)
+    const qrLarge = await generateQrDataUrl(batch.batch_id, 150)
 
     const plantName = plantNames.value[plan.plant] || plan.plant || '-'
 
@@ -389,7 +400,7 @@ const printBatchLabel = async (plan: any, batch: any) => {
       .replace(/\{\{PlantId\}\}/g, plan.plant || '-')
       .replace(/\{\{PlantName\}\}/g, plantName)
       .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
-      .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="231.028" y="391.028" width="148.972" height="148.972" />`)
+      .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="0" y="0" width="100" height="100" />`)
 
     const html = `
       <html>
@@ -468,21 +479,15 @@ const printAllBatchLabels = async (plan: any) => {
     const templateResponse = await fetch('/labels/BatchPlan-Label.svg')
     const templateStr = await templateResponse.text()
     const plantName = plantNames.value[plan.plant] || plan.plant || '-'
-    const totalBatches = batches.length
+    const totalBatches = plan.num_batches || batches.length || 1
 
     let labelsHtml = ''
 
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i]
-      const batchIndex = i + 1
+      const batchIndex = batch.batch_id ? parseInt(batch.batch_id.split('-').pop() || '1', 10) : (i + 1)
 
-      const qrData = {
-        plan_id: plan.plan_id,
-        batch_id: batch.batch_id,
-        sku_id: plan.sku_id,
-        batch_no: batchIndex,
-      }
-      const qrLarge = await generateQrDataUrl(JSON.stringify(qrData), 150)
+      const qrLarge = await generateQrDataUrl(batch.batch_id, 150)
 
       const svgContent = templateStr
         .replace(/\{\{PlanId\}\}/g, plan.plan_id || '-')
@@ -496,7 +501,7 @@ const printAllBatchLabels = async (plan: any) => {
         .replace(/\{\{PlantId\}\}/g, plan.plant || '-')
         .replace(/\{\{PlantName\}\}/g, plantName)
         .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
-        .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="231.028" y="391.028" width="148.972" height="148.972" />`)
+        .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="0" y="0" width="100" height="100" />`)
 
       labelsHtml += `<div class="label-container">${svgContent}</div>`
     }
@@ -537,14 +542,14 @@ const printAllBatchLabels = async (plan: any) => {
 }
 
 // Expand / Collapse All
-const expandedRows = ref<Set<number>>(new Set())
+const expandedRows = ref<any[]>([])
 
 const expandAll = () => {
-  filteredPlans.value.forEach((p: any) => expandedRows.value.add(p.id))
+  expandedRows.value = filteredPlans.value.map((p: any) => p.id)
 }
 
 const collapseAll = () => {
-  expandedRows.value.clear()
+  expandedRows.value = []
 }
 
 const printPlan = (plan: any) => {
@@ -831,6 +836,39 @@ const getStatusColor = (status: string) => {
   return 'text-blue-8'
 }
 
+const getPlanIngredients = (plan: any) => {
+  if (!plan.batches || plan.batches.length === 0) return []
+  const ingredientsMap: Record<string, any> = {}
+  
+  plan.batches.forEach((b: any) => {
+     if(b.reqs) {
+        b.reqs.forEach((req: any) => {
+           if (!ingredientsMap[req.re_code]) {
+               ingredientsMap[req.re_code] = {
+                   re_code: req.re_code,
+                   name: req.ingredient_name || req.re_code,
+                   wh: req.wh || '-',
+                   vol_per_batch: req.required_volume || 0,
+                   total_vol: 0
+               }
+           }
+           ingredientsMap[req.re_code].total_vol += (req.required_volume || 0)
+        })
+     }
+  })
+
+  // Provide deterministic sorting by re_code
+  return Object.values(ingredientsMap).sort((a, b) => a.re_code.localeCompare(b.re_code))
+}
+
+const ingredientColumns = computed<QTableColumn[]>(() => [
+  { name: 're_code', label: t('prodPlan.ingredientCode'), field: 're_code', align: 'left', sortable: true },
+  { name: 'name', label: t('prodPlan.ingredientName'), field: 'name', align: 'left', sortable: true },
+  { name: 'wh', label: 'Warehouse', field: 'wh', align: 'center', sortable: true },
+  { name: 'vol_per_batch', label: t('prodPlan.volPerBatch'), field: 'vol_per_batch', align: 'right', sortable: true, format: val => val?.toFixed(2) },
+  { name: 'total_vol', label: t('prodPlan.totalVol'), field: 'total_vol', align: 'right', sortable: true, format: val => val?.toFixed(2) },
+])
+
 onMounted(() => {
   fetchPlants()
   fetchSkus()
@@ -992,7 +1030,8 @@ onMounted(() => {
           class="text-caption sticky-header-table"
           :pagination="{ rowsPerPage: 0 }"
           hide-bottom
-          style="max-height: calc(100vh - 380px);"
+          style="max-height: 320px;"
+          v-model:expanded="expandedRows"
         >
           <template v-slot:header="props">
             <q-tr :props="props" class="bg-blue-grey-2">
@@ -1022,7 +1061,11 @@ onMounted(() => {
                 />
               </q-td>
               <q-td v-for="col in props.cols" :key="col.name" :props="props">
-                <template v-if="col.name === 'plant'">
+                <template v-if="['flavour_house', 'spp', 'batch_prepare', 'ready_to_product', 'production', 'done'].includes(col.name)">
+                  <q-icon v-if="col.value" name="check_circle" color="positive" size="sm" />
+                  <q-icon v-else name="cancel" color="grey-4" size="sm" />
+                </template>
+                <template v-else-if="col.name === 'plant'">
                   <span class="text-weight-medium">{{ plantNames[props.row.plant] || props.row.plant }}</span>
                 </template>
                 <template v-else-if="col.name === 'status'">
@@ -1049,14 +1092,13 @@ onMounted(() => {
                 <template v-else-if="col.name === 'actions'">
                     <div class="row no-wrap items-center">
                       <q-btn
-                        icon="print_all"
                         flat round dense size="sm" color="blue-7"
                         @click.stop="printAllBatchLabels(props.row)"
                       >
                         <q-tooltip>Print All Batch Labels</q-tooltip>
                         <q-icon name="layers" />
                       </q-btn>
-                      <q-btn icon="more_vert" flat round dense size="sm" color="grey-7">
+                      <q-btn icon="more_vert" flat round dense size="sm" color="grey-7" @click.stop>
                         <q-menu auto-close>
                             <q-list style="min-width: 150px">
                                 <q-item clickable @click="printPlan(props.row)">
@@ -1086,66 +1128,115 @@ onMounted(() => {
             <!-- Expanded Row for Batches -->
             <q-tr v-show="props.expand" :props="props" class="bg-blue-grey-1">
               <q-td colspan="100%" class="q-pa-md">
-                <div class="text-subtitle2 q-mb-sm text-blue-9">{{ t('prodPlan.batchDetails') }} - {{ props.row.plan_id }}</div>
-                <template v-if="props.row.batches && props.row.batches.length > 0">
-                  <q-table
-                    :rows="props.row.batches"
-                    :columns="batchColumns"
-                    row-key="batch_id"
-                    flat
-                    dense
-                    hide-bottom
-                    :pagination="{ rowsPerPage: 0 }"
-                    class="bg-white"
-                  >
-                    <template v-slot:header="batchProps">
-                      <q-tr :props="batchProps" class="bg-grey-3">
-                        <q-th
-                          v-for="col in batchProps.cols"
-                          :key="col.name"
-                          :props="batchProps"
-                          class="text-weight-bold"
-                        >
-                          {{ col.label }}
-                        </q-th>
-                      </q-tr>
-                    </template>
-                    <template v-slot:body="batchProps">
-                      <q-tr :props="batchProps" class="hover-bg">
-                        <q-td v-for="col in batchProps.cols" :key="col.name" :props="batchProps">
-                          <template v-if="col.name === 'status'">
-                            <q-badge
-                              :color="
-                                batchProps.row.status === 'Cancelled'
-                                  ? 'red'
-                                  : batchProps.row.status === 'Draft' || batchProps.row.status === 'Pending'
-                                    ? 'grey-6'
-                                    : 'green'
-                              "
-                              text-color="white"
+                <div class="row q-col-gutter-lg">
+                  <!-- Ingredients List -->
+                  <div class="col-12 col-md-5">
+                    <div class="text-subtitle2 q-mb-sm text-blue-9">{{ t('prodPlan.ingredientRequirement') }}</div>
+                    <q-table
+                      :rows="getPlanIngredients(props.row)"
+                      :columns="ingredientColumns"
+                      row-key="re_code"
+                      flat
+                      dense
+                      hide-bottom
+                      :pagination="{ rowsPerPage: 0 }"
+                      class="bg-white shadow-1"
+                      style="border-radius: 6px; border: 1px solid #e0e0e0;"
+                    >
+                      <template v-slot:header="ingProps">
+                        <q-tr :props="ingProps" class="bg-grey-2">
+                          <q-th v-for="col in ingProps.cols" :key="col.name" :props="ingProps" class="text-weight-bold">
+                            {{ col.label }}
+                          </q-th>
+                        </q-tr>
+                      </template>
+                      <template v-slot:body="ingProps">
+                         <q-tr :props="ingProps" class="hover-bg">
+                           <q-td v-for="col in ingProps.cols" :key="col.name" :props="ingProps">
+                             <template v-if="col.name === 're_code'">
+                               <span class="text-weight-medium text-blue-8">{{ col.value }}</span>
+                             </template>
+                             <template v-else-if="col.name === 'vol_per_batch' || col.name === 'total_vol'">
+                               <span class="text-weight-bold">{{ col.value }}</span>
+                             </template>
+                             <template v-else>
+                               {{ col.value }}
+                             </template>
+                           </q-td>
+                         </q-tr>
+                      </template>
+                    </q-table>
+                  </div>
+
+                  <!-- Batches List -->
+                  <div class="col-12 col-md-7">
+                    <div class="text-subtitle2 q-mb-sm text-blue-9">{{ t('prodPlan.batchDetails') }} - {{ props.row.plan_id }}</div>
+                    <template v-if="props.row.batches && props.row.batches.length > 0">
+                      <q-table
+                        :rows="props.row.batches"
+                        :columns="batchColumns"
+                        row-key="batch_id"
+                        flat
+                        dense
+                        hide-bottom
+                        :pagination="{ rowsPerPage: 0 }"
+                        class="bg-white shadow-1"
+                        style="border-radius: 6px; border: 1px solid #e0e0e0;"
+                      >
+                        <template v-slot:header="batchProps">
+                          <q-tr :props="batchProps" class="bg-grey-2">
+                            <q-th
+                              v-for="col in batchProps.cols"
+                              :key="col.name"
+                              :props="batchProps"
                               class="text-weight-bold"
                             >
-                              {{ batchProps.row.status }}
-                            </q-badge>
-                          </template>
-                          <template v-else-if="col.name === 'batch_id'">
-                            <span class="text-weight-medium">{{ batchProps.row.batch_id }}</span>
-                          </template>
-                          <template v-else-if="col.name === 'actions'">
-                            <q-btn icon="print" flat round dense color="primary" @click="printBatchLabel(props.row, batchProps.row)">
-                              <q-tooltip>{{ t('prodPlan.printLabel') }}</q-tooltip>
-                            </q-btn>
-                          </template>
-                          <template v-else>
-                            {{ col.value }}
-                          </template>
-                        </q-td>
-                      </q-tr>
+                              {{ col.label }}
+                            </q-th>
+                          </q-tr>
+                        </template>
+                        <template v-slot:body="batchProps">
+                          <q-tr :props="batchProps" class="hover-bg">
+                            <q-td v-for="col in batchProps.cols" :key="col.name" :props="batchProps">
+                              <template v-if="['flavour_house', 'spp', 'batch_prepare', 'ready_to_product', 'production', 'done'].includes(col.name)">
+                                <q-icon v-if="col.value" name="check_circle" color="positive" size="sm" />
+                                <q-icon v-else name="cancel" color="grey-4" size="sm" />
+                              </template>
+                              <template v-else-if="col.name === 'status'">
+                                <q-badge
+                                  :color="
+                                    batchProps.row.status === 'Cancelled'
+                                      ? 'red'
+                                      : batchProps.row.status === 'Draft' || batchProps.row.status === 'Pending' || batchProps.row.status === 'Created'
+                                        ? 'grey-6'
+                                        : 'green'
+                                  "
+                                  text-color="white"
+                                  class="text-weight-bold"
+                                >
+                                  {{ batchProps.row.status }}
+                                </q-badge>
+                              </template>
+                              <template v-else-if="col.name === 'batch_id'">
+                                <span class="text-weight-medium text-blue-8">{{ batchProps.row.batch_id }}</span>
+                              </template>
+                              <template v-else-if="col.name === 'actions'">
+                                <q-btn icon="print" flat round dense color="primary" @click="printBatchLabel(props.row, batchProps.row)">
+                                  <q-tooltip>{{ t('prodPlan.printLabel') }}</q-tooltip>
+                                </q-btn>
+                              </template>
+                              <template v-else>
+                                {{ col.value }}
+                              </template>
+                            </q-td>
+                          </q-tr>
+                        </template>
+                      </q-table>
                     </template>
-                  </q-table>
-                </template>
-                <div v-else class="text-caption text-grey-7 q-py-sm">
-                  {{ t('common.noData') }}
+                    <div v-else class="text-caption text-grey-7 q-py-sm">
+                      {{ t('common.noData') }}
+                    </div>
+                  </div>
                 </div>
               </q-td>
             </q-tr>
@@ -1153,6 +1244,56 @@ onMounted(() => {
         </q-table>
       </q-card>
     </q-page>
+
+    <!-- Cancel Plan Dialog -->
+    <q-dialog v-model="showCancelDialog" persistent>
+      <q-card style="min-width: 420px;">
+        <q-card-section class="bg-negative text-white">
+          <div class="text-h6 row items-center q-gutter-sm">
+            <q-icon name="cancel" size="sm" />
+            <span>{{ t('prodPlan.cancelConfirmTitle') }}</span>
+          </div>
+        </q-card-section>
+
+        <q-card-section class="q-pt-md">
+          <p class="text-body2 q-mb-md">{{ t('prodPlan.cancelConfirmMessage') }}</p>
+
+          <div class="text-caption text-weight-bold q-mb-xs">{{ t('prodPlan.cancelReasonLabel') }}</div>
+          <q-select
+            v-model="cancelReason"
+            :options="cancelReasonOptions"
+            outlined
+            dense
+            emit-value
+            map-options
+            class="q-mb-md"
+          />
+
+          <template v-if="cancelReason === 'Other'">
+            <div class="text-caption text-weight-bold q-mb-xs">{{ t('prodPlan.cancelCustomReason', 'Specify reason') }}</div>
+            <q-input
+              v-model="cancelCustomReason"
+              outlined
+              dense
+              autofocus
+              type="textarea"
+              rows="2"
+            />
+          </template>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-pa-md">
+          <q-btn flat :label="t('common.cancel', 'Cancel')" color="grey-7" v-close-popup />
+          <q-btn
+            unelevated
+            :label="t('prodPlan.confirmCancel', 'Confirm Cancel')"
+            color="negative"
+            :disable="!cancelReason"
+            @click="confirmCancelPlan"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
   </RouterView>
 </template>

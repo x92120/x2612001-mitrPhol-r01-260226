@@ -21,9 +21,9 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      showgrid="true"
-     inkscape:zoom="3.4836794"
-     inkscape:cx="7.3198469"
-     inkscape:cy="392.83179"
+     inkscape:zoom="1.2316667"
+     inkscape:cx="-29.634641"
+     inkscape:cy="386.87415"
      inkscape:window-width="1920"
      inkscape:window-height="945"
      inkscape:window-x="0"
@@ -309,7 +309,7 @@
      y="588"
      text-anchor="end"
      fill="#000000"
-     style="font-size:8px;font-family:sans-serif;font-weight:bold;"
+     style="font-size:8px;font-family:'Courier Prime', 'Courier New', Courier, monospace;font-weight:bold;"
      id="text112">xDev.co.th</text>
   <rect
      style="fill:none;stroke:#000000;stroke-width:1.21624"
@@ -320,7 +320,7 @@
      y="350.60812" />
   <rect
      style="fill:none;stroke:#000000;stroke-width:1.02801"
-     id="rect331"
+     id="qrCode-Frame-001"
      width="148.972"
      height="148.972"
      x="231.028"

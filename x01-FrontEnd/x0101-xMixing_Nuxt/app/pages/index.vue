@@ -324,8 +324,8 @@ const canAccess = (permission: string) => {
                   {{ t('home.accountStatus') }}: <span class="text-weight-bold text-green-3">{{ t('home.active') }}</span> | {{ t('home.systemOperational') }}
                 </div>
               </div>
-              <div class="col-auto q-pl-md gt-xs">
-                <!-- Removed Logo as requested -->
+              <div class="col-auto q-pl-md gt-xs" style="display: flex; align-items: center;">
+                <img src="/labels/xDev_WeAreWeCan.svg" alt="xDev" style="width: 360px; height: auto; object-fit: contain;" />
               </div>
             </div>
           </q-card-section>
