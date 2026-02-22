@@ -429,6 +429,53 @@ const fetchIngredientBatchDetail = async (reCode: string) => {
     }
 }
 
+// Expandable batch rows in per-batch breakdown table
+const expandedBatchRows = ref<string[]>([])
+const toggleBatchRow = (key: string) => {
+    const idx = expandedBatchRows.value.indexOf(key)
+    if (idx >= 0) {
+        expandedBatchRows.value.splice(idx, 1)
+    } else {
+        expandedBatchRows.value.push(key)
+    }
+}
+const isBatchRowExpanded = (key: string) => expandedBatchRows.value.includes(key)
+
+const getPackagePlan = (batchId: string, reCode: string, requiredVolume: number) => {
+    // Get ingredient package size
+    const ingInfo = ingredients.value.find(i => i.re_code === reCode)
+    let pkgSize = ingInfo?.std_package_size || packageSize.value || 0
+    if (requiredVolume <= 0) return []
+    
+    // If no package size defined, treat full volume as one package
+    if (pkgSize <= 0) pkgSize = requiredVolume
+    
+    // Calculate total packages needed
+    const totalPkgs = Math.ceil(requiredVolume / pkgSize)
+    
+    // Get actual records for this batch+re_code
+    const actuals = preBatchLogs.value
+        .filter(log => log.re_code === reCode && log.batch_record_id.startsWith(batchId))
+        .sort((a: any, b: any) => a.package_no - b.package_no)
+    
+    // Build package plan list
+    const packages: any[] = []
+    let remain = requiredVolume
+    for (let i = 1; i <= totalPkgs; i++) {
+        const target = Math.min(remain, pkgSize)
+        remain -= target
+        const actual = actuals.find(a => a.package_no === i)
+        packages.push({
+            pkg_no: i,
+            target: target,
+            actual: actual?.net_volume || null,
+            status: actual ? 'done' : 'pending',
+            log: actual || null
+        })
+    }
+    return packages
+}
+
 const getIngredientLogs = (reCode: string) => {
     if (!selectedBatch.value) return []
     return preBatchLogs.value.filter(log => 
@@ -927,7 +974,9 @@ const remainToBatch = computed(() => {
 
 const targetWeight = computed(() => {
     if (requireVolume.value <= 0 || packageSize.value <= 0) return 0
-    return Math.min(remainToBatch.value, packageSize.value)
+    // Remaining after completed packages only (not current scale reading)
+    const remainAfterCompleted = Math.max(0, requireVolume.value - totalCompletedWeight.value)
+    return Math.min(remainAfterCompleted, packageSize.value)
 })
 
 const requestBatch = computed(() => {
@@ -1518,7 +1567,65 @@ const quickReprint = async (ing: any) => {
   }
 }
 
-const onDone = () => {
+const printAllBatchLabels = async (batchId: string, reCode: string, requiredVolume: number) => {
+  const packages = getPackagePlan(batchId, reCode, requiredVolume)
+  if (packages.length === 0) {
+    $q.notify({ type: 'warning', message: 'No packages found for this batch' })
+    return
+  }
+
+  const ing = ingredients.value.find(i => i.re_code === reCode)
+  const plan = selectedPlanDetails.value
+  const batch = { batch_id: batchId, sku_id: plan?.sku_id || '-', plan_id: plan?.plan_id || selectedProductionPlan.value }
+
+  $q.notify({ type: 'info', message: `Generating ${packages.length} labels...`, position: 'top', timeout: 1500 })
+
+  const allSvgs: string[] = []
+
+  for (const pkg of packages) {
+    try {
+      const volume = pkg.actual !== null ? pkg.actual : pkg.target
+      const data = {
+        SKU: batch.sku_id || '-',
+        PlanId: batch.plan_id || '-',
+        BatchId: batchId,
+        IngredientID: ing?.name || reCode,
+        Ingredient_ReCode: reCode,
+        mat_sap_code: ing?.mat_sap_code || '-',
+        PlanStartDate: plan?.start_date || '-',
+        PlanFinishDate: plan?.finish_date || '-',
+        PlantId: plan?.plant || '-',
+        PlantName: '-',
+        Timestamp: pkg.log ? new Date(pkg.log.created_at || Date.now()).toLocaleString('en-GB') : new Date().toLocaleString('en-GB'),
+        PackageSize: volume.toFixed(4),
+        BatchRequireSize: requiredVolume.toFixed(4),
+        PackageNo: `${pkg.pkg_no}/${packages.length}`,
+        QRCode: `${batch.plan_id},${batchId}-${reCode}-${pkg.pkg_no},${pkg.log?.prebatch_id || ''},${reCode},${volume}`
+      }
+
+      const svg = await generateLabelSvg('prebatch-label', data)
+      if (svg) allSvgs.push(svg)
+    } catch (err) {
+      console.error(`Error generating label #${pkg.pkg_no}:`, err)
+    }
+  }
+
+  if (allSvgs.length > 0) {
+    printLabel(allSvgs)
+    $q.notify({ type: 'positive', message: `Printing ${allSvgs.length} labels`, position: 'top' })
+  } else {
+    $q.notify({ type: 'warning', message: 'No labels generated' })
+  }
+}
+
+// Done button disabled unless packaged volume is in green (within tolerance)
+const isDoneDisabled = computed(() => {
+  if (!selectedIntakeLotId.value) return true
+  if (!selectedReCode.value) return true
+  return !isPackagedVolumeInTol.value
+})
+
+const onDone = async () => {
   if (!selectedReCode.value) {
     $q.notify({ type: 'warning', message: 'Please select an ingredient first' })
     return
@@ -1534,7 +1641,10 @@ const onDone = () => {
     return
   }
 
-  // Open the dialog instead of just notifying
+  // Capture scale value at Done click
+  capturedScaleValue.value = actualScaleValue.value
+
+  // Open label dialog and save record
   openLabelDialog()
 }
 
@@ -1748,10 +1858,11 @@ const onSelectBatch = (index: number) => {
                             <!-- Per-batch breakdown table -->
                             <tr v-if="isExpanded(ing.re_code)" class="bg-blue-grey-1">
                                 <td colspan="5" class="q-pa-none">
-                                    <div class="q-pl-lg q-pr-sm q-py-xs">
+                                    <div class="q-pl-lg q-pr-sm q-py-xs" style="max-width: 100%; overflow-x: auto;">
                                         <q-markup-table dense flat square separator="cell" class="bg-white rounded-borders shadow-1" style="font-size: 0.65rem;">
                                             <thead class="bg-blue-grey-2">
                                                 <tr>
+                                                    <th style="width: 20px;"></th>
                                                     <th class="text-left" style="font-size: 0.65rem;">Batch ID</th>
                                                     <th class="text-right" style="font-size: 0.65rem;">Require</th>
                                                     <th class="text-right" style="font-size: 0.65rem;">Actual</th>
@@ -1759,24 +1870,67 @@ const onSelectBatch = (index: number) => {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <tr 
-                                                    v-for="bd in (ingredientBatchDetail[ing.re_code] || [])" 
-                                                    :key="bd.batch_id"
-                                                    class="cursor-pointer"
-                                                    :class="selectedBatch?.batch_id === bd.batch_id && selectedReCode === ing.re_code ? 'bg-orange-1 text-weight-bold' : (bd.status === 2 ? 'bg-green-1 text-grey-6' : '')"
-                                                    @click="onBatchIngredientClick({ batch_id: bd.batch_id }, { re_code: ing.re_code, id: bd.req_id, required_volume: bd.required_volume, status: bd.status }, selectedPlanDetails)"
-                                                >
-                                                    <td class="text-left">{{ bd.batch_id.slice(-3) }}</td>
-                                                    <td class="text-right">{{ bd.required_volume.toFixed(1) }}</td>
-                                                    <td class="text-right" :class="bd.actual_volume > 0 ? 'text-blue-9 text-weight-bold' : ''">{{ bd.actual_volume.toFixed(1) }}</td>
-                                                    <td class="text-center">
-                                                        <q-badge v-if="bd.status === 2" color="green" label="Done" size="sm" />
-                                                        <q-badge v-else-if="bd.status === 1" color="orange" label="Batch" size="sm" />
-                                                        <q-badge v-else color="grey-5" label="Wait" size="sm" />
-                                                    </td>
-                                                </tr>
+                                                <template v-for="bd in (ingredientBatchDetail[ing.re_code] || [])" :key="bd.batch_id">
+                                                    <tr 
+                                                        class="cursor-pointer"
+                                                        :class="selectedBatch?.batch_id === bd.batch_id && selectedReCode === ing.re_code ? 'bg-orange-1 text-weight-bold' : (bd.status === 2 ? 'bg-green-1 text-grey-6' : '')"
+                                                        @click="onBatchIngredientClick({ batch_id: bd.batch_id }, { re_code: ing.re_code, id: bd.req_id, required_volume: bd.required_volume, status: bd.status }, selectedPlanDetails)"
+                                                    >
+                                                        <td style="padding: 0; width: 20px;">
+                                                            <q-btn flat round dense size="xs"
+                                                                :icon="isBatchRowExpanded(bd.batch_id + '-' + ing.re_code) ? 'keyboard_arrow_down' : 'keyboard_arrow_right'"
+                                                                color="blue-grey-6"
+                                                                @click.stop="toggleBatchRow(bd.batch_id + '-' + ing.re_code)"
+                                                            />
+                                                        </td>
+                                                        <td class="text-left">{{ bd.batch_id }}</td>
+                                                        <td class="text-right">{{ bd.required_volume.toFixed(1) }}</td>
+                                                        <td class="text-right" :class="bd.actual_volume > 0 ? 'text-blue-9 text-weight-bold' : ''">{{ bd.actual_volume.toFixed(1) }}</td>
+                                                        <td class="text-center">
+                                                            <div class="row no-wrap items-center justify-center q-gutter-x-xs">
+                                                                <q-badge v-if="bd.status === 2" color="green" label="Done" size="sm" />
+                                                                <q-badge v-else-if="bd.status === 1" color="orange" label="Batch" size="sm" />
+                                                                <q-badge v-else color="grey-5" label="Wait" size="sm" />
+                                                                <q-btn v-if="bd.actual_volume > 0" flat round dense icon="print" size="xs" color="blue-7" @click.stop="printAllBatchLabels(bd.batch_id, ing.re_code, bd.required_volume)">
+                                                                    <q-tooltip>Print all labels</q-tooltip>
+                                                                </q-btn>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                    <!-- Expanded package plan -->
+                                                    <tr v-if="isBatchRowExpanded(bd.batch_id + '-' + ing.re_code)" class="bg-blue-grey-1">
+                                                        <td :colspan="5" class="q-pa-none q-pl-lg">
+                                                            <q-markup-table dense flat square separator="cell" class="bg-white" style="font-size: 0.6rem;">
+                                                                <thead class="bg-grey-2">
+                                                                    <tr>
+                                                                        <th style="font-size: 0.6rem; width: 30px;">Pkg#</th>
+                                                                        <th class="text-right" style="font-size: 0.6rem;">Target</th>
+                                                                        <th class="text-right" style="font-size: 0.6rem;">Actual</th>
+                                                                        <th class="text-center" style="font-size: 0.6rem; width: 40px;"></th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    <tr v-for="pkg in getPackagePlan(bd.batch_id, ing.re_code, bd.required_volume)" :key="pkg.pkg_no"
+                                                                        :class="pkg.status === 'done' ? 'bg-green-1' : ''">
+                                                                        <td class="text-center">#{{ pkg.pkg_no }}</td>
+                                                                        <td class="text-right">{{ pkg.target.toFixed(3) }}</td>
+                                                                        <td class="text-right" :class="pkg.status === 'done' ? 'text-blue-9 text-weight-bold' : 'text-grey-5'">
+                                                                            {{ pkg.actual !== null ? pkg.actual.toFixed(4) : '-' }}
+                                                                        </td>
+                                                                        <td class="text-center">
+                                                                            <q-icon v-if="pkg.status === 'done'" name="check_circle" color="green" size="xs" />
+                                                                            <q-btn v-if="pkg.log" flat round dense icon="print" size="xs" color="blue-5" @click.stop="onReprintLabel(pkg.log)">
+                                                                                <q-tooltip>Print</q-tooltip>
+                                                                            </q-btn>
+                                                                        </td>
+                                                                    </tr>
+                                                                </tbody>
+                                                            </q-markup-table>
+                                                        </td>
+                                                    </tr>
+                                                </template>
                                                 <tr v-if="!ingredientBatchDetail[ing.re_code] || ingredientBatchDetail[ing.re_code].length === 0">
-                                                    <td colspan="4" class="text-center text-grey text-italic">Loading...</td>
+                                                    <td colspan="5" class="text-center text-grey text-italic">Loading...</td>
                                                 </tr>
                                             </tbody>
                                         </q-markup-table>
@@ -2109,7 +2263,7 @@ const onSelectBatch = (index: number) => {
                     size="md"
                     unelevated
                     @click="onDone"
-                    :disable="!selectedIntakeLotId"
+                    :disable="isDoneDisabled"
                     />
                 </div>
                 </div>
