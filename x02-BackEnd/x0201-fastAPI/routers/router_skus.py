@@ -264,6 +264,33 @@ def delete_sku_phase(phase_id: str, db: Session = Depends(get_db)):
     return {"status": "success"}
 
 
+# --- SKU Groups ---
+
+@router.get("/sku-groups/", response_model=List[schemas.SkuGroup])
+def get_sku_groups(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return crud.get_sku_groups(db, skip=skip, limit=limit)
+
+@router.post("/sku-groups/", response_model=schemas.SkuGroup)
+def create_sku_group(group: schemas.SkuGroupCreate, db: Session = Depends(get_db)):
+    try:
+        return crud.create_sku_group(db, group=group)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.put("/sku-groups/{group_code}", response_model=schemas.SkuGroup)
+def update_sku_group(group_code: str, group: schemas.SkuGroupCreate, db: Session = Depends(get_db)):
+    result = crud.update_sku_group(db, group_code=group_code, group_update=group)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return result
+
+@router.delete("/sku-groups/{group_code}")
+def delete_sku_group(group_code: str, db: Session = Depends(get_db)):
+    result = crud.delete_sku_group(db, group_code=group_code)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return {"status": "success"}
+
 # =============================================================================
 # SKU EXPORT
 # =============================================================================

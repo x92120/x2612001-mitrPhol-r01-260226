@@ -106,7 +106,9 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
                         step_req = (step_req / std_batch_size) * plan_data.batch_size
                     
                     if step.re_code not in ingredient_info:
-                        ingredient_info[step.re_code] = {'qty': 0, 'name': step.ingredient_name or step.re_code}
+                        ing = db.query(models.Ingredient).filter(models.Ingredient.re_code == step.re_code).first()
+                        ing_name = ing.name if ing else step.re_code
+                        ingredient_info[step.re_code] = {'qty': 0, 'name': ing_name}
                     
                     ingredient_info[step.re_code]['qty'] += step_req
 
@@ -116,7 +118,7 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
 
                     # Try to find a default warehouse from inventory
                     wh_loc = "-"
-                    first_stock = db.query(models.IngredientIntakeList.warehouse_location).filter(
+                    first_stock = db.query(models.IngredientIntakeList.intake_from).filter(
                         models.IngredientIntakeList.re_code == re_code
                     ).first()
                     if first_stock:

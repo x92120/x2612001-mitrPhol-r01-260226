@@ -21,6 +21,9 @@ interface SkuMaster {
   sku_name: string
   std_batch_size?: number
   uom?: string
+  sku_group?: number | null
+  sku_group_code?: string
+  sku_group_name?: string
   status: string
   creat_by?: string
   created_at?: string
@@ -115,6 +118,7 @@ const expandedPhases = ref<{[key: string]: string[]}>({})
 const skuActions = ref<SkuAction[]>([])
 const skuDestinations = ref<SkuDestination[]>([])
 const skuPhases = ref<SkuPhase[]>([])
+const skuGroups = ref<{ id: number, group_code: string, group_name: string, description?: string, status?: string }[]>([])
 const ingredients = ref<Ingredient[]>([])
 const ingredientOptions = ref<{label: string, value: string, original: Ingredient}[]>([])
 
@@ -125,6 +129,9 @@ const searchFilter = ref('')
 const selectedSkus = ref<SkuMaster[]>([])
 const showAllIncludingInactive = ref(false)
 const showFilters = ref(false)
+const filterSkuId = ref('')
+const filterSkuName = ref('')
+const filterGroup = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const skuTableExpanded = ref(true)
 
@@ -140,12 +147,28 @@ const groupedSteps = computed<{ phaseNum: string, steps: SkuStep[], firstStep: S
   return Object.values(groups).sort((a,b) => a.phaseNum.localeCompare(b.phaseNum))
 })
 
+const ingredientSummary = computed(() => {
+  if (!selectedSkuId.value) return []
+  const steps = skuStepsMap.value[selectedSkuId.value] || []
+  const map: { [key: string]: { re_code: string, name: string, total: number, uom: string, phases: string[] } } = {}
+  steps.forEach(s => {
+    if (s.ingredient_name && s.require && s.require > 0) {
+      const key = s.re_code || s.ingredient_name || ''
+      if (!map[key]) map[key] = { re_code: s.re_code || '', name: s.ingredient_name || '', total: 0, uom: s.uom || s.ingredient_unit || 'kg', phases: [] }
+      map[key].total += s.require
+      if (!map[key].phases.includes(s.phase_number)) map[key].phases.push(s.phase_number)
+    }
+  })
+  return Object.values(map).sort((a, b) => b.total - a.total)
+})
+
 // --- Control State ---
 const showSkuDialog = ref(false)
 const showStepDialog = ref(false)
 const showActionDialog = ref(false)
 const showPhaseDialog = ref(false)
 const showDuplicateDialog = ref(false)
+const showGroupDialog = ref(false)
 
 const isCreatingSku = ref(false)
 const isEditMode = ref(false)
@@ -154,6 +177,9 @@ const isActionEdit = ref(false)
 const isDuplicating = ref(false)
 const actionSearch = ref('')
 const phaseSearch = ref('')
+const groupSearch = ref('')
+const isGroupEdit = ref(false)
+const isSavingGroup = ref(false)
 
 // --- Forms ---
 const editingSkuId = ref<number | undefined>(undefined)
@@ -162,6 +188,7 @@ const skuForm = ref({
   sku_name: '',
   std_batch_size: 0,
   uom: 'kg',
+  sku_group: null as number | null,
   status: 'Active'
 })
 
@@ -169,6 +196,12 @@ const duplicateForm = ref({
   source_sku_id: '',
   new_sku_id: '',
   new_sku_name: ''
+})
+
+const groupForm = ref({
+  group_code: '',
+  group_name: '',
+  description: ''
 })
 
 const editingStep = ref<SkuStep | null>(null)
@@ -257,6 +290,53 @@ const deleteAction = (action: SkuAction) => {
 }
 
 // ============================================================================
+// SKU GROUP MANAGEMENT
+// ============================================================================
+
+const filteredSkuGroups = computed(() => {
+  if (!groupSearch.value) return skuGroups.value
+  const q = groupSearch.value.toLowerCase()
+  return skuGroups.value.filter(g => g.group_code.toLowerCase().includes(q) || g.group_name.toLowerCase().includes(q))
+})
+
+const openGroupDialog = () => {
+  groupForm.value = { group_code: '', group_name: '', description: '' }
+  isGroupEdit.value = false
+  showGroupDialog.value = true
+}
+
+const editGroup = (group: any) => {
+  groupForm.value = { group_code: group.group_code, group_name: group.group_name, description: group.description || '' }
+  isGroupEdit.value = true
+  showGroupDialog.value = true
+}
+
+const saveGroup = async () => {
+  if (!groupForm.value.group_code || !groupForm.value.group_name) return $q.notify({ type: 'warning', message: 'Fill in code and name' })
+  isSavingGroup.value = true
+  try {
+    const method = isGroupEdit.value ? 'PUT' : 'POST'
+    const url = isGroupEdit.value ? `${appConfig.apiBaseUrl}/sku-groups/${groupForm.value.group_code}` : `${appConfig.apiBaseUrl}/sku-groups/`
+    await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(groupForm.value) })
+    $q.notify({ type: 'positive', message: 'Group saved' })
+    await fetchSkuGroups()
+    if (isGroupEdit.value) { isGroupEdit.value = false }
+    groupForm.value = { group_code: '', group_name: '', description: '' }
+  } catch (e) { $q.notify({ type: 'negative', message: 'Save failed' }) }
+  finally { isSavingGroup.value = false }
+}
+
+const deleteGroup = (group: any) => {
+  $q.dialog({ title: 'Confirm', message: `Delete group ${group.group_code} - ${group.group_name}?`, cancel: true }).onOk(async () => {
+    try {
+      await fetch(`${appConfig.apiBaseUrl}/sku-groups/${group.group_code}`, { method: 'DELETE' })
+      $q.notify({ type: 'positive', message: 'Group deleted' })
+      await fetchSkuGroups()
+    } catch (e) { $q.notify({ type: 'negative', message: 'Delete failed' }) }
+  })
+}
+
+// ============================================================================
 // PHASE MANAGEMENT
 // ============================================================================
 
@@ -330,6 +410,19 @@ const filteredSkus = computed(() => {
       sku.sku_name.toLowerCase().includes(needle)
     )
   }
+  // Column filters
+  if (filterSkuId.value) {
+    const f = filterSkuId.value.toLowerCase()
+    skus = skus.filter(s => s.sku_id.toLowerCase().includes(f))
+  }
+  if (filterSkuName.value) {
+    const f = filterSkuName.value.toLowerCase()
+    skus = skus.filter(s => s.sku_name.toLowerCase().includes(f))
+  }
+  if (filterGroup.value) {
+    const f = filterGroup.value.toLowerCase()
+    skus = skus.filter(s => (s.sku_group_name || '').toLowerCase().includes(f))
+  }
 
   return skus
 })
@@ -369,6 +462,9 @@ const filteredSkuPhases = computed(() => {
 
 const resetFilters = () => {
   searchFilter.value = ''
+  filterSkuId.value = ''
+  filterSkuName.value = ''
+  filterGroup.value = ''
   showAllIncludingInactive.value = false
   $q.notify({ type: 'info', message: t('sku.filtersReset') })
 }
@@ -410,48 +506,50 @@ const onFileSelected = async (event: Event) => {
 // ============================================================================
 
 const fetchSkuMasters = async () => {
-  isLoading.value = true
   try {
-    const data = await fetch(`${appConfig.apiBaseUrl}/api/v_sku_master_detail`).then(res => res.json())
-    skuMasters.value = data
+    const res = await fetch(`${appConfig.apiBaseUrl}/api/v_sku_master_detail`)
+    if (res.ok) skuMasters.value = await res.json()
   } catch (err) {
     $q.notify({ type: 'negative', message: t('sku.fetchFailed') })
-  } finally { isLoading.value = false }
+  }
 }
 
 const fetchSkuSteps = async (skuId: string) => {
   if (skuStepsMap.value[skuId]) return
   try {
-    skuStepsMap.value[skuId] = await fetch(`${appConfig.apiBaseUrl}/api/v_sku_step_detail?sku_id=${skuId}`).then(res => res.json())
+    const res = await fetch(`${appConfig.apiBaseUrl}/api/v_sku_step_detail?sku_id=${skuId}`)
+    if (res.ok) skuStepsMap.value[skuId] = await res.json()
   } catch (err) {
     $q.notify({ type: 'negative', message: t('sku.fetchStepsFailed') })
   }
 }
 
 const fetchActions = async () => {
-  isLoading.value = true
-  try { skuActions.value = await fetch(`${appConfig.apiBaseUrl}/sku-actions/`).then(res => res.json()) } 
+  try { const res = await fetch(`${appConfig.apiBaseUrl}/sku-actions/`); if (res.ok) skuActions.value = await res.json() } 
   catch (e) { console.error(e) }
-  finally { isLoading.value = false }
 }
 
 const fetchDestinations = async () => {
-  try { skuDestinations.value = await fetch(`${appConfig.apiBaseUrl}/sku-destinations/`).then(res => res.json()) } 
+  try { const res = await fetch(`${appConfig.apiBaseUrl}/sku-destinations/`); if (res.ok) skuDestinations.value = await res.json() } 
   catch (e) { console.error(e) }
 }
 
 const fetchPhases = async () => {
-  isLoading.value = true
-  try { skuPhases.value = await fetch(`${appConfig.apiBaseUrl}/sku-phases/`).then(res => res.json()) } 
+  try { const res = await fetch(`${appConfig.apiBaseUrl}/sku-phases/`); if (res.ok) skuPhases.value = await res.json() } 
   catch (e) { console.error(e) }
-  finally { isLoading.value = false }
 }
 
 const fetchIngredients = async () => {
   try {
-    const data = await fetch(`${appConfig.apiBaseUrl}/ingredients/`).then(res => res.json())
-    ingredients.value = data
-    updateIngredientOptions(data)
+    const res = await fetch(`${appConfig.apiBaseUrl}/ingredients/`)
+    if (res.ok) { const data = await res.json(); ingredients.value = data; updateIngredientOptions(data) }
+  } catch (e) { console.error(e) }
+}
+
+const fetchSkuGroups = async () => {
+  try {
+    const res = await fetch(`${appConfig.apiBaseUrl}/sku-groups/`)
+    if (res.ok) skuGroups.value = await res.json()
   } catch (e) { console.error(e) }
 }
 
@@ -718,14 +816,14 @@ const getPhaseDescription = (phaseId: string | null) => {
 // ============================================================================
 
 const createNewSku = () => {
-  skuForm.value = { sku_id: '', sku_name: '', std_batch_size: 0, uom: 'kg', status: 'Active' }
+  skuForm.value = { sku_id: '', sku_name: '', std_batch_size: 0, uom: 'kg', sku_group: null as number | null, status: 'Active' }
   isEditMode.value = false; editingSkuId.value = undefined; showSkuDialog.value = true
 }
 
 const editSku = (skuId: string) => {
   const sku = skuMasters.value.find(s => s.sku_id === skuId)
   if (!sku) return $q.notify({ type: 'negative', message: t('sku.skuNotFound') })
-  skuForm.value = { sku_id: sku.sku_id, sku_name: sku.sku_name, std_batch_size: sku.std_batch_size || 0, uom: sku.uom || 'kg', status: sku.status || 'Active' }
+  skuForm.value = { sku_id: sku.sku_id, sku_name: sku.sku_name, std_batch_size: sku.std_batch_size || 0, uom: sku.uom || 'kg', sku_group: sku.sku_group || null, status: sku.status || 'Active' }
   isEditMode.value = true; editingSkuId.value = sku.id; showSkuDialog.value = true
 }
 
@@ -744,6 +842,7 @@ const saveNewSku = async () => {
         sku_name: skuForm.value.sku_name, 
         std_batch_size: skuForm.value.std_batch_size,
         uom: skuForm.value.uom,
+        sku_group: skuForm.value.sku_group || null,
         status: skuForm.value.status 
       }) 
     })
@@ -808,12 +907,11 @@ const saveDuplicateSku = async () => {
 const masterColumns = computed<QTableColumn[]>(() => [
   { name: 'sku_id', label: t('sku.skuId'), field: 'sku_id', align: 'left' as const, sortable: true },
   { name: 'sku_name', label: t('sku.skuName'), field: 'sku_name', align: 'left' as const, sortable: true },
+  { name: 'sku_group', label: t('sku.skuGroup', 'Group'), field: 'sku_group_name', align: 'left' as const, sortable: true },
   { name: 'std_batch', label: t('sku.stdBatch'), field: 'std_batch_size', align: 'right' as const, sortable: true },
   { name: 'phases', label: t('sku.phases'), field: 'total_phases', align: 'center' as const, sortable: true },
   { name: 'steps', label: t('sku.steps'), field: 'total_sub_steps', align: 'center' as const, sortable: true },
-  { name: 'status', label: t('common.status'), field: 'status', align: 'center' as const, sortable: true },
-  { name: 'updated_at', label: t('sku.updated'), field: 'updated_at', align: 'center' as const, sortable: true, format: (val: any) => formatDate(val) },
-  { name: 'actions', label: t('common.actions'), field: 'actions', align: 'center' as const, style: 'width: 140px' }
+  { name: 'actions', label: t('common.actions'), field: 'actions', align: 'center' as const, style: 'width: 220px' }
 ])
 
 const stepColumns = computed<QTableColumn[]>(() => [
@@ -831,13 +929,19 @@ const stepColumns = computed<QTableColumn[]>(() => [
 ])
 
 const refreshAll = async () => {
-  await Promise.all([
-    fetchSkuMasters(),
-    fetchActions(),
-    fetchDestinations(),
-    fetchPhases(),
-    fetchIngredients()
-  ])
+  isLoading.value = true
+  try {
+    await Promise.all([
+      fetchSkuMasters(),
+      fetchActions(),
+      fetchDestinations(),
+      fetchPhases(),
+      fetchIngredients(),
+      fetchSkuGroups()
+    ])
+  } finally {
+    isLoading.value = false
+  }
 }
 
 onMounted(refreshAll)
@@ -860,6 +964,22 @@ const printSkuReport = async (sku: SkuMaster) => {
   })
   const phases = Object.keys(phaseMap).sort()
 
+  // Build required ingredients summary
+  const ingredientMap: { [key: string]: { name: string, re_code: string, total: number, uom: string, phases: string[] } } = {}
+  steps.forEach(s => {
+    if (s.ingredient_name && s.require && s.require > 0) {
+      const key = s.re_code || s.ingredient_name || ''
+      if (!ingredientMap[key]) {
+        ingredientMap[key] = { name: s.ingredient_name || '', re_code: s.re_code || '', total: 0, uom: s.uom || s.ingredient_unit || 'kg', phases: [] }
+      }
+      ingredientMap[key].total += s.require
+      if (!ingredientMap[key].phases.includes(s.phase_number)) {
+        ingredientMap[key].phases.push(s.phase_number)
+      }
+    }
+  })
+  const ingredientList = Object.values(ingredientMap).sort((a, b) => a.name.localeCompare(b.name))
+
   const qcFlags = (step: SkuStep) => {
     const flags: string[] = []
     if (step.qc_temp) flags.push('🌡️ Temp')
@@ -878,102 +998,175 @@ const printSkuReport = async (sku: SkuMaster) => {
   <meta charset="utf-8">
   <title>SKU Report - ${sku.sku_id}</title>
   <style>
-    @page { size: A4; margin: 15mm; }
+    @page { size: A4; margin: 12mm 15mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Courier Prime', 'Courier New', Courier, monospace; font-size: 11px; color: #222; line-height: 1.4; }
-    .header { background: #0384fc; color: white; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; margin-bottom: 16px; }
-    .header h1 { font-size: 20px; margin: 0; }
-    .header .meta { font-size: 10px; text-align: right; opacity: 0.9; }
-    .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
-    .info-box { background: #f5f7fa; border: 1px solid #dde; border-radius: 4px; padding: 8px 12px; }
-    .info-box .label { font-size: 9px; color: #666; text-transform: uppercase; font-weight: bold; }
-    .info-box .value { font-size: 13px; font-weight: bold; color: #1a237e; margin-top: 2px; }
-    .phase-header { background: #e8eaf6; padding: 8px 14px; font-weight: bold; font-size: 12px; color: #283593; border-left: 4px solid #3f51b5; margin-top: 14px; margin-bottom: 2px; border-radius: 2px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 10px; }
-    th { background: #37474f; color: white; padding: 5px 6px; text-align: left; font-weight: bold; font-size: 9px; text-transform: uppercase; }
-    td { padding: 4px 6px; border-bottom: 1px solid #e0e0e0; }
-    tr:nth-child(even) td { background: #fafafa; }
+
+    /* Repeating header/footer via table trick */
+    .page-wrapper { display: table; width: 100%; }
+    .page-header { display: table-header-group; }
+    .page-footer { display: table-footer-group; }
+    .page-body { display: table-row-group; }
+
+    .report-header { background: #0384fc; color: white; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; margin-bottom: 4px; }
+    .report-header h1 { font-size: 16px; margin: 0; }
+    .report-header .meta { font-size: 9px; text-align: right; opacity: 0.9; }
+    .report-footer { border-top: 2px solid #0384fc; font-size: 8px; color: #888; padding: 6px 0; display: flex; justify-content: space-between; margin-top: 4px; }
+
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+    .info-box { background: #f5f7fa; border: 1px solid #dde; border-radius: 3px; padding: 6px 10px; }
+    .info-box .label { font-size: 8px; color: #666; text-transform: uppercase; font-weight: bold; }
+    .info-box .value { font-size: 12px; font-weight: bold; color: #1a237e; margin-top: 1px; }
+
+    .section-title { font-size: 13px; font-weight: bold; color: #1a237e; margin: 12px 0 6px 0; border-bottom: 2px solid #1a237e; padding-bottom: 3px; }
+    .phase-header { background: #e8eaf6; padding: 6px 12px; font-weight: bold; font-size: 11px; color: #283593; border-left: 4px solid #3f51b5; margin-top: 10px; margin-bottom: 2px; border-radius: 2px; page-break-after: avoid; }
+
+    table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 10px; }
+    table.data-table th { background: #37474f; color: white; padding: 4px 5px; text-align: left; font-weight: bold; font-size: 8px; text-transform: uppercase; }
+    table.data-table td { padding: 3px 5px; border-bottom: 1px solid #e0e0e0; }
+    table.data-table tr:nth-child(even) td { background: #fafafa; }
+
+    table.ingredient-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 10px; }
+    table.ingredient-table th { background: #1b5e20; color: white; padding: 4px 6px; text-align: left; font-weight: bold; font-size: 8px; text-transform: uppercase; }
+    table.ingredient-table td { padding: 3px 6px; border-bottom: 1px solid #c8e6c9; }
+    table.ingredient-table tr:nth-child(even) td { background: #f1f8e9; }
+    table.ingredient-table tr.total-row td { background: #e8f5e9; font-weight: bold; border-top: 2px solid #2e7d32; }
+
     .text-right { text-align: right; }
     .text-center { text-align: center; }
-    .footer { margin-top: 20px; padding-top: 10px; border-top: 2px solid #0384fc; font-size: 9px; color: #888; display: flex; justify-content: space-between; }
-    .badge { display: inline-block; background: #e3f2fd; color: #1565c0; padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; }
+    .badge { display: inline-block; background: #e3f2fd; color: #1565c0; padding: 1px 5px; border-radius: 3px; font-size: 8px; font-weight: bold; }
+    .badge-green { background: #e8f5e9; color: #2e7d32; }
+    .page-break { page-break-before: always; }
     @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div>
-      <h1>📋 SKU Report: ${sku.sku_id}</h1>
-      <div style="margin-top:4px;">${sku.sku_name}</div>
-    </div>
-    <div class="meta">
-      <div>Generated: ${now}</div>
-      <div>xMixing 2025</div>
-    </div>
-  </div>
-
-  <div class="info-grid">
-    <div class="info-box"><div class="label">SKU ID</div><div class="value">${sku.sku_id}</div></div>
-    <div class="info-box"><div class="label">SKU Name</div><div class="value">${sku.sku_name}</div></div>
-    <div class="info-box"><div class="label">Std Batch Size</div><div class="value">${sku.std_batch_size || '-'} ${sku.uom || ''}</div></div>
-    <div class="info-box"><div class="label">Status</div><div class="value">${sku.status}</div></div>
-    <div class="info-box"><div class="label">Total Phases</div><div class="value">${sku.total_phases || 0}</div></div>
-    <div class="info-box"><div class="label">Total Steps</div><div class="value">${sku.total_sub_steps || 0}</div></div>
-    <div class="info-box"><div class="label">Created</div><div class="value">${sku.created_at ? new Date(sku.created_at).toLocaleDateString() : '-'}</div></div>
-    <div class="info-box"><div class="label">Updated</div><div class="value">${sku.updated_at ? new Date(sku.updated_at).toLocaleDateString() : '-'}</div></div>
-  </div>
-
-  <h2 style="font-size:14px; color:#1a237e; margin-bottom:4px;">Process Steps Detail</h2>
-
-  ${phases.map(phaseNum => {
-    const phaseSteps = phaseMap[phaseNum]
-    const firstStep = phaseSteps[0]
-    const phaseDesc = firstStep?.action || ''
-    const phaseId = firstStep?.phase_id || ''
-    return `
-      <div class="phase-header">
-        ${phaseNum} ${phaseDesc ? '- ' + phaseDesc : ''}
-        ${phaseId ? '<span class="badge">' + phaseId + '</span>' : ''}
-        (${phaseSteps.length} steps)
+  <div class="page-wrapper">
+    <!-- Repeating Page Header -->
+    <div class="page-header">
+      <div>
+        <div class="report-header">
+          <div>
+            <h1>📋 SKU Report: ${sku.sku_id}</h1>
+            <div style="margin-top:2px; font-size:12px;">${sku.sku_name}</div>
+          </div>
+          <div class="meta">
+            <div>Generated: ${now}</div>
+            <div>xMixing 2025 | xDev.co.th</div>
+          </div>
+        </div>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th style="width:40px;">Sub</th>
-            <th style="width:55px;">Code</th>
-            <th>Description</th>
-            <th>Ingredient / Component</th>
-            <th class="text-right" style="width:60px;">Amount</th>
-            <th class="text-center" style="width:35px;">UOM</th>
-            <th class="text-right" style="width:45px;">Temp°C</th>
-            <th class="text-right" style="width:50px;">RPM</th>
-            <th class="text-right" style="width:50px;">Time(m)</th>
-            <th style="width:90px;">QC Records</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${phaseSteps.map(s => `
-            <tr>
-              <td class="text-center">${s.sub_step}</td>
-              <td><span class="badge">${s.action_code || '-'}</span></td>
-              <td>${s.action_description || '-'}</td>
-              <td>${s.ingredient_name || '-'}</td>
-              <td class="text-right">${s.require || '-'}</td>
-              <td class="text-center">${s.uom || s.ingredient_unit || '-'}</td>
-              <td class="text-right">${s.temperature || '-'}</td>
-              <td class="text-right">${s.agitator_rpm || '-'}</td>
-              <td class="text-right">${s.step_time ? (s.step_time / 60).toFixed(1) : '-'}</td>
-              <td>${qcFlags(s)}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    `
-  }).join('')}
+    </div>
 
-  <div class="footer">
-    <span>xDev.co.th - xMixing Control System 2025</span>
-    <span>SKU: ${sku.sku_id} | ${sku.sku_name}</span>
+    <!-- Repeating Page Footer -->
+    <div class="page-footer">
+      <div>
+        <div class="report-footer">
+          <span>xDev.co.th - xMixing Control System 2025</span>
+          <span>SKU: ${sku.sku_id} | ${sku.sku_name} | Std Batch: ${sku.std_batch_size || '-'} ${sku.uom || ''}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Body -->
+    <div class="page-body">
+      <div>
+        <!-- SKU Info -->
+        <div class="info-grid">
+          <div class="info-box"><div class="label">SKU ID</div><div class="value">${sku.sku_id}</div></div>
+          <div class="info-box"><div class="label">SKU Name</div><div class="value">${sku.sku_name}</div></div>
+          <div class="info-box"><div class="label">Std Batch Size</div><div class="value">${sku.std_batch_size || '-'} ${sku.uom || ''}</div></div>
+          <div class="info-box"><div class="label">Status</div><div class="value">${sku.status}</div></div>
+          <div class="info-box"><div class="label">Total Phases</div><div class="value">${sku.total_phases || 0}</div></div>
+          <div class="info-box"><div class="label">Total Steps</div><div class="value">${sku.total_sub_steps || 0}</div></div>
+          <div class="info-box"><div class="label">Created</div><div class="value">${sku.created_at ? new Date(sku.created_at).toLocaleDateString() : '-'}</div></div>
+          <div class="info-box"><div class="label">Updated</div><div class="value">${sku.updated_at ? new Date(sku.updated_at).toLocaleDateString() : '-'}</div></div>
+        </div>
+
+        <!-- Required Ingredients Summary -->
+        <div class="section-title">🧪 Required Ingredients (${ingredientList.length} items)</div>
+        <table class="ingredient-table">
+          <thead>
+            <tr>
+              <th style="width:30px;">#</th>
+              <th style="width:90px;">RE Code</th>
+              <th>Ingredient Name</th>
+              <th class="text-right" style="width:80px;">Total Amount</th>
+              <th class="text-center" style="width:50px;">UOM</th>
+              <th style="width:120px;">Used in Phases</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${ingredientList.map((ing, idx) => `
+              <tr>
+                <td class="text-center">${idx + 1}</td>
+                <td><span class="badge badge-green">${ing.re_code || '-'}</span></td>
+                <td>${ing.name}</td>
+                <td class="text-right"><strong>${ing.total.toFixed(3)}</strong></td>
+                <td class="text-center">${ing.uom}</td>
+                <td>${ing.phases.join(', ')}</td>
+              </tr>
+            `).join('')}
+            <tr class="total-row">
+              <td colspan="3" class="text-right">Total Ingredients: ${ingredientList.length}</td>
+              <td class="text-right">${ingredientList.reduce((sum, i) => sum + i.total, 0).toFixed(3)}</td>
+              <td class="text-center">-</td>
+              <td>-</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Process Steps Detail -->
+        <div class="section-title page-break">⚙️ Process Steps Detail</div>
+
+        ${phases.map(phaseNum => {
+          const phaseSteps = phaseMap[phaseNum]
+          const firstStep = phaseSteps[0]
+          const phaseDesc = firstStep?.action || ''
+          const phaseId = firstStep?.phase_id || ''
+          return `
+            <div class="phase-header">
+              ${phaseNum} ${phaseDesc ? '- ' + phaseDesc : ''}
+              ${phaseId ? '<span class="badge">' + phaseId + '</span>' : ''}
+              (${phaseSteps.length} steps)
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:35px;">Sub</th>
+                  <th style="width:50px;">Code</th>
+                  <th>Description</th>
+                  <th>Ingredient / Component</th>
+                  <th class="text-right" style="width:55px;">Amount</th>
+                  <th class="text-center" style="width:30px;">UOM</th>
+                  <th class="text-right" style="width:40px;">Temp°C</th>
+                  <th class="text-right" style="width:40px;">RPM</th>
+                  <th class="text-right" style="width:45px;">Time(m)</th>
+                  <th style="width:80px;">QC Records</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${phaseSteps.map(s => `
+                  <tr>
+                    <td class="text-center">${s.sub_step}</td>
+                    <td><span class="badge">${s.action_code || '-'}</span></td>
+                    <td>${s.action_description || '-'}</td>
+                    <td>${s.ingredient_name || '-'}</td>
+                    <td class="text-right">${s.require || '-'}</td>
+                    <td class="text-center">${s.uom || s.ingredient_unit || '-'}</td>
+                    <td class="text-right">${s.temperature || '-'}</td>
+                    <td class="text-right">${s.agitator_rpm || '-'}</td>
+                    <td class="text-right">${s.step_time ? (s.step_time / 60).toFixed(1) : '-'}</td>
+                    <td>${qcFlags(s)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `
+        }).join('')}
+
+      </div>
+    </div>
   </div>
 </body>
 </html>`
@@ -1122,6 +1315,47 @@ const printSkuReport = async (sku: SkuMaster) => {
       :hide-bottom="!skuTableExpanded"
     >
       <!-- Custom Row Template for Selection -->
+      <template v-slot:header="props">
+        <q-tr :props="props">
+          <q-th v-for="col in props.cols" :key="col.name" :props="props">
+            {{ col.label }}
+          </q-th>
+        </q-tr>
+        <q-tr v-if="showFilters" class="bg-grey-1">
+          <q-th v-for="col in props.cols" :key="'f-' + col.name" style="padding: 2px 4px">
+            <q-input
+              v-if="col.name === 'sku_id'"
+              v-model="filterSkuId"
+              dense
+              outlined
+              placeholder="Filter..."
+              clearable
+              size="sm"
+              class="filter-input"
+            />
+            <q-input
+              v-else-if="col.name === 'sku_name'"
+              v-model="filterSkuName"
+              dense
+              outlined
+              placeholder="Filter..."
+              clearable
+              size="sm"
+              class="filter-input"
+            />
+            <q-input
+              v-else-if="col.name === 'sku_group'"
+              v-model="filterGroup"
+              dense
+              outlined
+              placeholder="Filter..."
+              clearable
+              size="sm"
+              class="filter-input"
+            />
+          </q-th>
+        </q-tr>
+      </template>
       <template v-slot:body="props">
         <q-tr 
           :props="props" 
@@ -1142,20 +1376,75 @@ const printSkuReport = async (sku: SkuMaster) => {
             <template v-else-if="col.name === 'steps'">
               <q-badge color="blue-grey-6" :label="props.row.total_sub_steps || 0" />
             </template>
-            <template v-else-if="col.name === 'status'">
-              <q-badge 
-                :color="props.row.status === 'Active' ? 'positive' : 'grey'" 
-                :label="props.row.status"
-              />
-            </template>
-            <template v-else-if="col.name === 'updated_at'">
-              <div v-if="props.row.updated_at" class="text-caption">
-                {{ new Date(props.row.updated_at).toLocaleDateString() }}
-              </div>
-              <div v-else class="text-grey-5">-</div>
-            </template>
             <template v-else-if="col.name === 'actions'">
-              <div class="row items-center justify-center q-gutter-xs">
+              <div class="row items-center justify-center no-wrap q-gutter-xs">
+                <q-btn 
+                  size="sm" 
+                  color="teal" 
+                  flat 
+                  round
+                  icon="info" 
+                  @click.stop
+                >
+                  <q-tooltip>SKU Detail</q-tooltip>
+                  <q-popup-proxy>
+                    <q-card style="min-width: 280px;">
+                      <q-card-section class="bg-primary text-white q-py-sm">
+                        <div class="text-subtitle2">{{ props.row.sku_id }}</div>
+                        <div class="text-caption">{{ props.row.sku_name }}</div>
+                      </q-card-section>
+                      <q-card-section class="q-pa-sm">
+                        <div class="q-gutter-xs">
+                          <div><strong>Batch Size:</strong> {{ props.row.std_batch_size || '-' }} {{ props.row.uom || '' }}</div>
+                          <div><strong>Status:</strong> <q-badge :color="props.row.status === 'Active' ? 'positive' : 'grey'" :label="props.row.status" /></div>
+                          <div><strong>Phases:</strong> {{ props.row.total_phases || 0 }}</div>
+                          <div><strong>Steps:</strong> {{ props.row.total_sub_steps || 0 }}</div>
+                          <div><strong>Created:</strong> {{ props.row.created_at ? new Date(props.row.created_at).toLocaleString() : '-' }}</div>
+                          <div><strong>Created by:</strong> {{ props.row.creat_by || '-' }}</div>
+                          <div><strong>Updated:</strong> {{ props.row.updated_at ? new Date(props.row.updated_at).toLocaleString() : '-' }}</div>
+                          <div><strong>Updated by:</strong> {{ props.row.update_by || '-' }}</div>
+                        </div>
+                      </q-card-section>
+                    </q-card>
+                  </q-popup-proxy>
+                </q-btn>
+                <q-btn 
+                  size="sm" 
+                  color="amber-8" 
+                  flat 
+                  round
+                  icon="history" 
+                  @click.stop
+                >
+                  <q-tooltip>History</q-tooltip>
+                  <q-popup-proxy>
+                    <q-card style="min-width: 250px;">
+                      <q-card-section class="bg-amber-8 text-white q-py-sm">
+                        <div class="text-subtitle2">History: {{ props.row.sku_id }}</div>
+                      </q-card-section>
+                      <q-card-section class="q-pa-sm">
+                        <q-timeline color="primary" dense>
+                          <q-timeline-entry
+                            v-if="props.row.created_at"
+                            :subtitle="new Date(props.row.created_at).toLocaleString()"
+                            icon="add_circle"
+                            color="positive"
+                          >
+                            <div class="text-caption">Created by {{ props.row.creat_by || 'system' }}</div>
+                          </q-timeline-entry>
+                          <q-timeline-entry
+                            v-if="props.row.updated_at && props.row.updated_at !== props.row.created_at"
+                            :subtitle="new Date(props.row.updated_at).toLocaleString()"
+                            icon="edit"
+                            color="info"
+                          >
+                            <div class="text-caption">Updated by {{ props.row.update_by || 'system' }}</div>
+                          </q-timeline-entry>
+                        </q-timeline>
+                      </q-card-section>
+                    </q-card>
+                  </q-popup-proxy>
+                </q-btn>
                 <q-btn 
                   size="sm" 
                   color="deep-purple" 
@@ -1216,6 +1505,39 @@ const printSkuReport = async (sku: SkuMaster) => {
         </div>
       </template>
     </q-table>
+
+    <!-- Ingredient Requirement Table -->
+    <q-card v-if="selectedSkuId && ingredientSummary.length > 0" flat bordered class="q-mt-md q-mb-md">
+      <q-card-section class="q-pa-sm">
+        <div class="row items-center q-mb-sm">
+          <q-icon name="science" color="green-7" size="sm" class="q-mr-xs" />
+          <span class="text-subtitle2 text-green-8 text-bold">Required Ingredients</span>
+          <q-badge color="green-7" class="q-ml-sm">{{ ingredientSummary.length }}</q-badge>
+          <q-space />
+          <span class="text-caption text-grey-6">{{ selectedSkuId }}</span>
+        </div>
+        <q-markup-table dense flat bordered separator="cell" class="text-caption">
+          <thead>
+            <tr class="bg-green-1">
+              <th class="text-left">RE Code</th>
+              <th class="text-left">Ingredient</th>
+              <th class="text-right">Qty Required</th>
+              <th class="text-center">UOM</th>
+              <th class="text-center">Phases</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="ing in ingredientSummary" :key="ing.re_code || ing.name">
+              <td class="text-bold text-green-9">{{ ing.re_code || '?' }}</td>
+              <td>{{ ing.name }}</td>
+              <td class="text-right text-bold">{{ ing.total.toFixed(2) }}</td>
+              <td class="text-center">{{ ing.uom }}</td>
+              <td class="text-center">{{ ing.phases.join(', ') }}</td>
+            </tr>
+          </tbody>
+        </q-markup-table>
+      </q-card-section>
+    </q-card>
 
     <!-- Detail View (Always Visible) -->
       <div class="detail-container q-pa-md bg-white rounded-borders shadow-1 bordered">
@@ -1835,6 +2157,31 @@ const printSkuReport = async (sku: SkuMaster) => {
             </div>
 
             <q-select
+              v-model="skuForm.sku_group"
+              :options="[{label: '-- None --', value: null}, ...skuGroups.map(g => ({label: `${g.group_code} - ${g.group_name}`, value: g.id}))]"
+              emit-value
+              map-options
+              :label="t('sku.skuGroup', 'SKU Group')"
+              outlined
+              dense
+              clearable
+              :hint="'Group for categorizing SKUs'"
+            >
+              <template v-slot:after>
+                <q-btn
+                  round
+                  dense
+                  flat
+                  icon="settings"
+                  color="grey-7"
+                  @click.stop="openGroupDialog"
+                >
+                  <q-tooltip>Manage SKU Groups</q-tooltip>
+                </q-btn>
+              </template>
+            </q-select>
+
+            <q-select
               v-model="skuForm.status"
               :options="['Active', 'Inactive']"
               :label="t('common.status')"
@@ -2082,6 +2429,76 @@ const printSkuReport = async (sku: SkuMaster) => {
       </q-card>
     </q-dialog>
 
+
+    <!-- SKU Group Dialog -->
+    <q-dialog v-model="showGroupDialog">
+      <q-card style="min-width: 500px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">
+            <q-icon name="category" color="teal" class="q-mr-sm" />
+            Manage SKU Groups
+          </div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section>
+          <div class="row q-col-gutter-sm q-mb-md q-pt-md">
+            <div class="col-3">
+              <q-input v-model="groupForm.group_code" label="Code *" outlined dense :readonly="isGroupEdit" :rules="[val => !!val || 'Required']" hint="e.g. SYR" />
+            </div>
+            <div class="col-4">
+              <q-input v-model="groupForm.group_name" label="Name *" outlined dense :rules="[val => !!val || 'Required']" hint="e.g. Syrup" />
+            </div>
+            <div class="col-5">
+              <q-input v-model="groupForm.description" label="Description" outlined dense />
+            </div>
+          </div>
+
+          <div class="row q-mb-lg justify-end q-gutter-sm">
+            <q-btn v-if="isGroupEdit" label="Cancel" flat color="grey-7" @click="openGroupDialog" />
+            <q-btn :label="isGroupEdit ? 'Update' : 'Add Group'" color="teal" unelevated :loading="isSavingGroup" @click="saveGroup" />
+          </div>
+
+          <q-separator class="q-mb-md" />
+
+          <div class="row items-center q-mb-sm">
+            <div class="text-subtitle2 text-grey-8 uppercase text-bold">Existing Groups</div>
+            <q-space />
+            <q-btn flat round dense icon="refresh" color="primary" @click="fetchSkuGroups" size="sm">
+              <q-tooltip>Refresh</q-tooltip>
+            </q-btn>
+          </div>
+
+          <q-input v-model="groupSearch" placeholder="Filter groups..." dense outlined class="q-mb-sm" clearable>
+            <template v-slot:prepend><q-icon name="search" /></template>
+          </q-input>
+
+          <q-list bordered separator style="max-height: 300px; overflow-y: auto" class="rounded-borders">
+            <q-item v-for="group in filteredSkuGroups" :key="group.group_code">
+              <q-item-section>
+                <q-item-label class="text-bold text-teal">{{ group.group_code }}</q-item-label>
+                <q-item-label caption>{{ group.group_name }} <span v-if="group.description" class="text-grey-6">— {{ group.description }}</span></q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <div class="row q-gutter-xs">
+                  <q-btn flat round dense icon="edit" color="primary" @click="editGroup(group)" />
+                  <q-btn flat round dense icon="delete" color="negative" @click="deleteGroup(group)" />
+                </div>
+              </q-item-section>
+            </q-item>
+            <q-item v-if="filteredSkuGroups.length === 0">
+              <q-item-section class="text-center text-grey">No groups found</q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-pa-md">
+          <q-btn flat label="Close" color="grey-7" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
   </q-page>
 </template>
 
@@ -2093,6 +2510,18 @@ const printSkuReport = async (sku: SkuMaster) => {
 
 .master-table {
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.filter-input :deep(.q-field__control) {
+  min-height: 28px !important;
+  height: 28px !important;
+}
+.filter-input :deep(.q-field__native) {
+  font-size: 12px;
+  padding: 0 4px;
+}
+.filter-input :deep(.q-field__marginal) {
+  height: 28px;
 }
 
 .child-row {

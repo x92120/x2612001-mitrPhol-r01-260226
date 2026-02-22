@@ -19,6 +19,7 @@ def create_sku(db: Session, sku: schemas.SkuCreate) -> models.Sku:
             sku_name=sku.sku_name,
             std_batch_size=sku.std_batch_size,
             uom=sku.uom,
+            sku_group=getattr(sku, 'sku_group', None),
             status=sku.status,
             creat_by=getattr(sku, 'creat_by', 'system'),
             update_by=getattr(sku, 'update_by', 'system')
@@ -56,6 +57,7 @@ def update_sku(db: Session, sku_db_id: int, sku_update: schemas.SkuCreate) -> Op
         db_sku.sku_name = sku_update.sku_name
         db_sku.std_batch_size = sku_update.std_batch_size
         db_sku.uom = sku_update.uom
+        db_sku.sku_group = getattr(sku_update, 'sku_group', db_sku.sku_group)
         db_sku.status = sku_update.status
         
         # Update steps: Delete existing and add new ONLY if steps are provided in update
@@ -110,6 +112,7 @@ def duplicate_sku(db: Session, dup_data: schemas.SkuDuplicate) -> models.Sku:
             sku_name=dup_data.new_sku_name,
             std_batch_size=source_sku.std_batch_size,
             uom=source_sku.uom,
+            sku_group=source_sku.sku_group,
             status="Active",
             creat_by=dup_data.creat_by,
             update_by=dup_data.creat_by
@@ -226,3 +229,36 @@ def delete_sku_phase(db: Session, phase_id: str) -> Optional[models.SkuPhase]:
         db.delete(db_phase)
         db.commit()
     return db_phase
+
+# SkuGroup CRUD
+def get_sku_groups(db: Session, skip: int = 0, limit: int = 100) -> List[models.SkuGroup]:
+    return db.query(models.SkuGroup).offset(skip).limit(limit).all()
+
+def create_sku_group(db: Session, group: schemas.SkuGroupCreate) -> models.SkuGroup:
+    db_group = models.SkuGroup(
+        group_code=group.group_code,
+        group_name=group.group_name,
+        description=group.description,
+        status=group.status
+    )
+    db.add(db_group)
+    db.commit()
+    db.refresh(db_group)
+    return db_group
+
+def update_sku_group(db: Session, group_code: str, group_update: schemas.SkuGroupCreate) -> Optional[models.SkuGroup]:
+    db_group = db.query(models.SkuGroup).filter(models.SkuGroup.group_code == group_code).first()
+    if db_group:
+        db_group.group_name = group_update.group_name
+        db_group.description = group_update.description
+        db_group.status = group_update.status
+        db.commit()
+        db.refresh(db_group)
+    return db_group
+
+def delete_sku_group(db: Session, group_code: str) -> Optional[models.SkuGroup]:
+    db_group = db.query(models.SkuGroup).filter(models.SkuGroup.group_code == group_code).first()
+    if db_group:
+        db.delete(db_group)
+        db.commit()
+    return db_group

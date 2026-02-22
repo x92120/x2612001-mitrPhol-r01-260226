@@ -13,6 +13,7 @@ cd ..
 
 # Start MQTT Bridge (Separated)
 echo "🌉 Starting Scale and Scanner Readers..."
+source ./x02-BackEnd/.venv/bin/activate
 python3 -u ./x09-LocalMqtt/x01-EquipmentRead/scale_read.py > bridge.log 2>&1 &
 python3 -u ./x09-LocalMqtt/x01-EquipmentRead/scanner_read.py >> bridge.log 2>&1 &
 

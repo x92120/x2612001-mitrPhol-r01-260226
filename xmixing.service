@@ -1,0 +1,14 @@
+[Unit]
+Description=xMixing Application Auto Start
+After=network.target docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=x92120
+WorkingDirectory=/home/x92120/xApp/x01-mitrPhol/x01-localApp
+ExecStart=/bin/bash /home/x92120/xApp/x01-mitrPhol/x01-localApp/start-app.sh
+ExecStop=/bin/bash /home/x92120/xApp/x01-mitrPhol/x01-localApp/stop-app.sh
+
+[Install]
+WantedBy=multi-user.target

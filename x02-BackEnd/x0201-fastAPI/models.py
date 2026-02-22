@@ -123,6 +123,18 @@ class IntakePackageReceive(Base):
     # Relationship back to the main intake record
     intake_record = relationship("IngredientIntakeList", back_populates="packages")
 
+# SkuGroup Model
+class SkuGroup(Base):
+    __tablename__ = "sku_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_code = Column(String(50), unique=True, nullable=False, index=True)
+    group_name = Column(String(100), nullable=False)
+    description = Column(String(255))
+    status = Column(String(20), default="Active")
+    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
+
 # Sku Model (formerly Recipe)
 class Sku(Base):
     __tablename__ = "sku_masters"
@@ -133,13 +145,15 @@ class Sku(Base):
     std_batch_size = Column(Float)
     uom = Column(String(20))
     status = Column(String(20), default="Active")
+    sku_group = Column(Integer, ForeignKey("sku_groups.id"), nullable=True)
     creat_by = Column(String(50), nullable=False)
     update_by = Column(String(50))
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
-    # Relationship to steps
+    # Relationships
     steps = relationship("SkuStep", back_populates="sku", foreign_keys="[SkuStep.sku_id]", primaryjoin="Sku.sku_id == SkuStep.sku_id")
+    group = relationship("SkuGroup", foreign_keys=[sku_group])
 
 class SkuStep(Base):
     __tablename__ = "sku_steps"
@@ -370,6 +384,9 @@ class VSkuMasterDetail(Base):
     total_phases = Column(Integer)
     total_sub_steps = Column(Integer)
     last_step_update = Column(TIMESTAMP)
+    sku_group = Column(Integer)
+    sku_group_code = Column(String(50))
+    sku_group_name = Column(String(100))
 
 
 class VSkuStepDetail(Base):

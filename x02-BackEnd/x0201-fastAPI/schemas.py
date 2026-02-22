@@ -225,6 +225,7 @@ class SkuBase(BaseModel):
     sku_name: str = Field(..., max_length=200)
     std_batch_size: Optional[float] = None
     uom: Optional[str] = Field(None, max_length=20)
+    sku_group: Optional[int] = None
     status: str = Field("Active", max_length=20)
     creat_by: str = Field("system", max_length=50)
     update_by: Optional[str] = Field(None, max_length=50)
@@ -429,6 +430,24 @@ class SkuPhase(SkuPhaseBase):
     class Config:
         from_attributes = True
 
+# SkuGroup Schemas
+class SkuGroupBase(BaseModel):
+    group_code: str = Field(..., max_length=50)
+    group_name: str = Field(..., max_length=100)
+    description: Optional[str] = Field(None, max_length=255)
+    status: Optional[str] = Field("Active", max_length=20)
+
+class SkuGroupCreate(SkuGroupBase):
+    pass
+
+class SkuGroup(SkuGroupBase):
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 # Plant Schemas
 class PlantBase(BaseModel):
     plant_id: str = Field(..., max_length=50)
@@ -567,6 +586,9 @@ class VSkuMasterDetail(BaseModel):
     total_phases: Optional[int] = 0
     total_sub_steps: Optional[int] = 0
     last_step_update: Optional[datetime] = None
+    sku_group: Optional[int] = None
+    sku_group_code: Optional[str] = None
+    sku_group_name: Optional[str] = None
 
     class Config:
         from_attributes = True

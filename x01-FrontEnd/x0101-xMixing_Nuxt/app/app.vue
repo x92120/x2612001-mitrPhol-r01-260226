@@ -12,7 +12,26 @@ const applyZoom = () => {
   localStorage.setItem(ZOOM_KEY, String(zoomLevel.value))
 }
 
-const zoomLabel = computed(() => `${Math.round(zoomLevel.value * 100)}%`)
+const zoomOptions = [
+  { label: '80%', value: 0.8 },
+  { label: '90%', value: 0.9 },
+  { label: '100%', value: 1.0 },
+  { label: '110%', value: 1.1 },
+  { label: '120%', value: 1.2 },
+  { label: '130%', value: 1.3 },
+  { label: '140%', value: 1.4 },
+  { label: '150%', value: 1.5 },
+  { label: '160%', value: 1.6 },
+  { label: '170%', value: 1.7 },
+  { label: '180%', value: 1.8 },
+  { label: '190%', value: 1.9 },
+  { label: '200%', value: 2.0 },
+  { label: '210%', value: 2.1 },
+  { label: '220%', value: 2.2 },
+  { label: '230%', value: 2.3 },
+  { label: '240%', value: 2.4 },
+  { label: '250%', value: 2.5 },
+]
 
 watch(zoomLevel, applyZoom)
 onMounted(applyZoom)
@@ -38,8 +57,8 @@ const handleLogout = async () => {
           </div>
         </q-toolbar-title>
 
-        <!-- Zoom Slider -->
-        <div class="row items-center q-mr-md" style="min-width: 180px;">
+        <!-- Zoom Control: Slider + Dropdown -->
+        <div class="row items-center q-mr-md" style="min-width: 220px;">
           <q-icon name="zoom_out" size="xs" class="q-mr-xs" />
           <q-slider
             v-model="zoomLevel"
@@ -52,8 +71,18 @@ const handleLogout = async () => {
             dense
             style="flex: 1;"
           />
-          <q-icon name="zoom_in" size="xs" class="q-ml-xs" />
-          <span class="text-caption q-ml-sm" style="min-width: 35px; text-align: center;">{{ zoomLabel }}</span>
+          <q-icon name="zoom_in" size="xs" class="q-mx-xs" />
+          <q-select
+            v-model="zoomLevel"
+            :options="zoomOptions"
+            emit-value
+            map-options
+            dense
+            dark
+            borderless
+            style="min-width: 65px;"
+            popup-content-style="min-width: 80px;"
+          />
         </div>
 
         <!-- Language Toggle -->

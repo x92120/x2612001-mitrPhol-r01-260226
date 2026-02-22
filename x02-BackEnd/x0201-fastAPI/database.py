@@ -26,7 +26,7 @@ load_dotenv()
 
 DB_USER = os.getenv("DB_USER", "mixingcontrol")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "admin100")
-DB_HOST = os.getenv("DB_HOST", "192.168.121.11")
+DB_HOST = os.getenv("DB_HOST", "152.42.166.150")
 DB_PORT = os.getenv("DB_PORT", "3306")
 DB_NAME = os.getenv("DB_NAME", "xMixingControl")
 
