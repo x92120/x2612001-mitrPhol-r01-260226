@@ -1795,7 +1795,7 @@ const printSkuReport = async (sku: SkuMaster) => {
                     color="primary"
                     @click.stop="openPhaseDialog"
                   >
-                    <q-tooltip>{{ t('sku.managePhases') }}</q-tooltip>
+                    <q-tooltip v-if="!showPhaseDialog">{{ t('sku.managePhases') }}</q-tooltip>
                   </q-btn>
                 </template>
               </q-select>
@@ -1850,7 +1850,7 @@ const printSkuReport = async (sku: SkuMaster) => {
                           color="primary"
                           @click.stop="openActionDialog"
                         >
-                          <q-tooltip>{{ t('sku.manageActions') }}</q-tooltip>
+                          <q-tooltip v-if="!showActionDialog">{{ t('sku.manageActions') }}</q-tooltip>
                         </q-btn>
                       </template>
                     </q-select>
@@ -2176,7 +2176,7 @@ const printSkuReport = async (sku: SkuMaster) => {
                   color="grey-7"
                   @click.stop="openGroupDialog"
                 >
-                  <q-tooltip>Manage SKU Groups</q-tooltip>
+                  <q-tooltip v-if="!showGroupDialog">Manage SKU Groups</q-tooltip>
                 </q-btn>
               </template>
             </q-select>

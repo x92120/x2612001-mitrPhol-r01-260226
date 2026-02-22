@@ -46,6 +46,7 @@ class Ingredient(Base):
     Group = Column(String(50))  # Colour, Flavor, etc.
     std_package_size = Column(Float, default=25.0) # Added standard package size
     std_prebatch_batch_size = Column(Float, default=0.0) # Added standard prebatch batch size
+    warehouse = Column(String(50), default="")  # Default warehouse location
     status = Column(String(20), default="Active")  # Active, Inactive
     creat_by = Column(String(50), nullable=False)  # Username who created
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))

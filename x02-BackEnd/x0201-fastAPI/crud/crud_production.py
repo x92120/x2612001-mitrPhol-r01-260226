@@ -108,8 +108,32 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
             recipe_steps = sku.steps if sku else []
             std_batch_size = sku.std_batch_size if sku else 0
 
+            # 2. Pre-calculate ingredient info ONCE (not per-batch)
+            # This avoids N×M queries to the remote DB
+            ingredient_template = {}  # {re_code: {'qty': total_per_batch, 'name': name, 'wh': warehouse}}
+            for step in recipe_steps:
+                if not step.re_code:
+                    continue
+                step_req = step.require or 0
+                if std_batch_size and std_batch_size > 0:
+                    step_req = (step_req / std_batch_size) * plan_data.batch_size
+                
+                if step.re_code not in ingredient_template:
+                    ing = db.query(models.Ingredient).filter(models.Ingredient.re_code == step.re_code).first()
+                    ing_name = ing.name if ing else step.re_code
+                    # Find default warehouse
+                    wh_loc = "-"
+                    first_stock = db.query(models.IngredientIntakeList.intake_from).filter(
+                        models.IngredientIntakeList.re_code == step.re_code
+                    ).first()
+                    if first_stock:
+                        wh_loc = first_stock[0]
+                    ingredient_template[step.re_code] = {'qty': 0, 'name': ing_name, 'wh': wh_loc}
+                
+                ingredient_template[step.re_code]['qty'] += step_req
+
+            # 3. Create batches and requirements using pre-fetched data
             for i in range(1, num_batches + 1):
-                # Use format: plan_id-001
                 batch_id_str = f"{plan_id_str}-{i:03d}"
                 
                 db_batch = models.ProductionBatch(
@@ -121,47 +145,18 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
                     status="Created"
                 )
                 db.add(db_batch)
-                db.flush() # Ensure db_batch.id is available
+                db.flush()
 
-                # 2. Create requirements for each ingredient in the recipe
-                ingredient_info = {} # {re_code: {'qty': total, 'name': name}}
-                for step in recipe_steps:
-                    if not step.re_code:
-                        continue
-                        
-                    # Calculate volume for this step's contribution to the batch
-                    step_req = step.require or 0
-                    if std_batch_size and std_batch_size > 0:
-                        step_req = (step_req / std_batch_size) * plan_data.batch_size
-                    
-                    if step.re_code not in ingredient_info:
-                        ing = db.query(models.Ingredient).filter(models.Ingredient.re_code == step.re_code).first()
-                        ing_name = ing.name if ing else step.re_code
-                        ingredient_info[step.re_code] = {'qty': 0, 'name': ing_name}
-                    
-                    ingredient_info[step.re_code]['qty'] += step_req
-
-                for re_code, info in ingredient_info.items():
-                    req_vol = info['qty']
-                    ing_name = info['name']
-
-                    # Try to find a default warehouse from inventory
-                    wh_loc = "-"
-                    first_stock = db.query(models.IngredientIntakeList.intake_from).filter(
-                        models.IngredientIntakeList.re_code == re_code
-                    ).first()
-                    if first_stock:
-                        wh_loc = first_stock[0]
-
+                for re_code, info in ingredient_template.items():
                     db_req = models.PreBatchReq(
                         batch_db_id=db_batch.id,
                         plan_id=db_plan.plan_id,
                         batch_id=batch_id_str,
                         re_code=re_code,
-                        ingredient_name=ing_name,
-                        required_volume=round(req_vol, 4),
-                        wh=wh_loc,
-                        status=0 # 0=Pending
+                        ingredient_name=info['name'],
+                        required_volume=round(info['qty'], 4),
+                        wh=info['wh'],
+                        status=0
                     )
                     db.add(db_req)
 

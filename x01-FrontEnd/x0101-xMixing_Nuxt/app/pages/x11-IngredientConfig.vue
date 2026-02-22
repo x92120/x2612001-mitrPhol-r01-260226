@@ -13,6 +13,7 @@ interface Ingredient {
   name: string
   unit: string
   Group?: string
+  warehouse?: string
   status: string
   creat_by: string
   update_by?: string
@@ -100,10 +101,10 @@ const columns = computed((): QTableColumn[] => [
   { name: 're_code', label: t('ingConfig.reCode'), field: 're_code', align: 'left', sortable: true },
   { name: 'ingredient_id', label: t('ingConfig.ingredientId'), field: 'ingredient_id', align: 'left', sortable: true },
   { name: 'name', label: t('ingConfig.ingredientName'), field: 'name', align: 'left', sortable: true },
-  { name: 'unit', label: t('ingConfig.unit'), field: 'unit', align: 'left', sortable: true },
   { name: 'std_package_size', label: t('ingConfig.batchPrepPkgSize'), field: 'std_package_size', align: 'left', sortable: true },
   { name: 'Group', label: t('ingConfig.group'), field: 'Group', align: 'left', sortable: true },
-  { name: 'status', label: t('common.status'), field: 'status', align: 'center', sortable: true },
+  { name: 'warehouse', label: t('ingConfig.warehouse'), field: 'warehouse', align: 'left', sortable: true },
+
   { name: 'update_by', label: t('ingConfig.editBy'), field: 'update_by', align: 'left', sortable: true },
   { name: 'actions', label: t('common.actions'), field: 'actions', align: 'right' },
 ])
@@ -118,6 +119,7 @@ const openAddDialog = () => {
     name: '',
     unit: 'kg',
     Group: '',
+    warehouse: '',
     status: 'Active',
     creat_by: '',
     update_by: '',
@@ -349,14 +351,7 @@ const onSave = async () => {
               </q-th>
             </q-tr>
           </template>
-          <template v-slot:body-cell-status="props">
-            <q-td :props="props">
-              <q-badge
-                :color="props.row.status === 'Active' ? 'positive' : 'grey'"
-                :label="props.row.status"
-              />
-            </q-td>
-          </template>
+
           <template v-slot:body-cell-actions="props">
             <q-td :props="props" align="right">
               <q-btn
@@ -435,6 +430,7 @@ const onSave = async () => {
             class="q-mb-md"
           />
           <q-input v-model="form.Group" :label="t('ingConfig.groupColorFlavor')" dense class="q-mb-md" />
+          <q-input v-model="form.warehouse" :label="t('ingConfig.warehouse')" dense class="q-mb-md" />
           <q-select
             v-model="form.status"
             :options="['Active', 'Inactive']"

@@ -22,8 +22,8 @@
      inkscape:deskcolor="#d1d1d1"
      showgrid="true"
      inkscape:zoom="1.2316667"
-     inkscape:cx="-29.634641"
-     inkscape:cy="386.87415"
+     inkscape:cx="-48.308524"
+     inkscape:cy="257.78078"
      inkscape:window-width="1920"
      inkscape:window-height="945"
      inkscape:window-x="0"
@@ -118,67 +118,28 @@
   <!-- ========================================== -->
   <text
      x="20"
-     y="134"
-     fill="#444444"
-     font-size="9px"
-     font-family="Arial, sans-serif"
-     id="text81">Plan ID</text>
-  <text
-     x="20"
-     y="152"
-     fill="black"
-     font-size="13px"
-     font-weight="bold"
-     font-family="monospace"
-     id="text-planid">{{PlanId}}</text>
-  <text
-     x="19.701332"
-     y="378.10669"
-     fill="#000000"
-     font-size="13px"
-     font-weight="bold"
-     font-family="monospace"
-     id="text-planid-7"
-     style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:10.66670036px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal">{{PlanId}}</text>
-  <text
-     x="20"
-     y="170"
+     y="130"
      fill="#444444"
      font-size="9px"
      font-family="Arial, sans-serif"
      id="text84">Batch ID</text>
   <text
      x="20"
-     y="190"
-     fill="black"
+     y="150"
+     fill="#000000"
      font-size="18px"
      font-weight="bold"
      font-family="Arial, sans-serif"
      id="text-batchid">{{BatchId}}</text>
   <text
      x="19.70133"
-     y="393.10672"
+     y="381.10672"
      fill="#000000"
      font-size="18px"
      font-weight="bold"
      font-family="Arial, sans-serif"
      id="text-batchid-5"
-     style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:10.66670036px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal">{{BatchId}}</text>
-  <text
-     x="299.26172"
-     y="134.91211"
-     fill="#444444"
-     font-size="9px"
-     font-family="Arial, sans-serif"
-     id="text87">Batch No.</text>
-  <text
-     x="299.26172"
-     y="152.91211"
-     fill="#000000"
-     font-size="15px"
-     font-weight="bold"
-     font-family="Arial, sans-serif"
-     id="text-batchno">{{BatchNo}}</text>
+     style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:16px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000">{{BatchId}}</text>
   <text
      x="19.84"
      y="508.10669"

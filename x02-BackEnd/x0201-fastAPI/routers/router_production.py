@@ -173,6 +173,78 @@ def get_prebatch_reqs_by_batch(batch_id: str, db: Session = Depends(get_db)):
     """Get prebatch requirements filtered by batch ID."""
     return crud.get_prebatch_reqs_by_batch(db, batch_id=batch_id)
 
+@router.get("/prebatch-reqs/summary-by-plan/{plan_id}")
+def get_prebatch_reqs_summary_by_plan(plan_id: str, db: Session = Depends(get_db)):
+    """Get ingredient requirements summarized across all batches for a plan."""
+    reqs = db.query(models.PreBatchReq).filter(models.PreBatchReq.plan_id == plan_id).all()
+    
+    # Pre-fetch warehouse from ingredients table by re_code
+    re_codes = list(set(r.re_code for r in reqs if r.re_code))
+    ing_wh_map: dict = {}
+    if re_codes:
+        ings = db.query(models.Ingredient.re_code, models.Ingredient.warehouse).filter(
+            models.Ingredient.re_code.in_(re_codes)
+        ).all()
+        for ing in ings:
+            if ing.re_code and ing.warehouse:
+                ing_wh_map[ing.re_code] = ing.warehouse
+    
+    # Group by re_code and sum required_volume
+    summary: dict = {}
+    for req in reqs:
+        if req.re_code not in summary:
+            summary[req.re_code] = {
+                "re_code": req.re_code,
+                "ingredient_name": req.ingredient_name,
+                "total_required": 0,
+                "batch_count": 0,
+                "per_batch": req.required_volume or 0,
+                "wh": ing_wh_map.get(req.re_code, req.wh or "-"),
+                "status": 0,  # 0=Pending, 1=InProgress, 2=Done
+                "completed_batches": 0
+            }
+        summary[req.re_code]["total_required"] += req.required_volume or 0
+        summary[req.re_code]["batch_count"] += 1
+        if req.status == 2:
+            summary[req.re_code]["completed_batches"] += 1
+    
+    # Determine status per ingredient
+    for key in summary:
+        s = summary[key]
+        if s["completed_batches"] >= s["batch_count"] and s["batch_count"] > 0:
+            s["status"] = 2  # All batches done
+        elif s["completed_batches"] > 0:
+            s["status"] = 1  # Some batches done
+        s["total_required"] = round(s["total_required"], 4)
+    
+    return list(summary.values())
+
+@router.get("/prebatch-reqs/batches-by-ingredient/{plan_id}/{re_code}")
+def get_batches_for_ingredient(plan_id: str, re_code: str, db: Session = Depends(get_db)):
+    """Get per-batch detail for a specific ingredient within a plan."""
+    reqs = db.query(models.PreBatchReq).filter(
+        models.PreBatchReq.plan_id == plan_id,
+        models.PreBatchReq.re_code == re_code
+    ).order_by(models.PreBatchReq.batch_id).all()
+    
+    result = []
+    for req in reqs:
+        # Sum actual volume from prebatch_recs for this batch + re_code
+        recs = db.query(models.PreBatchRec).filter(
+            models.PreBatchRec.batch_record_id.like(f"{req.batch_id}-{re_code}%")
+        ).all()
+        actual = sum(r.net_volume or 0 for r in recs)
+        
+        result.append({
+            "batch_id": req.batch_id,
+            "required_volume": req.required_volume or 0,
+            "actual_volume": round(actual, 4),
+            "status": req.status,  # 0=Wait, 1=Batch, 2=Done
+            "req_id": req.id
+        })
+    
+    return result
+
 @router.put("/prebatch-reqs/{req_id}/status")
 def update_prebatch_req_status_by_id(req_id: int, status: int, db: Session = Depends(get_db)):
     """Update the status of a prebatch requirement by its ID. 0=Pending, 1=In-Progress, 2=Completed."""
