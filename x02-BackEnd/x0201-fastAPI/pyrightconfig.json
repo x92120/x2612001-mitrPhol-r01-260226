@@ -1,0 +1,14 @@
+{
+    "executionEnvironments": [
+        {
+            "root": ".",
+            "extraPaths": [
+                "."
+            ]
+        }
+    ],
+    "extraPaths": [
+        "."
+    ],
+    "reportMissingImports": true
+}
