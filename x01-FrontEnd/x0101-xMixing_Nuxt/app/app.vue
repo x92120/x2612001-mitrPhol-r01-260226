@@ -5,7 +5,7 @@ const $q = useQuasar()
 
 // Zoom control
 const ZOOM_KEY = 'app-zoom-level'
-const zoomLevel = ref(parseFloat(localStorage.getItem(ZOOM_KEY) || '1.5'))
+const zoomLevel = ref(1.5)
 
 const applyZoom = () => {
   document.documentElement.style.zoom = String(zoomLevel.value)
@@ -34,7 +34,14 @@ const zoomOptions = [
 ]
 
 watch(zoomLevel, applyZoom)
-onMounted(applyZoom)
+onMounted(() => {
+  const stored = localStorage.getItem(ZOOM_KEY)
+  if (stored) {
+    zoomLevel.value = parseFloat(stored)
+  } else {
+    applyZoom()
+  }
+})
 
 const handleLogout = async () => {
   await logout()

@@ -299,7 +299,7 @@ class PreBatchRec(Base):
     net_volume = Column(Float)
     total_volume = Column(Float)
     total_request_volume = Column(Float)
-    intake_lot_id = Column(String(50), index=True)
+    intake_lot_id = Column(String(50), index=True, nullable=True) # Now nullable for multiple lots
     mat_sap_code = Column(String(50), index=True)
     prebatch_id = Column(String(100), index=True)
     recode_batch_id = Column(String(50), index=True)
@@ -312,6 +312,19 @@ class PreBatchRec(Base):
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
     req = relationship("PreBatchReq", backref="recs")
+    origins = relationship("PreBatchRecFrom", back_populates="prebatch_rec", cascade="all, delete-orphan")
+
+class PreBatchRecFrom(Base):
+    __tablename__ = "prebatch_rec_from"
+
+    id = Column(Integer, primary_key=True, index=True)
+    prebatch_rec_id = Column(Integer, ForeignKey("prebatch_recs.id"), nullable=False, index=True)
+    intake_lot_id = Column(String(50), nullable=False, index=True)
+    mat_sap_code = Column(String(50), index=True)
+    take_volume = Column(Float, nullable=False)
+    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    prebatch_rec = relationship("PreBatchRec", back_populates="origins")
 
 class SkuAction(Base):
     __tablename__ = "sku_actions"

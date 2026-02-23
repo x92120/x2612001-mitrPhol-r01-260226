@@ -293,13 +293,30 @@ class PreBatchRecBase(BaseModel):
     recheck_at: Optional[datetime] = None
     recheck_by: Optional[str] = None
 
-class PreBatchRecCreate(PreBatchRecBase):
+class PreBatchRecFromBase(BaseModel):
+    intake_lot_id: str = Field(..., max_length=50)
+    mat_sap_code: Optional[str] = Field(None, max_length=50)
+    take_volume: float
+
+class PreBatchRecFromCreate(PreBatchRecFromBase):
     pass
+
+class PreBatchRecFrom(PreBatchRecFromBase):
+    id: int
+    prebatch_rec_id: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class PreBatchRecCreate(PreBatchRecBase):
+    origins: Optional[List[PreBatchRecFromCreate]] = None
 
 class PreBatchRec(PreBatchRecBase):
     id: int
     created_at: datetime
     wh: Optional[str] = None
+    origins: List[PreBatchRecFrom] = []
     
     class Config:
         from_attributes = True

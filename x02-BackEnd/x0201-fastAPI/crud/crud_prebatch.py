@@ -1,95 +1,109 @@
+import logging
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from typing import List, Optional
 import models
 import schemas
 
-# PreBatch Record CRUD (formerly PB Log)
+logger = logging.getLogger(__name__)
+
+
+def _populate_wh(records: List[models.PreBatchRec]) -> List[models.PreBatchRec]:
+    """Populate the transient `wh` field from the joined PreBatchReq relationship."""
+    for rec in records:
+        rec.wh = rec.req.wh if rec.req else "-"
+    return records
+
+
+def _base_rec_query(db: Session):
+    """Base query for PreBatchRec with PreBatchReq outer-join."""
+    return db.query(models.PreBatchRec).outerjoin(
+        models.PreBatchReq, models.PreBatchRec.req_id == models.PreBatchReq.id
+    )
+
+
+# ---------------------------------------------------------------------------
+# PreBatch Record CRUD
+# ---------------------------------------------------------------------------
+
 def get_prebatch_recs(db: Session, skip: int = 0, limit: int = 100, wh: Optional[str] = None) -> List[models.PreBatchRec]:
-    """Get list of PreBatch records (transactions) with pagination, optionally filtered by warehouse"""
-    query = db.query(
-        models.PreBatchRec
-    ).outerjoin(models.PreBatchReq, models.PreBatchRec.req_id == models.PreBatchReq.id)
-    
+    """Get PreBatch records with pagination, optionally filtered by warehouse."""
+    query = _base_rec_query(db)
     if wh and wh != "All Warehouse":
         query = query.filter(models.PreBatchReq.wh == wh)
-        
     records = query.order_by(models.PreBatchRec.created_at.desc()).offset(skip).limit(limit).all()
-    
-    # Manually populate wh field from the joined relationship if needed
-    # Since we use outerjoin and models.PreBatchRec has relationship 'req', 
-    # SQLAlchemy might already have 'req' populated.
-    for rec in records:
-        if rec.req:
-            rec.wh = rec.req.wh
-        else:
-            rec.wh = "-"
-            
-    return records
+    return _populate_wh(records)
+
 
 def get_prebatch_recs_by_plan(db: Session, plan_id: str) -> List[models.PreBatchRec]:
-    """Get list of PreBatch records for a specific plan and populate wh field"""
-    records = db.query(models.PreBatchRec).outerjoin(
-        models.PreBatchReq, models.PreBatchRec.req_id == models.PreBatchReq.id
-    ).filter(models.PreBatchRec.plan_id == plan_id).all()
-    
-    for rec in records:
-        if rec.req:
-            rec.wh = rec.req.wh
-        else:
-            rec.wh = "-"
-    return records
+    """Get PreBatch records for a specific plan."""
+    records = _base_rec_query(db).filter(models.PreBatchRec.plan_id == plan_id).all()
+    return _populate_wh(records)
+
 
 def get_prebatch_recs_by_batch(db: Session, batch_id: str) -> List[models.PreBatchRec]:
-    """Get list of PreBatch records for a specific batch and populate wh field"""
-    # Using LIKE because batch_record_id contains re_code and package_no suffix
-    records = db.query(models.PreBatchRec).outerjoin(
-        models.PreBatchReq, models.PreBatchRec.req_id == models.PreBatchReq.id
-    ).filter(models.PreBatchRec.batch_record_id.like(f"{batch_id}%")).all()
-    
-    for rec in records:
-        if rec.req:
-            rec.wh = rec.req.wh
-        else:
-            rec.wh = "-"
-    return records
+    """Get PreBatch records for a specific batch (prefix match on batch_record_id)."""
+    records = _base_rec_query(db).filter(
+        models.PreBatchRec.batch_record_id.like(f"{batch_id}%")
+    ).all()
+    return _populate_wh(records)
+
+
+def _deduct_inventory(db: Session, re_code: str, intake_lot_id: str, volume: float):
+    """Deduct `volume` from the matching inventory lot."""
+    inv = db.query(models.IngredientIntakeList).filter(
+        models.IngredientIntakeList.intake_lot_id == intake_lot_id,
+        models.IngredientIntakeList.re_code == re_code,
+    ).first()
+    if inv:
+        inv.remain_vol = (inv.remain_vol or 0) - volume
+
+
+def _restore_inventory(db: Session, re_code: str, intake_lot_id: str, volume: float):
+    """Restore `volume` to the matching inventory lot."""
+    inv = db.query(models.IngredientIntakeList).filter(
+        models.IngredientIntakeList.intake_lot_id == intake_lot_id,
+        models.IngredientIntakeList.re_code == re_code,
+    ).first()
+    if inv:
+        inv.remain_vol = (inv.remain_vol or 0) + volume
+
 
 def create_prebatch_rec(db: Session, record: schemas.PreBatchRecCreate) -> models.PreBatchRec:
-    """Create new PreBatch record (transaction) and update inventory"""
+    """Create a new PreBatch record (transaction) and update inventory."""
     try:
-        db_record = models.PreBatchRec(**record.dict())
-        
-        # Auto-format prebatch_id: batch_id + re_code + recode_batch_id
+        record_data = record.dict(exclude={'origins'})
+        db_record = models.PreBatchRec(**record_data)
+
+        # Auto-format prebatch_id
         if not db_record.prebatch_id and db_record.recode_batch_id and db_record.re_code:
-            # We need the string batch_id, which might be in PreBatchReq
             batch_id_str = ""
             if db_record.req_id:
                 req = db.query(models.PreBatchReq).filter(models.PreBatchReq.id == db_record.req_id).first()
                 if req:
                     batch_id_str = req.batch_id
-            
             if not batch_id_str and db_record.batch_record_id:
-                # Fallback: extract from batch_record_id if it's there
-                # batch_record_id is usually batch_id-re_code-pkg
                 batch_id_str = db_record.batch_record_id.split(f"-{db_record.re_code}")[0]
-
             if batch_id_str:
                 db_record.prebatch_id = f"{batch_id_str}{db_record.re_code}{db_record.recode_batch_id}"
 
         db.add(db_record)
-        
-        # Update Inventory remain_vol
-        if db_record.intake_lot_id:
-            inventory_item = db.query(models.IngredientIntakeList).filter(
-                models.IngredientIntakeList.intake_lot_id == db_record.intake_lot_id,
-                models.IngredientIntakeList.re_code == db_record.re_code
-            ).first()
-            
-            if inventory_item:
-                consumed_vol = db_record.net_volume or 0
-                inventory_item.remain_vol = (inventory_item.remain_vol or 0) - consumed_vol
-        
-        # Update Requirement Status
+        db.flush()
+
+        # Inventory deduction — multi-lot or single-lot
+        if record.origins:
+            for origin in record.origins:
+                db.add(models.PreBatchRecFrom(
+                    prebatch_rec_id=db_record.id,
+                    intake_lot_id=origin.intake_lot_id,
+                    mat_sap_code=origin.mat_sap_code,
+                    take_volume=origin.take_volume,
+                ))
+                _deduct_inventory(db, db_record.re_code, origin.intake_lot_id, origin.take_volume)
+        elif db_record.intake_lot_id:
+            _deduct_inventory(db, db_record.re_code, db_record.intake_lot_id, db_record.net_volume or 0)
+
+        # Update requirement status
         if db_record.req_id:
             req = db.query(models.PreBatchReq).filter(models.PreBatchReq.id == db_record.req_id).first()
             if req:
@@ -97,75 +111,81 @@ def create_prebatch_rec(db: Session, record: schemas.PreBatchRecCreate) -> model
                     req.status = 2  # Completed
                 elif req.status == 0:
                     req.status = 1  # In-Progress
-                
-                # Check if ALL requirements for this batch are now completed
+
+                # Auto-finalize batch when ALL requirements are completed
                 batch = req.batch
                 if batch:
                     all_reqs = db.query(models.PreBatchReq).filter(models.PreBatchReq.batch_db_id == batch.id).all()
                     if all(r.status == 2 for r in all_reqs):
                         batch.batch_prepare = True
-                        if batch.status == "Created" or batch.status == "In-Progress":
+                        if batch.status in ("Created", "In-Progress"):
                             batch.status = "Prepared"
-        
+
         db.commit()
         db.refresh(db_record)
         return db_record
     except IntegrityError as e:
         db.rollback()
-        print(f"INTEGRITY ERROR in create_prebatch_rec: {e}")
-        raise ValueError(f"Database integrity error: {str(e)}")
+        logger.error("Integrity error in create_prebatch_rec: %s", e)
+        raise ValueError(f"Database integrity error: {e}")
     except SQLAlchemyError as e:
         db.rollback()
-        print(f"SQLALCHEMY ERROR in create_prebatch_rec: {e}")
-        raise RuntimeError(f"Database error: {str(e)}")
+        logger.error("SQLAlchemy error in create_prebatch_rec: %s", e)
+        raise RuntimeError(f"Database error: {e}")
     except Exception as e:
         db.rollback()
-        print(f"UNEXPECTED ERROR in create_prebatch_rec: {e}")
-        raise RuntimeError(f"Unexpected error: {str(e)}")
+        logger.exception("Unexpected error in create_prebatch_rec")
+        raise RuntimeError(f"Unexpected error: {e}")
+
 
 def delete_prebatch_rec(db: Session, record_id: int) -> bool:
-    """Delete a PreBatch record and revert inventory consumption"""
+    """Delete a PreBatch record and revert inventory consumption (supports multi-lot origins)."""
     try:
         db_record = db.query(models.PreBatchRec).filter(models.PreBatchRec.id == record_id).first()
         if not db_record:
             return False
-            
-        # 1. Restore Inventory
-        if db_record.intake_lot_id:
-            inventory_item = db.query(models.IngredientIntakeList).filter(
-                models.IngredientIntakeList.intake_lot_id == db_record.intake_lot_id,
-                models.IngredientIntakeList.re_code == db_record.re_code
-            ).first()
-            
-            if inventory_item:
-                inventory_item.remain_vol = (inventory_item.remain_vol or 0) + (db_record.net_volume or 0)
-        
-        # 2. Revert Requirement Status if needed
+
+        # 1. Restore inventory — prefer origins (multi-lot), fall back to single lot
+        origins = db.query(models.PreBatchRecFrom).filter(
+            models.PreBatchRecFrom.prebatch_rec_id == record_id
+        ).all()
+
+        if origins:
+            for origin in origins:
+                _restore_inventory(db, db_record.re_code, origin.intake_lot_id, origin.take_volume)
+        elif db_record.intake_lot_id:
+            _restore_inventory(db, db_record.re_code, db_record.intake_lot_id, db_record.net_volume or 0)
+
+        # 2. Revert requirement status
         if db_record.req_id:
             req = db.query(models.PreBatchReq).filter(models.PreBatchReq.id == db_record.req_id).first()
             if req:
-                # Set back to In-Progress (1)
-                req.status = 1 
-        
-        # 3. Delete the record
+                req.status = 1  # Back to In-Progress
+
+        # 3. Delete record (origins cascade via FK)
         db.delete(db_record)
         db.commit()
         return True
     except Exception as e:
         db.rollback()
-        print(f"Error deleting prebatch record {record_id}: {e}")
+        logger.error("Error deleting prebatch record %d: %s", record_id, e)
         return False
 
-# PreBatch Requirement CRUD (formerly PB Task)
+
+# ---------------------------------------------------------------------------
+# PreBatch Requirement CRUD
+# ---------------------------------------------------------------------------
+
 def get_prebatch_reqs_by_batch(db: Session, batch_id: str) -> List[models.PreBatchReq]:
-    """Get ingredient requirements for a specific batch"""
+    """Get ingredient requirements for a specific batch."""
     return db.query(models.PreBatchReq).filter(models.PreBatchReq.batch_id == batch_id).all()
 
+
 def update_prebatch_req_status(db: Session, batch_id: str, re_code: str, status: int) -> bool:
-    """Update requirement status (0=Pending, 1=In-Progress, 2=Completed)"""
+    """Update requirement status (0=Pending, 1=In-Progress, 2=Completed)."""
     req = db.query(models.PreBatchReq).filter(
         models.PreBatchReq.batch_id == batch_id,
-        models.PreBatchReq.re_code == re_code
+        models.PreBatchReq.re_code == re_code,
     ).first()
     if req:
         req.status = status
@@ -173,77 +193,73 @@ def update_prebatch_req_status(db: Session, batch_id: str, re_code: str, status:
         return True
     return False
 
+
 def get_prebatch_req(db: Session, req_id: int) -> Optional[models.PreBatchReq]:
     return db.query(models.PreBatchReq).filter(models.PreBatchReq.id == req_id).first()
 
+
 def ensure_prebatch_reqs_for_batch(db: Session, batch_id: str) -> bool:
-    """
-    Ensure PreBatch requirements exist for a given batch. If not, create them based on the SKU recipe.
-    Returns True if requirements were created or already existed.
-    """
-    # Check if requirements already exist
-    existing_count = db.query(models.PreBatchReq).filter(models.PreBatchReq.batch_id == batch_id).count()
-    if existing_count > 0:
+    """Ensure PreBatch requirements exist for a batch; create from SKU recipe if missing."""
+    if db.query(models.PreBatchReq).filter(models.PreBatchReq.batch_id == batch_id).count() > 0:
         return True
 
-    # Find the batch and plan
     batch = db.query(models.ProductionBatch).filter(models.ProductionBatch.batch_id == batch_id).first()
     if not batch:
         return False
 
-    # Find SKU
     sku = db.query(models.Sku).filter(models.Sku.sku_id == batch.sku_id).first()
     if not sku:
         return False
 
-    recipe_steps = sku.steps
     std_batch_size = sku.std_batch_size or 0
-    
-    ingredient_info = {}
-    for step in recipe_steps:
+
+    # Aggregate ingredient requirements from recipe steps
+    ingredient_info: dict = {}
+    for step in sku.steps:
         if not step.re_code:
             continue
         if step.re_code not in ingredient_info:
             ing = db.query(models.Ingredient).filter(models.Ingredient.re_code == step.re_code).first()
-            ing_name = ing.name if ing else step.re_code
-            ingredient_info[step.re_code] = {'qty_per_std': (step.require or 0), 'name': ing_name}
+            ingredient_info[step.re_code] = {
+                'qty': step.require or 0,
+                'name': ing.name if ing else step.re_code,
+            }
         else:
-            ingredient_info[step.re_code]['qty_per_std'] += (step.require or 0)
+            ingredient_info[step.re_code]['qty'] += (step.require or 0)
 
     try:
-        reqs_created = False
+        created = False
         for re_code, info in ingredient_info.items():
-            req_vol = info['qty_per_std']
+            req_vol = info['qty']
             if std_batch_size > 0:
                 req_vol = (req_vol / std_batch_size) * batch.batch_size
-            
+
+            # Default warehouse from first inventory lot
             wh_loc = "-"
-            # Try to populate default WH from Intake List (FIFO or just any)
             first_stock = db.query(models.IngredientIntakeList.warehouse_location).filter(
                 models.IngredientIntakeList.re_code == re_code
             ).first()
             if first_stock:
                 wh_loc = first_stock[0]
 
-            db_req = models.PreBatchReq(
+            db.add(models.PreBatchReq(
                 batch_db_id=batch.id,
-                plan_id=batch.plan.plan_id if batch.plan else "-", 
+                plan_id=batch.plan.plan_id if batch.plan else "-",
                 batch_id=batch.batch_id,
                 re_code=re_code,
                 ingredient_name=info['name'],
                 required_volume=round(req_vol, 4),
                 wh=wh_loc,
-                status=0
-            )
-            db.add(db_req)
-            reqs_created = True
-        
-        if reqs_created:
+                status=0,
+            ))
+            created = True
+
+        if created:
             db.commit()
             return True
     except Exception as e:
         db.rollback()
-        print(f"Error creating requirements for {batch_id}: {e}")
+        logger.error("Error creating requirements for %s: %s", batch_id, e)
         return False
-    
+
     return False

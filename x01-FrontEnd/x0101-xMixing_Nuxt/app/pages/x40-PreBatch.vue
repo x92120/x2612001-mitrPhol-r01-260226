@@ -495,10 +495,6 @@ const getIngredientRowClass = (ing: any) => {
     return 'hover-bg-grey-1 cursor-pointer'
 }
 
-// Fetch Steps for the selected Plan's SKU
-// fetchSkuStepsForPlan removed as we now rely on server-side PBTasks
-
-// Watcher to handle selection reset if ingredient disappears
 watch(selectableIngredients, (newList) => {
     if (selectedReCode.value && !newList.some(i => i.re_code === selectedReCode.value)) {
         selectedReCode.value = ''
@@ -513,8 +509,6 @@ const onSelectIngredient = async (ing: any) => {
     if (ing.isDisabled) return
     selectedReCode.value = ing.re_code
     selectedRequirementId.value = ing.req_id
-    updateRequireVolume()
-
     // Update status to onBatch (1) if it's currently Created (0)
     if (ing.status === 0 && selectedBatch.value) {
         await updatePrebatchItemStatus(selectedBatch.value.batch_id, ing.re_code, 1)
@@ -990,33 +984,50 @@ const packageLabelId = ref('')
 const capturedScaleValue = ref(0)
 const renderedLabel = ref('')
 
+// --- Shared label-data helpers ---
+const buildLotStrings = (origins: any[] | undefined, fallbackLotId?: string, fallbackVol?: number) => ({
+  Lot1: origins?.[0] ? `1. ${origins[0].intake_lot_id} / ${(origins[0].take_volume || 0).toFixed(4)} kg` : (fallbackLotId ? `1. ${fallbackLotId} / ${(fallbackVol ?? 0).toFixed(4)} kg` : ''),
+  Lot2: origins?.[1] ? `2. ${origins[1].intake_lot_id} / ${(origins[1].take_volume || 0).toFixed(4)} kg` : '',
+})
+
+const buildLabelData = (opts: { batch: any, planId: string, plan: any, reCode: string, ingName: string, matSapCode: string, netVol: number, totalVol: number, pkgNo: number | string, qrCode: string, timestamp: string, origins?: any[], fallbackLotId?: string }) => ({
+  SKU: opts.batch.sku_id || '-',
+  PlanId: opts.planId || '-',
+  BatchId: opts.batch.batch_id || opts.batch.batchId || '-',
+  IngredientID: opts.ingName || '-',
+  Ingredient_ReCode: opts.reCode || '-',
+  mat_sap_code: opts.matSapCode || '-',
+  PlanStartDate: opts.plan?.start_date || '-',
+  PlanFinishDate: opts.plan?.finish_date || '-',
+  PlantId: opts.plan?.plant || '-',
+  PlantName: '-',
+  Timestamp: opts.timestamp,
+  PackageSize: opts.netVol.toFixed(4),
+  BatchRequireSize: opts.totalVol.toFixed(4),
+  PackageNo: opts.pkgNo,
+  QRCode: opts.qrCode,
+  ...buildLotStrings(opts.origins, opts.fallbackLotId, opts.netVol),
+})
+
 const labelDataMapping = computed(() => {
   if (!selectedBatch.value || !selectedReCode.value) return null
-  
   const ing = selectableIngredients.value.find(i => i.re_code === selectedReCode.value)
   const pkgNo = nextPackageNo.value
-  const totalPkgs = requestBatch.value
-  
-    const now = new Date()
-  const timestamp = formatDate(now.toISOString())
 
-  return {
-    SKU: selectedBatch.value.sku_id || '-',
-    PlanId: selectedProductionPlan.value || '-',
-    BatchId: selectedBatch.value.batch_id || '-',
-    IngredientID: ing?.ingredient_name || '-',
-    Ingredient_ReCode: selectedReCode.value || '-',
-    mat_sap_code: ing?.mat_sap_code || '-',
-    PlanStartDate: selectedPlanDetails.value?.start_date || '-',
-    PlanFinishDate: selectedPlanDetails.value?.finish_date || '-',
-    PlantId: selectedPlanDetails.value?.plant || '-',
-    PlantName: '-', // Plant Name not in model, using ID as fallback or '-'
-    Timestamp: timestamp,
-    PackageSize: capturedScaleValue.value.toFixed(4),
-    BatchRequireSize: requireVolume.value.toFixed(4),
-    PackageNo: pkgNo,
-    QRCode: `${selectedBatch.value.plan_id},${selectedBatch.value.batch_id},${selectedBatch.value.batch_id}${selectedReCode.value}${String(pkgNo).padStart(2, '0')},${selectedReCode.value},${capturedScaleValue.value}`
-  }
+  return buildLabelData({
+    batch: selectedBatch.value,
+    planId: selectedProductionPlan.value,
+    plan: selectedPlanDetails.value,
+    reCode: selectedReCode.value,
+    ingName: ing?.ingredient_name || '-',
+    matSapCode: ing?.mat_sap_code || '-',
+    netVol: capturedScaleValue.value,
+    totalVol: requireVolume.value,
+    pkgNo,
+    qrCode: `${selectedBatch.value.plan_id},${selectedBatch.value.batch_id},${selectedBatch.value.batch_id}${selectedReCode.value}${String(pkgNo).padStart(2, '0')},${selectedReCode.value},${capturedScaleValue.value}`,
+    timestamp: formatDate(new Date().toISOString()),
+    origins: currentPackageOrigins.value.length > 0 ? currentPackageOrigins.value : undefined,
+  })
 })
 
 const updateDialogPreview = async () => {
@@ -1143,12 +1154,40 @@ watch(actualScaleValue, (newVal) => {
 
 // Also sync if ingredient just got selected to catch current scale value immediately
 watch(selectedReCode, (newReCode) => {
+  currentPackageOrigins.value = [] // reset origins when ingredient changes
   if (newReCode) {
     batchedVolume.value = actualScaleValue.value
   } else {
     batchedVolume.value = 0
   }
 })
+
+// New state for multi-lot tracking
+const currentPackageOrigins = ref<{intake_lot_id: string, mat_sap_code: string | null, take_volume: number}[]>([])
+
+const getOriginDelta = () => {
+   const reading = actualScaleValue.value
+   const recorded = currentPackageOrigins.value.reduce((s, o) => s + o.take_volume, 0)
+   return reading - recorded
+}
+
+const onAddLot = () => {
+   if (!selectedIntakeLotId.value) return
+   const delta = getOriginDelta()
+   if (delta <= 0.0001) {
+      $q.notify({type: 'warning', message: 'No new net volume to add since last lot'})
+      return
+   }
+   const ing = selectableIngredients.value.find(i => i.re_code === selectedReCode.value)
+   currentPackageOrigins.value.push({ intake_lot_id: selectedIntakeLotId.value, mat_sap_code: ing?.mat_sap_code || null, take_volume: delta })
+   $q.notify({ type: 'positive', message: `Added ${delta.toFixed(4)}kg from lot ${selectedIntakeLotId.value}`, position: 'top' })
+   selectedIntakeLotId.value = ''
+   selectedInventoryItem.value = []
+}
+
+const onRemoveLot = (index: number) => {
+    currentPackageOrigins.value.splice(index, 1)
+}
 
 // PreBatch Records from database
 const preBatchLogs = ref<any[]>([])
@@ -1434,13 +1473,7 @@ const openLabelDialog = () => {
   showLabelDialog.value = true
 }
 
-const onReprint = () => {
-  if (!packageLabelId.value) {
-    $q.notify({ type: 'warning', message: 'Please enter Package Label ID' })
-    return
-  }
-  $q.notify({ type: 'info', message: `Reprinting label: ${packageLabelId.value}` })
-}
+// onReprint removed — use onReprintLabel(record) instead
 
 const onPrintLabel = async () => {
   if (!selectedBatch.value || !selectedReCode.value) {
@@ -1469,9 +1502,10 @@ const onPrintLabel = async () => {
       net_volume: capturedScaleValue.value,
       total_volume: requireVolume.value,
       total_request_volume: targetWeight.value,
-      intake_lot_id: selectedIntakeLotId.value,
+      intake_lot_id: currentPackageOrigins.value[0]?.intake_lot_id || selectedIntakeLotId.value, // primary lot backward compatibility
       mat_sap_code: ing?.mat_sap_code || null,
-      recode_batch_id: String(pkgNo).padStart(2, '0')
+      recode_batch_id: String(pkgNo).padStart(2, '0'),
+      origins: currentPackageOrigins.value
     }
 
     // 1. Save to Database
@@ -1515,6 +1549,8 @@ const onPrintLabel = async () => {
     }
 
     showLabelDialog.value = false
+    currentPackageOrigins.value = []
+    selectedIntakeLotId.value = ''
   } catch (error) {
     console.error('Error saving prebatch record:', error)
     $q.notify({ type: 'negative', message: 'Failed to save record' })
@@ -1523,26 +1559,22 @@ const onPrintLabel = async () => {
 
 const onReprintLabel = async (record: any) => {
   if (!record || !selectedBatch.value) return
-  
   try {
-    const data = {
-      SKU: selectedBatch.value.sku_id || '-',
-      PlanId: record.plan_id || selectedProductionPlan.value || '-',
-      BatchId: selectedBatch.value.batch_id || '-',
-      IngredientID: record.ingredient_name || '-',
-      Ingredient_ReCode: record.re_code || '-',
-      mat_sap_code: record.mat_sap_code || '-',
-      PlanStartDate: selectedPlanDetails.value?.start_date || '-',
-      PlanFinishDate: selectedPlanDetails.value?.finish_date || '-',
-      PlantId: selectedPlanDetails.value?.plant || '-',
-      PlantName: '-',
-      Timestamp: new Date(record.created_at || Date.now()).toLocaleString('en-GB'),
-      PackageSize: record.net_volume.toFixed(4),
-      BatchRequireSize: record.total_volume.toFixed(4),
-      PackageNo: record.package_no,
-      QRCode: `${selectedBatch.value.plan_id},${record.batch_record_id},${record.prebatch_id || ''},${record.re_code},${record.net_volume}`
-    }
-
+    const data = buildLabelData({
+      batch: selectedBatch.value,
+      planId: record.plan_id || selectedProductionPlan.value,
+      plan: selectedPlanDetails.value,
+      reCode: record.re_code,
+      ingName: record.ingredient_name || '-',
+      matSapCode: record.mat_sap_code || '-',
+      netVol: Number(record.net_volume),
+      totalVol: Number(record.total_volume),
+      pkgNo: record.package_no,
+      qrCode: `${selectedBatch.value.plan_id},${record.batch_record_id},${record.prebatch_id || ''},${record.re_code},${record.net_volume}`,
+      timestamp: new Date(record.created_at || Date.now()).toLocaleString('en-GB'),
+      origins: record.origins?.length > 0 ? record.origins : undefined,
+      fallbackLotId: record.intake_lot_id,
+    })
     const svg = await generateLabelSvg('prebatch-label', data)
     if (svg) {
       printLabel(svg)
@@ -1585,24 +1617,21 @@ const printAllBatchLabels = async (batchId: string, reCode: string, requiredVolu
   for (const pkg of packages) {
     try {
       const volume = pkg.actual !== null ? pkg.actual : pkg.target
-      const data = {
-        SKU: batch.sku_id || '-',
-        PlanId: batch.plan_id || '-',
-        BatchId: batchId,
-        IngredientID: ing?.name || reCode,
-        Ingredient_ReCode: reCode,
-        mat_sap_code: ing?.mat_sap_code || '-',
-        PlanStartDate: plan?.start_date || '-',
-        PlanFinishDate: plan?.finish_date || '-',
-        PlantId: plan?.plant || '-',
-        PlantName: '-',
-        Timestamp: pkg.log ? new Date(pkg.log.created_at || Date.now()).toLocaleString('en-GB') : new Date().toLocaleString('en-GB'),
-        PackageSize: volume.toFixed(4),
-        BatchRequireSize: requiredVolume.toFixed(4),
-        PackageNo: `${pkg.pkg_no}/${packages.length}`,
-        QRCode: `${batch.plan_id},${batchId}-${reCode}-${pkg.pkg_no},${pkg.log?.prebatch_id || ''},${reCode},${volume}`
-      }
-
+      const data = buildLabelData({
+        batch,
+        planId: batch.plan_id,
+        plan,
+        reCode,
+        ingName: ing?.name || reCode,
+        matSapCode: ing?.mat_sap_code || '-',
+        netVol: volume,
+        totalVol: requiredVolume,
+        pkgNo: `${pkg.pkg_no}/${packages.length}`,
+        qrCode: `${batch.plan_id},${batchId}-${reCode}-${pkg.pkg_no},${pkg.log?.prebatch_id || ''},${reCode},${volume}`,
+        timestamp: pkg.log ? new Date(pkg.log.created_at || Date.now()).toLocaleString('en-GB') : new Date().toLocaleString('en-GB'),
+        origins: pkg.log?.origins?.length > 0 ? pkg.log.origins : undefined,
+        fallbackLotId: pkg.log?.intake_lot_id,
+      })
       const svg = await generateLabelSvg('prebatch-label', data)
       if (svg) allSvgs.push(svg)
     } catch (err) {
@@ -1630,13 +1659,23 @@ const onDone = async () => {
     return
   }
   
-  if (!selectedIntakeLotId.value) {
-    $q.notify({ type: 'negative', message: 'Please scan or select an Intake Lot ID first', position: 'top' })
-    return
+  // Auto-add remaining delta from scale
+  const remainder = getOriginDelta()
+  if (remainder > 0.0001) {
+      if (!selectedIntakeLotId.value) {
+        $q.notify({ type: 'negative', message: 'Please scan or select an Intake Lot ID to record the remaining weight', position: 'top' })
+        return
+      }
+      const ing = selectableIngredients.value.find(i => i.re_code === selectedReCode.value)
+      currentPackageOrigins.value.push({ intake_lot_id: selectedIntakeLotId.value, mat_sap_code: ing?.mat_sap_code || null, take_volume: remainder })
   }
 
-  // Capture scale value at Done click
-  capturedScaleValue.value = actualScaleValue.value
+  if (currentPackageOrigins.value.length === 0) {
+      $q.notify({ type: 'negative', message: 'No volume recorded. Please weigh and scan lot.', position: 'top' })
+      return
+  }
+
+  capturedScaleValue.value = currentPackageOrigins.value.reduce((s, o) => s + o.take_volume, 0)
 
   // Open label dialog and save record
   openLabelDialog()
@@ -2023,7 +2062,18 @@ const onSelectBatch = (index: number) => {
                         clearable
                         autofocus
                         @keyup.enter="onIntakeLotScanEnter"
-                    />
+                    >
+                        <template v-slot:after>
+                           <q-btn icon="add" color="primary" round dense @click="onAddLot">
+                               <q-tooltip>Add Lot & weight</q-tooltip>
+                           </q-btn>
+                        </template>
+                    </q-input>
+                    <div v-if="currentPackageOrigins.length > 0" class="q-mt-xs row q-gutter-xs">
+                        <q-chip v-for="(o, i) in currentPackageOrigins" :key="i" removable @remove="onRemoveLot(i)" color="blue-1" text-color="blue-9" dense class="q-ma-xs">
+                            {{ o.intake_lot_id }} ({{ o.take_volume.toFixed(4) }}kg)
+                        </q-chip>
+                    </div>
                 </div>
             </q-card-section>
 
@@ -2170,7 +2220,7 @@ const onSelectBatch = (index: number) => {
                     size="md"
                     unelevated
                     @click="onDone"
-                    :disable="!selectedIntakeLotId"
+                    :disable="!selectedIntakeLotId && currentPackageOrigins.length === 0"
                     />
                 </div>
                 </div>
@@ -2471,14 +2521,7 @@ const onSelectBatch = (index: number) => {
               </div>
             </div>
             <div class="col-4">
-              <q-btn
-                :label="t('preBatch.reprint')"
-                color="grey-6"
-                class="full-width"
-                size="md"
-                @click="onReprint"
-                no-caps
-              />
+              <!-- Reprint uses onReprintLabel from history table -->
             </div>
           </div>
 

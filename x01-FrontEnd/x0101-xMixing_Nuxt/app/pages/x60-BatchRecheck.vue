@@ -308,29 +308,33 @@ const onSimSelectBatch = async (batch: any) => {
         const boxSvg = await generateLabelSvg('packingbox-label', boxMapping as any)
         previewLabelSvg.value = boxSvg || ''
         
+        // Shared bag label mapping builder
+        const buildBagLabelMapping = (b: any, r: any) => ({
+            SKU: b.sku_id || '-',
+            PlanId: b.plan_id || '-',
+            BatchId: b.batch_id || '-',
+            IngredientID: r.re_code || '-',
+            Ingredient_ReCode: r.re_code || '-',
+            mat_sap_code: r.mat_sap_code || '-',
+            PlanStartDate: '-',
+            PlanFinishDate: '-',
+            PlantId: '-',
+            PlantName: '-',
+            Timestamp: new Date(r.created_at || Date.now()).toLocaleString('en-GB'),
+            PackageSize: (r.net_volume || 0).toFixed(4),
+            BatchRequireSize: (r.total_volume || 0).toFixed(4),
+            PackageNo: `${r.package_no || 1}/${r.total_packages || 1}`,
+            QRCode: `${b.plan_id},${r.batch_record_id},${r.re_code},${r.net_volume}`,
+            Lot1: r.origins?.[0] ? `1. ${r.origins[0].intake_lot_id} / ${(r.origins[0].take_volume || 0).toFixed(4)} kg` : (r.intake_lot_id ? `1. ${r.intake_lot_id} / ${Number(r.net_volume).toFixed(4)} kg` : ''),
+            Lot2: r.origins?.[1] ? `2. ${r.origins[1].intake_lot_id} / ${(r.origins[1].take_volume || 0).toFixed(4)} kg` : '',
+        })
+
         // Generate individual bag labels
         const bagLabels: {svg: string, batch_record_id: string, re_code: string}[] = []
         for (const record of records) {
-            const bagMapping = {
-                RecipeName: batch.sku_name || batch.sku_id || '-',
-                BaseQuantity: batch.batch_size || 0,
-                ItemNumber: '-',
-                RefCode: record.re_code || '-',
-                OrderCode: batch.plan_id || '-',
-                BatchSize: batch.batch_size || 0,
-                Weight: `${(record.net_volume || 0).toFixed(3)} / ${(record.total_volume || 0).toFixed(3)}`,
-                Packages: `${record.package_no || 1} / ${record.total_packages || 1}`,
-                LotID: record.intake_lot_id || '-',
-                QRCode: `${batch.plan_id},${record.batch_record_id},${record.re_code},${record.net_volume}`,
-                SmallQRCode: `${batch.plan_id},${record.batch_record_id},${record.re_code},${record.net_volume}`
-            }
-            const svg = await generateLabelSvg('prebatch-label', bagMapping as any)
+            const svg = await generateLabelSvg('prebatch-label', buildBagLabelMapping(batch, record) as any)
             if (svg) {
-                bagLabels.push({
-                    svg,
-                    batch_record_id: record.batch_record_id,
-                    re_code: record.re_code
-                })
+                bagLabels.push({ svg, batch_record_id: record.batch_record_id, re_code: record.re_code })
             }
         }
         previewBagLabels.value = bagLabels
@@ -343,22 +347,8 @@ const onSimSelectBatch = async (batch: any) => {
                 const otherRecords = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-recs/by-batch/${otherBatch.batch_id}`, {
                     headers: getAuthHeader() as Record<string, string>
                 })
-                // Take up to 2 bags from each other batch
                 for (const record of otherRecords.slice(0, 2)) {
-                    const bagMapping = {
-                        RecipeName: otherBatch.sku_name || otherBatch.sku_id || '-',
-                        BaseQuantity: otherBatch.batch_size || 0,
-                        ItemNumber: '-',
-                        RefCode: record.re_code || '-',
-                        OrderCode: otherBatch.plan_id || '-',
-                        BatchSize: otherBatch.batch_size || 0,
-                        Weight: `${(record.net_volume || 0).toFixed(3)} / ${(record.total_volume || 0).toFixed(3)}`,
-                        Packages: `${record.package_no || 1} / ${record.total_packages || 1}`,
-                        LotID: record.intake_lot_id || '-',
-                        QRCode: `${otherBatch.plan_id},${record.batch_record_id},${record.re_code},${record.net_volume}`,
-                        SmallQRCode: `${otherBatch.plan_id},${record.batch_record_id},${record.re_code},${record.net_volume}`
-                    }
-                    const svg = await generateLabelSvg('prebatch-label', bagMapping as any)
+                    const svg = await generateLabelSvg('prebatch-label', buildBagLabelMapping(otherBatch, record) as any)
                     if (svg) {
                         otherLabels.push({
                             svg,
