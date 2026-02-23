@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { useQuasar, type QTableColumn } from 'quasar'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useQuasar } from 'quasar'
 
-import { appConfig } from '../appConfig/config'
 import { useAuth } from '../composables/useAuth'
 import { useLabelPrinter } from '~/composables/useLabelPrinter'
+import { usePreBatchProduction } from '~/composables/usePreBatchProduction'
+import { usePreBatchIngredients } from '~/composables/usePreBatchIngredients'
+import { usePreBatchInventory } from '~/composables/usePreBatchInventory'
+import { usePreBatchScales } from '~/composables/usePreBatchScales'
+import { usePreBatchLabels } from '~/composables/usePreBatchLabels'
+import { usePreBatchRecords } from '~/composables/usePreBatchRecords'
 
 const $q = useQuasar()
 const { getAuthHeader, user } = useAuth()
@@ -25,628 +30,203 @@ const formatDateTime = (date: any) => {
   return d.toLocaleString('en-GB')
 }
 
-// --- State ---
-const selectedProductionPlan = ref('')
+// ─── Shared refs (owned by page, passed into composables) ───
 const selectedReCode = ref('')
 const selectedRequirementId = ref<number | null>(null)
-const selectedScale = ref(0) // Default to 0 (none selected)
-const selectedBatchIndex = ref(0) // Default first one selected
-const warehouses = ref<any[]>([])
-const selectedWarehouse = ref('')
-const showDeleteDialog = ref(false)
-const deleteInput = ref('')
-const isPackageSizeLocked = ref(true)
-const showAuthDialog = ref(false)
-const authPassword = ref('')
-const selectedPreBatchLogs = ref<any[]>([])
-const showPackingBoxLabelDialog = ref(false)
-const renderedPackingBoxLabel = ref('')
-const expandedIngredients = ref<string[]>([])
-
-interface InventoryItem {
-  id: number
-  intake_lot_id: string
-  warehouse_location: string
-  lot_id: string
-  mat_sap_code: string
-  re_code: string
-  intake_vol: number
-  remain_vol: number
-  intake_package_vol: number
-  package_intake: number
-  expire_date: string
-  manufacturing_date?: string
-  material_description?: string
-  uom?: string
-  status: string
-}
-
-
-// Data from backend
-const ingredients = ref<any[]>([])
-const isLoading = ref(false)
-const productionPlans = ref<any[]>([])
-const productionPlanOptions = ref<string[]>([])
-const allBatches = ref<any[]>([])
-const filteredBatches = ref<any[]>([])
-// const skuSteps = ref<any[]>([]) // Removed
-const prebatchItems = ref<any[]>([])
-const ingredientOptions = ref<{label: string, value: string}[]>([])
-
-
-// Computed batch IDs for display
-const batchIds = computed(() => filteredBatches.value.map(b => b.batch_id))
-
-// Selected batch details
-const selectedBatch = computed(() => {
-  if (selectedBatchIndex.value >= 0 && filteredBatches.value.length > 0) {
-    return filteredBatches.value[selectedBatchIndex.value]
-  }
-  return null
-})
-
-// Fetch ingredients from backend
-const fetchIngredients = async () => {
-    try {
-        const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/ingredients/`, {
-            headers: getAuthHeader() as Record<string, string>
-        })
-        ingredients.value = data
-    } catch (e) {
-        console.error('Error fetching ingredients', e)
-    }
-}
-
-
-
-// Fetch production plans from backend
-const fetchProductionPlans = async () => {
-  try {
-    isLoading.value = true
-    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/production-plans/`, {
-      headers: getAuthHeader() as Record<string, string>
-    })
-    
-    productionPlans.value = data
-    productionPlanOptions.value = data.map(plan => plan.plan_id)
-    
-    /* removed auto-select to minimize initial queries */
-  } catch (error) {
-    console.error('Error fetching production plans:', error)
-    $q.notify({
-      type: 'negative',
-      message: t('preBatch.errorLoadingPlans'),
-      position: 'top'
-    })
-  } finally {
-    isLoading.value = false
-  }
-}
-
-// Fetch all batch IDs from backend
-const fetchBatchIds = async () => {
-  try {
-    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/production-batches/`, {
-      headers: getAuthHeader() as Record<string, string>
-    })
-    allBatches.value = data
-    filterBatchesByPlan()
-  } catch (error) {
-    console.error('Error fetching batch IDs:', error)
-  }
-}
-
-// Filter batches based on selected production plan
-const filterBatchesByPlan = async () => {
-  if (!selectedProductionPlan.value) {
-    filteredBatches.value = []
-    ingredientOptions.value = [] // Clear ingredients if no plan
-    return
-  }
-  
-  // Find the selected production plan
-  const plan = productionPlans.value.find(p => p.plan_id === selectedProductionPlan.value)
-  
-  if (plan) {
-    // 1. Filter batches that belong to this plan and sort by batch_id (ascending)
-    filteredBatches.value = allBatches.value
-      .filter(batch => {
-        // Match by plan_id or sku_id
-        return batch.sku_id === plan.sku_id || 
-               batch.batch_id.includes(plan.plan_id)
-      })
-      .sort((a, b) => {
-        // Sort by batch_id ascending
-        return a.batch_id.localeCompare(b.batch_id)
-      })
-    
-    // 2. Fetch SKU Steps - Logic moved to onBatchSelect per user request
-    /*
-    if (plan.sku_id) {
-       await fetchSkuStepsForPlan(plan.sku_id)
-    }
-    */
-
-    // Reset selection if current index is out of bounds
-    if (selectedBatchIndex.value >= filteredBatches.value.length) {
-      selectedBatchIndex.value = 0
-    }
-    
-    // Update require volume based on selected batch
-    updateRequireVolume()
-  }
-}
-
-const onPlanShow = async (plan: any) => {
-  selectedProductionPlan.value = plan.plan_id
-  isBatchSelected.value = false
-  selectedReCode.value = ''
-  selectedRequirementId.value = null
-  
-  // Fetch plan-level ingredient summary
-  try {
-    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-reqs/summary-by-plan/${plan.plan_id}`, {
-      headers: getAuthHeader() as Record<string, string>
-    })
-    // Map summary to prebatchItems format so the existing ingredient table works
-    prebatchItems.value = data.map((item: any) => ({
-      re_code: item.re_code,
-      ingredient_name: item.ingredient_name,
-      required_volume: item.total_required,
-      wh: item.wh,
-      status: item.status,
-      id: null,
-      batch_count: item.batch_count,
-      per_batch: item.per_batch,
-      completed_batches: item.completed_batches
-    }))
-  } catch (error) {
-    console.error('Error fetching plan ingredient summary:', error)
-    prebatchItems.value = []
-  }
-  
-  fetchPreBatchRecords()
-}
-
-const onBatchSelect = async (plan: any, batch: any, index: number) => {
-  selectedProductionPlan.value = plan.plan_id
-  selectedBatchIndex.value = Number(index)
-  isBatchSelected.value = true
-  
-  // Re-filter batches to ensure selectedBatch computed works correctly
-  filterBatchesByPlan()
-
-  // Fetch prebatch requirements from db table (triggers auto-creation if missing)
-  await fetchPrebatchItems(batch.batch_id)
-  
-  // Fetch records for this plan
-  await fetchPreBatchRecords()
-}
-
-// Per-batch ingredient data cache
-const batchIngredients = ref<Record<string, any[]>>({})
-
-const onBatchExpand = async (batch: any) => {
-  // Fetch ingredients for this specific batch
-  try {
-    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-reqs/by-batch/${batch.batch_id}`, {
-      headers: getAuthHeader() as Record<string, string>
-    })
-    // Look up warehouse from ingredients table
-    batchIngredients.value[batch.batch_id] = data.map((req: any) => {
-      const ingInfo = ingredients.value.find(i => i.re_code === req.re_code)
-      return {
-        ...req,
-        wh: ingInfo?.warehouse || req.wh || '-',
-        ingredient_name: req.ingredient_name || ingInfo?.name || req.re_code
-      }
-    })
-  } catch (error) {
-    console.error('Error fetching batch ingredients:', error)
-    batchIngredients.value[batch.batch_id] = []
-  }
-}
-
-const onBatchIngredientClick = async (batch: any, req: any, plan: any) => {
-  // Select plan if not already
-  if (selectedProductionPlan.value !== plan.plan_id) {
-    await onPlanShow(plan)
-  }
-  // Select batch
-  const batchIndex = filteredBatches.value.findIndex(b => b.batch_id === batch.batch_id)
-  if (batchIndex >= 0) {
-    await onBatchSelect(plan, { batch_id: batch.batch_id }, batchIndex)
-  }
-  // Select ingredient
-  selectedReCode.value = req.re_code
-  selectedRequirementId.value = req.id
-  isBatchSelected.value = true
-  
-  // Set require volume from per-batch value
-  requireVolume.value = req.required_volume || 0
-  
-  // Set package size from ingredient config
-  const ingInfo = ingredients.value.find(i => i.re_code === req.re_code)
-  if (ingInfo?.std_package_size && ingInfo.std_package_size > 0) {
-    packageSize.value = ingInfo.std_package_size
-  }
-  
-  // Fetch inventory and records 
-  await fetchPreBatchRecords()
-}
-
-const advanceToNextBatch = async (currentBatchId: string, reCode: string) => {
-  // Find the plan
-  const plan = productionPlans.value.find(p => p.plan_id === selectedProductionPlan.value)
-  if (!plan || !plan.batches) return
-  
-  // Find current batch index in plan batches
-  const currentIdx = plan.batches.findIndex((b: any) => b.batch_id === currentBatchId)
-  if (currentIdx < 0) return
-  
-  // Find next batch that is not done for this re_code
-  for (let i = currentIdx + 1; i < plan.batches.length; i++) {
-    const nextBatch = plan.batches[i]
-    if (nextBatch.batch_prepare) continue // skip completed batches
-    
-    // Load ingredients for this batch if not cached
-    if (!batchIngredients.value[nextBatch.batch_id]) {
-      await onBatchExpand(nextBatch)
-    }
-    
-    const nextReq = batchIngredients.value[nextBatch.batch_id]?.find((r: any) => r.re_code === reCode && r.status !== 2)
-    if (nextReq) {
-      // Auto-select this batch + ingredient
-      await onBatchIngredientClick(nextBatch, nextReq, plan)
-      $q.notify({
-        type: 'info',
-        message: `Advanced to ${nextBatch.batch_id} for ${reCode}`,
-        position: 'top',
-        timeout: 2000
-      })
-      return
-    }
-  }
-  
-  // All batches for this re_code are done
-  $q.notify({
-    type: 'positive',
-    message: `All batches completed for ${reCode}!`,
-    position: 'top',
-    timeout: 3000
-  })
-}
-
-const fetchPrebatchItems = async (batchId: string) => {
-  try {
-    // Fetch prebatch requirements (re_code + required_volume list) for this batch
-    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-reqs/by-batch/${batchId}`, {
-      headers: getAuthHeader() as Record<string, string>
-    })
-    prebatchItems.value = data
-  } catch (error) {
-    console.error('Error fetching prebatch requirements:', error)
-    prebatchItems.value = []
-  }
-}
-
-const updatePrebatchItemStatus = async (batchId: string, reCode: string, status: number) => {
-  try {
-    // Find the req_id for this re_code
-    const req = prebatchItems.value.find((r: any) => r.re_code === reCode)
-    if (!req) return
-    await $fetch(`${appConfig.apiBaseUrl}/prebatch-reqs/${req.id}/status?status=${status}`, {
-      method: 'PUT',
-      headers: getAuthHeader() as Record<string, string>
-    })
-    // Refresh local list
-    await fetchPrebatchItems(batchId)
-  } catch (error) {
-    console.error('Error updating prebatch requirement status:', error)
-  }
-}
-
-// State for tracking if a specific batch is selected versus just the plan
+const requireVolume = ref(0)
+const packageSize = ref(0)
 const isBatchSelected = ref(false)
+const ingredients = ref<any[]>([])
 
-// Computed ingredients list based on selected Batch (or Plan)
-const selectableIngredients = computed(() => {
-    if (!prebatchItems.value || prebatchItems.value.length === 0) return []
+// Cast getAuthHeader for composable compatibility
+const authHeader = getAuthHeader as () => Record<string, string>
 
-    const invList = inventoryRows.value || []
-    
-    // Map PBTasks to UI rows
-    return prebatchItems.value.map((task: any, index: number) => {
-        // Find Ingredient info for package size
-        const ingInfo = ingredients.value.find(i => i.re_code === task.re_code)
-        
-        // Try to find inventory source default location
-        const stock = invList.find((r: any) => r.re_code === task.re_code)
-        
-        // Use task WH if set, else stock default, else '-'
-        const warehouse = (task.wh && task.wh !== '-' ? task.wh : (stock?.warehouse_location || '-')).toUpperCase()
-        
-        return {
-            index: index + 1,
-            re_code: task.re_code,
-            ingredient_name: task.ingredient_name || ingInfo?.name || task.re_code,
-            std_package_size: ingInfo?.std_package_size || 0,
-            batch_require: task.per_batch || task.required_volume,
-            total_require: task.required_volume,
-            from_warehouse: warehouse,
-             isDisabled: warehouse !== selectedWarehouse.value.toUpperCase(),
-             isDone: task.status === 2,
-             status: task.status,
-             req_id: task.id,
-             mat_sap_code: ingInfo?.mat_sap_code || ''
-        }
-    })
+// ─── 1. Inventory ───
+const {
+  warehouses, selectedWarehouse, inventoryRows, inventoryLoading,
+  selectedInventoryItem, selectedIntakeLotId, showAllInventory,
+  showHistoryDialog, showIntakeLabelDialog, selectedHistoryItem,
+  intakeLabelData, selectedPrinter, intakeLotInputRef,
+  inventoryColumns, filteredInventory, sortedAllInventory, inventorySummary,
+  fetchWarehouses, fetchInventory, updateInventoryStatus,
+  printIntakeLabel, openIntakeLabelDialog, onViewHistory,
+  focusIntakeLotInput, onIntakeLotScanEnter, isFIFOCompliant,
+  simulateScan, onInventoryRowClick,
+} = usePreBatchInventory({
+  $q, getAuthHeader: authHeader, t, formatDate,
+  selectedReCode,
 })
 
-// Group ingredients by warehouse for Card 2 display
-const ingredientsByWarehouse = computed(() => {
-    const groups: Record<string, any[]> = {}
-    for (const ing of selectableIngredients.value) {
-        const wh = ing.from_warehouse || '-'
-        if (!groups[wh]) groups[wh] = []
-        groups[wh].push(ing)
-    }
-    // Sort groups alphabetically, put '-' last
-    return Object.entries(groups).sort((a, b) => {
-        if (a[0] === '-') return 1
-        if (b[0] === '-') return -1
-        return a[0].localeCompare(b[0])
-    })
+// ─── 2. Scales ───
+const scalesComposable = usePreBatchScales({
+  $q, t,
+  selectedReCode,
+  requireVolume,
+  packageSize,
+})
+const {
+  selectedScale, scales, connectedScales, batchedVolume, currentPackageOrigins,
+  activeScale, actualScaleValue, remainVolume, remainToBatch,
+  targetWeight, requestBatch, isToleranceExceeded, isPackagedVolumeInTol,
+  packagedVolumeBgColor,
+  onScaleInput, isScaleConnected, toggleScaleConnection,
+  getScaleClass, getDisplayClass, onTare,
+  getOriginDelta, onAddLot, onRemoveLot,
+} = scalesComposable
+
+// ─── Forward declarations for cross-references ───
+// These functions are set after the composables that own them are created.
+let _fetchPrebatchItems: (batchId: string) => Promise<void> = async () => {}
+let _updatePrebatchItemStatus: (batchId: string, reCode: string, status: number) => Promise<void> = async () => {}
+let _fetchPreBatchRecords: () => Promise<void> = async () => {}
+let _updateRequireVolume: () => void = () => {}
+let _finalizeBatchPreparation: (batchId: number) => Promise<void> = async () => {}
+
+// ─── 3. Ingredients ───
+// selectedProductionPlan and selectedBatch are owned by production composable
+// but ingredients needs them. We create a ref/computed that we'll sync later.
+const _selectedProductionPlan = ref('')
+const _selectedBatch = ref<any>(null)
+const _preBatchLogs = ref<any[]>([])
+
+const ingredientsComposable = usePreBatchIngredients({
+  $q, getAuthHeader: authHeader, t,
+  ingredients,
+  selectedProductionPlan: _selectedProductionPlan,
+  selectedBatch: computed(() => _selectedBatch.value),
+  selectedReCode,
+  selectedRequirementId,
+  selectedWarehouse,
+  isBatchSelected,
+  inventoryRows,
+  preBatchLogs: _preBatchLogs,
+  requireVolume,
+  packageSize,
+  filteredInventory,
+  selectedInventoryItem,
+  selectedIntakeLotId,
+  updatePrebatchItemStatus: (...args: [string, string, number]) => _updatePrebatchItemStatus(...args),
+})
+const {
+  prebatchItems, expandedIngredients, ingredientBatchDetail, expandedBatchRows,
+  selectableIngredients, ingredientsByWarehouse,
+  fetchPrebatchItems, updatePrebatchItemStatus,
+  toggleIngredientExpand, isExpanded, fetchIngredientBatchDetail,
+  toggleBatchRow, isBatchRowExpanded, getPackagePlan,
+  getIngredientLogs, getIngredientRowClass,
+  onSelectIngredient, updateRequireVolume, onIngredientSelect, onIngredientDoubleClick,
+} = ingredientsComposable
+
+// Wire forward refs
+_fetchPrebatchItems = fetchPrebatchItems
+_updatePrebatchItemStatus = updatePrebatchItemStatus
+_updateRequireVolume = updateRequireVolume
+
+// ─── 4. Records ───
+const recordsComposable = usePreBatchRecords({
+  $q, getAuthHeader: authHeader, t, user, formatDate,
+  selectedBatch: computed(() => _selectedBatch.value),
+  selectedReCode,
+  requireVolume,
+  selectableIngredients,
+  requestBatch,
+  fetchPrebatchItems,
+  finalizeBatchPreparation: (...args: [number]) => _finalizeBatchPreparation(...args),
+})
+const {
+  preBatchLogs, recordToDelete, showDeleteDialog, deleteInput,
+  isPackageSizeLocked, showAuthDialog, authPassword, selectedPreBatchLogs,
+  prebatchColumns, filteredPreBatchLogs, totalCompletedWeight,
+  completedCount, nextPackageNo, preBatchSummary,
+  fetchPreBatchRecords, executeDeletion, onDeleteRecord,
+  onConfirmDeleteManual, onDeleteScanEnter, unlockPackageSize, verifyAuth,
+} = recordsComposable
+
+// Wire forward refs
+_fetchPreBatchRecords = fetchPreBatchRecords
+
+// Sync preBatchLogs into ingredients composable
+watch(preBatchLogs, (val) => { _preBatchLogs.value = val }, { deep: true, immediate: true })
+
+// Sync computed values from records into scales
+watch(totalCompletedWeight, (val) => { scalesComposable.totalCompletedWeight.value = val }, { immediate: true })
+watch(completedCount, (val) => { scalesComposable.completedCount.value = val }, { immediate: true })
+watch(nextPackageNo, (val) => { scalesComposable.nextPackageNo.value = val }, { immediate: true })
+
+// ─── 5. Production ───
+const production = usePreBatchProduction({
+  $q, getAuthHeader: authHeader, t,
+  ingredients,
+  prebatchItems,
+  inventoryRows,
+  requireVolume,
+  packageSize,
+  selectedReCode,
+  selectedRequirementId,
+  isBatchSelected,
+  selectedWarehouse,
+  fetchPrebatchItems,
+  fetchPreBatchRecords,
+  updatePrebatchItemStatus,
+  updateRequireVolume,
+})
+const {
+  selectedBatchIndex, isLoading, productionPlans, productionPlanOptions,
+  allBatches, filteredBatches, ingredientOptions, batchIngredients,
+  batchIds, selectedBatch, selectedProductionPlan, selectedPlanDetails, structuredSkuList,
+  fetchIngredients, fetchProductionPlans, fetchBatchIds,
+  filterBatchesByPlan, onPlanShow, onBatchSelect, onBatchExpand,
+  onBatchIngredientClick, advanceToNextBatch, finalizeBatchPreparation, onSelectBatch,
+} = production
+
+// Wire forward ref & sync production-owned refs into ingredients/records composable
+_finalizeBatchPreparation = finalizeBatchPreparation
+watch(selectedProductionPlan, (val) => { _selectedProductionPlan.value = val }, { immediate: true })
+watch(selectedBatch, (val) => { _selectedBatch.value = val }, { immediate: true })
+
+// ─── 6. Labels ───
+const {
+  showLabelDialog, packageLabelId, capturedScaleValue, renderedLabel,
+  showPackingBoxLabelDialog, renderedPackingBoxLabel,
+  labelDataMapping, packingBoxLabelDataMapping,
+  buildLotStrings, buildLabelData,
+  updateDialogPreview, updatePackingBoxPreview,
+  openLabelDialog, onPrintLabel, onReprintLabel,
+  quickReprint, printAllBatchLabels, onPrintPackingBoxLabel, onDone,
+} = usePreBatchLabels({
+  $q, getAuthHeader: authHeader, t, user, formatDate,
+  generateLabelSvg: generateLabelSvg as (template: string, data: any) => Promise<string>,
+  printLabel,
+  selectedBatch,
+  selectedReCode,
+  selectedRequirementId,
+  selectedProductionPlan,
+  selectedPlanDetails,
+  selectableIngredients,
+  ingredients,
+  requireVolume,
+  packageSize,
+  capturedScaleValue: batchedVolume,
+  nextPackageNo,
+  requestBatch,
+  actualScaleValue,
+  currentPackageOrigins,
+  preBatchLogs,
+  selectedPreBatchLogs,
+  getPackagePlan,
+  fetchPreBatchRecords,
+  fetchPrebatchItems,
+  updatePrebatchItemStatus,
+  onBatchExpand,
+  onPlanShow,
+  advanceToNextBatch,
+  getOriginDelta,
+  selectedIntakeLotId,
+  selectedInventoryItem,
+  productionPlans,
 })
 
-const toggleIngredientExpand = (reCode: string) => {
-    const index = expandedIngredients.value.indexOf(reCode)
-    if (index > -1) {
-        expandedIngredients.value.splice(index, 1)
-    } else {
-        expandedIngredients.value.push(reCode)
-        // Auto-fetch batch detail when expanding
-        fetchIngredientBatchDetail(reCode)
-    }
-}
-
-const isExpanded = (reCode: string) => expandedIngredients.value.includes(reCode)
-
-// Per-ingredient batch breakdown cache
-const ingredientBatchDetail = ref<Record<string, any[]>>({})
-
-const fetchIngredientBatchDetail = async (reCode: string) => {
-    if (!selectedProductionPlan.value) return
-    try {
-        const data = await $fetch<any[]>(
-            `${appConfig.apiBaseUrl}/prebatch-reqs/batches-by-ingredient/${selectedProductionPlan.value}/${encodeURIComponent(reCode)}`,
-            { headers: getAuthHeader() as Record<string, string> }
-        )
-        ingredientBatchDetail.value[reCode] = data
-    } catch (error) {
-        console.error('Error fetching ingredient batch detail:', error)
-        ingredientBatchDetail.value[reCode] = []
-    }
-}
-
-// Expandable batch rows in per-batch breakdown table
-const expandedBatchRows = ref<string[]>([])
-const toggleBatchRow = (key: string) => {
-    const idx = expandedBatchRows.value.indexOf(key)
-    if (idx >= 0) {
-        expandedBatchRows.value.splice(idx, 1)
-    } else {
-        expandedBatchRows.value.push(key)
-    }
-}
-const isBatchRowExpanded = (key: string) => expandedBatchRows.value.includes(key)
-
-const getPackagePlan = (batchId: string, reCode: string, requiredVolume: number) => {
-    // Get ingredient package size
-    const ingInfo = ingredients.value.find(i => i.re_code === reCode)
-    let pkgSize = ingInfo?.std_package_size || packageSize.value || 0
-    if (requiredVolume <= 0) return []
-    
-    // If no package size defined, treat full volume as one package
-    if (pkgSize <= 0) pkgSize = requiredVolume
-    
-    // Calculate total packages needed
-    const totalPkgs = Math.ceil(requiredVolume / pkgSize)
-    
-    // Get actual records for this batch+re_code
-    const actuals = preBatchLogs.value
-        .filter(log => log.re_code === reCode && log.batch_record_id.startsWith(batchId))
-        .sort((a: any, b: any) => a.package_no - b.package_no)
-    
-    // Build package plan list
-    const packages: any[] = []
-    let remain = requiredVolume
-    for (let i = 1; i <= totalPkgs; i++) {
-        const target = Math.min(remain, pkgSize)
-        remain -= target
-        const actual = actuals.find(a => a.package_no === i)
-        packages.push({
-            pkg_no: i,
-            target: target,
-            actual: actual?.net_volume || null,
-            status: actual ? 'done' : 'pending',
-            log: actual || null
-        })
-    }
-    return packages
-}
-
-const getIngredientLogs = (reCode: string) => {
-    if (!selectedBatch.value) return []
-    return preBatchLogs.value.filter(log => 
-        log.re_code === reCode && 
-        log.batch_record_id.startsWith(selectedBatch.value.batch_id)
-    ).sort((a: any, b: any) => a.package_no - b.package_no)
-}
-
-const getIngredientRowClass = (ing: any) => {
-    if (ing.isDisabled) return 'bg-grey-3 text-grey-5 cursor-not-allowed'
-    if (selectedReCode.value === ing.re_code) return 'bg-orange-2 text-deep-orange-9 text-weight-bold cursor-pointer'
-    
-    // Status colors
-    if (ing.status === 2) return 'bg-green-1 text-green-9 cursor-pointer'
-    if (ing.status === 1) return 'bg-amber-1 text-amber-9 cursor-pointer'
-    
-    return 'hover-bg-grey-1 cursor-pointer'
-}
-
-watch(selectableIngredients, (newList) => {
-    if (selectedReCode.value && !newList.some(i => i.re_code === selectedReCode.value)) {
-        selectedReCode.value = ''
-    }
-})
-
-
-// Update require volume when batch is selected
-// NOTE: User requested Request Volume to stay 0 until ingredient is selected/double-clicked.
-// So we no longer auto-populate from batch size here.
-const onSelectIngredient = async (ing: any) => {
-    if (ing.isDisabled) return
-    selectedReCode.value = ing.re_code
-    selectedRequirementId.value = ing.req_id
-    // Update status to onBatch (1) if it's currently Created (0)
-    if (ing.status === 0 && selectedBatch.value) {
-        await updatePrebatchItemStatus(selectedBatch.value.batch_id, ing.re_code, 1)
-    }
-}
-
-const updateRequireVolume = () => {
-   // User requested Request Volume to get from Total Require on 2nd card
-   if (selectedReCode.value) {
-       const ing = selectableIngredients.value.find(i => i.re_code === selectedReCode.value)
-       if (ing) {
-           requireVolume.value = ing.batch_require || 0
-           
-           // Optionally defaults package size if available
-           if (ing.std_package_size > 0) {
-               packageSize.value = ing.std_package_size
-           }
-       }
-   } else {
-       requireVolume.value = 0
-   }
-}
-
-// --- Scales (editable for testing) ---
-const scales = ref([
-  {
-    id: 1,
-    label: 'Scale 1 (10 Kg +/- 0.01)',
-    value: 0.0,
-    displayValue: '0.0000',
-    targetScaleId: 'scale-01',
-    connected: false,
-    tolerance: 0.01,
-    precision: 4,
-    isStable: true,
-    isError: false
-  },
-  {
-    id: 2,
-    label: 'Scale 2 (30 Kg +/- 0.02)',
-    value: 0.0,
-    displayValue: '0.000',
-    targetScaleId: 'scale-02',
-    connected: false,
-    tolerance: 0.02,
-    precision: 3,
-    isStable: true,
-    isError: false
-  },
-  {
-    id: 3,
-    label: 'Scale 3 (150 Kg +/- 0.5)',
-    value: 0.0,
-    displayValue: '0.00',
-    targetScaleId: 'scale-03',
-    connected: false,
-    tolerance: 0.5,
-    precision: 2,
-    isStable: true,
-    isError: false
-  },
-])
-
-const onScaleInput = (scaleId: number, val: string) => {
-  const scale = scales.value.find(s => s.id === scaleId)
-  if (!scale) return
-  const num = parseFloat(val) || 0
-  scale.value = num
-  scale.displayValue = num.toFixed(scale.precision)
-}
-
-const connectedScales = ref<Record<number, boolean>>({})
-
-const isScaleConnected = (id: number) => !!connectedScales.value[id]
-
-const toggleScaleConnection = (scaleId: number) => {
-  const scale = scales.value.find((s) => s.id === scaleId)
-  if (!scale) return
-  connectedScales.value[scaleId] = !connectedScales.value[scaleId]
-  $q.notify({
-    type: connectedScales.value[scaleId] ? 'positive' : 'info',
-    message: connectedScales.value[scaleId] ? `${t('preBatch.connected')} ${scale.label}` : `${t('preBatch.disconnected')} ${scale.label}`,
-    position: 'top',
-    timeout: 500
-  })
-}
-
-// --- Scanner input ref (keyboard emulator mode) ---
-const intakeLotInputRef = ref<any>(null)
-
-const focusIntakeLotInput = () => {
-  nextTick(() => {
-    intakeLotInputRef.value?.focus()
-  })
-}
-
-// Handle barcode scanner Enter key for intake lot ID
-const onIntakeLotScanEnter = () => {
-  // The watcher on selectedIntakeLotId already handles lookup/FIFO validation
-  // So when scanner sends Enter, the value is already set and watcher fires
-}
-
-const selectedPlanDetails = computed(() => {
-    return productionPlans.value.find(p => p.plan_id === selectedProductionPlan.value)
-})
-
-const structuredSkuList = computed(() => {
-    const groups: Record<string, any> = {}
-    
-    // Filter active plans
-    // Using filtered productionPlans logic
-    const activePlans = productionPlans.value.filter(p => 
-        !p.status || ['Active', 'In Progress', 'Released', 'Planned'].includes(p.status)
-    )
-    
-    activePlans.forEach(plan => {
-        const sku = plan.sku_id || 'No SKU'
-        if (!groups[sku]) {
-            groups[sku] = {
-                sku: sku,
-                plans: []
-            }
-        }
-        
-        // Find child batches for this plan
-        // Assuming allBatches is available in scope
-        const childBatches = (allBatches.value || []).filter(b => b.plan_id === plan.id || b.batch_id.includes(plan.plan_id))
-                            .sort((a: any, b: any) => a.batch_id.localeCompare(b.batch_id))
-        
-        groups[sku].plans.push({
-            ...plan,
-            batches: childBatches
-        })
-    })
-    
-    return Object.values(groups).sort((a: any, b: any) => a.sku.localeCompare(b.sku))
-})
-
+// ─── Lifecycle ───
 onMounted(() => {
   fetchIngredients()
   fetchProductionPlans()
@@ -656,1036 +236,7 @@ onMounted(() => {
   fetchWarehouses()
   focusIntakeLotInput()
 })
-
-const fetchWarehouses = async () => {
-    try {
-        const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/warehouses/`, {
-            headers: getAuthHeader() as Record<string, string>
-        })
-        warehouses.value = data
-        if (data.length > 0) {
-            // Auto-select FH if it exists
-            const fh = data.find(w => w.warehouse_id === 'FH')
-            selectedWarehouse.value = fh ? fh.warehouse_id : data[0].warehouse_id
-        }
-    } catch (e) {
-        console.error('Error fetching warehouses', e)
-    }
-}
-
-// --- Inventory Logic ---
-const inventoryRows = ref<InventoryItem[]>([])
-const inventoryLoading = ref(false)
-const selectedInventoryItem = ref<InventoryItem[]>([])
-const selectedIntakeLotId = ref('')
-const showAllInventory = ref(false)
-const showHistoryDialog = ref(false)
-const showIntakeLabelDialog = ref(false)
-const selectedHistoryItem = ref<any>(null)
-const intakeLabelData = ref<any>(null)
-const selectedPrinter = ref('TSC_MB241')
-
-const printIntakeLabel = () => {
-    window.print()
-}
-
-const openIntakeLabelDialog = (item: any) => {
-    // Robust mapping for label data to handle potential database naming variations
-    // (e.g., PascalCase from MSSQL vs camelCase from proxy)
-    const normalizedData = {
-        intake_lot_id: item.intake_lot_id || item.IntakeLotId || item.intake_lot || '',
-        lot_id: item.lot_id || item.LotId || item.supplier_lot || '',
-        re_code: item.re_code || item.ReCode || item.material_code || '',
-        mat_sap_code: item.mat_sap_code || item.MatSapCode || item.sap_code || '',
-        intake_vol: Number(item.intake_vol ?? item.IntakeVol ?? item.intake_volume ?? item.remain_vol ?? 0),
-        package_intake: Number(item.package_intake ?? item.PackageIntake ?? item.packages ?? 1),
-        expire_date: item.expire_date || item.ExpireDate || '',
-        material_description: item.material_description || item.MaterialDescription || item.description || ''
-    }
-    
-    console.log('Mapping intake label data:', { source: item, mapped: normalizedData })
-    intakeLabelData.value = normalizedData
-    showIntakeLabelDialog.value = true
-}
-
-const onViewHistory = (item: any) => {
-    selectedHistoryItem.value = item
-    showHistoryDialog.value = true
-}
-
-const inventoryColumns = computed<QTableColumn[]>(() => [
-    { name: 'id', align: 'center', label: t('common.id'), field: 'id', sortable: true },
-    { name: 'intake_lot_id', align: 'left', label: t('preBatch.intakeLotId'), field: 'intake_lot_id', sortable: true },
-    { name: 'warehouse_location', align: 'center', label: t('preBatch.fromWarehouse'), field: 'warehouse_location' },
-    { name: 'lot_id', align: 'left', label: t('ingredient.lotId'), field: 'lot_id' },
-    { name: 'mat_sap_code', align: 'left', label: t('ingredient.matSapCode'), field: 'mat_sap_code' },
-    { name: 're_code', align: 'center', label: t('ingredient.reCode'), field: 're_code' },
-    { name: 'material_description', align: 'left', label: t('common.description'), field: 'material_description' },
-    { name: 'uom', align: 'center', label: t('ingredient.uom'), field: 'uom' },
-    { name: 'intake_vol', align: 'right', label: t('ingredient.intakeVolume'), field: 'intake_vol' },
-    { name: 'remain_vol', align: 'right', label: t('ingredient.remainVolume'), field: 'remain_vol', classes: 'text-red text-weight-bold' },
-    { name: 'intake_package_vol', align: 'right', label: t('ingredient.pkgVol'), field: 'intake_package_vol' },
-    { name: 'package_intake', align: 'center', label: t('ingredient.pkgs'), field: 'package_intake' },
-    { name: 'expire_date', align: 'center', label: t('ingredient.expiryDate'), field: 'expire_date', format: (val: any) => formatDate(val) },
-    { name: 'po_number', align: 'left', label: t('ingredient.poNo'), field: 'po_number' },
-    { name: 'manufacturing_date', align: 'center', label: t('preBatch.mfgDate'), field: 'manufacturing_date', format: (val: any) => formatDate(val) },
-    { name: 'status', align: 'center', label: t('common.status'), field: 'status' },
-    { name: 'actions', align: 'center', label: t('common.actions'), field: 'id' }
-])
-
-const filteredInventory = computed(() => {
-    // If no ingredient selected, show empty
-    if (!selectedReCode.value) return []
-    // Filter by re_code, sort by expire_date then intake_lot_id (FIFO/FEFO)
-    return inventoryRows.value
-        .filter(item => {
-            const reMatch = (item.re_code || '').trim().toUpperCase() === selectedReCode.value.trim().toUpperCase()
-            // Only on-hand (>0) and Active items (unless showAll)
-            const hasStock = item.remain_vol > 0
-            const statusOk = showAllInventory.value || item.status === 'Active'
-            return reMatch && hasStock && statusOk
-        })
-        .sort((a, b) => {
-             // Primary: expire_date ascending (FIFO/FEFO)
-             const dateA = a.expire_date ? new Date(a.expire_date).getTime() : Infinity
-             const dateB = b.expire_date ? new Date(b.expire_date).getTime() : Infinity
-             if (dateA !== dateB) return dateA - dateB
-             // Secondary: intake_lot_id ascending
-             return (a.intake_lot_id || '').localeCompare(b.intake_lot_id || '')
-        })
-})
-
-// Validate FIFO compliance: Must be the earliest expiring item (or same date)
-const isFIFOCompliant = (item: InventoryItem) => {
-    if (!item || !item.expire_date) return false // Should have expire date
-    const list = filteredInventory.value
-    if (list.length === 0) return false
-    
-    const fifoItem = list[0]
-    // If FIFO item has no date, then any item is arguably valid, or invalid?
-    if (!fifoItem || !fifoItem.expire_date) return true 
-    
-    // Strict comparison: Date must be <= FIFO Date
-    const d1 = formatDate(item.expire_date)
-    const fifoDate = formatDate(fifoItem.expire_date)
-    
-    if (!d1 || !fifoDate) return true // Cannot strictly enforce if dates missing
-    
-    return d1 <= fifoDate
-}
-
-// Watcher for manually typed/scanned intake lot id
-watch(selectedIntakeLotId, (newVal) => {
-    if (!newVal) {
-        if (selectedInventoryItem.value.length > 0) {
-             selectedInventoryItem.value = []
-        }
-        return
-    }
-    
-    // Find candidate by exact match (case insensitive)
-    const match = filteredInventory.value.find(i => 
-        i.intake_lot_id === newVal || i.intake_lot_id.toLowerCase() === newVal.toLowerCase()
-    )
-    
-    if (match) {
-        if (isFIFOCompliant(match)) {
-            selectedInventoryItem.value = [match]
-            // Silent success for scanning
-        } else {
-             // FIFO Violation
-             const fifoItem = filteredInventory.value[0]
-             const expDate = formatDate(fifoItem?.expire_date) || 'N/A'
-             const expectedLot = fifoItem ? fifoItem.intake_lot_id : 'Unknown'
-             
-             $q.notify({
-                 type: 'negative',
-                 message: `FIFO Violation! Expected Lot: ${expectedLot} (Exp: ${expDate})`,
-                 position: 'top',
-                 timeout: 4000
-             })
-             // Reject selection but keep input visible for correction
-             selectedInventoryItem.value = []
-        }
-    } else {
-        // No match found
-        selectedInventoryItem.value = []
-    }
-})
-
-const simulateScan = () => {
-    // Pick the first item from FIFO sorted list
-    if (filteredInventory.value.length > 0) {
-        const item = filteredInventory.value[0]
-        if (item) {
-            selectedIntakeLotId.value = item.intake_lot_id
-            selectedInventoryItem.value = [item]
-            $q.notify({ type: 'positive', message: `Simulated Scan: Selected ${item.intake_lot_id} (FIFO)` })
-        }
-    } else {
-        $q.notify({ type: 'warning', message: 'No inventory available to scan' })
-    }
-}
-
-const sortedAllInventory = computed(() => {
-    // Sort by expire_date ascending (FIFO/FEFO)
-    return [...inventoryRows.value]
-      .filter(i => i.remain_vol > 0 && i.status === 'Active')
-      .sort((a, b) => {
-          const dateA = a.expire_date ? new Date(a.expire_date).getTime() : Infinity
-          const dateB = b.expire_date ? new Date(b.expire_date).getTime() : Infinity
-          return dateA - dateB
-      })
-})
-
-const inventorySummary = computed(() => {
-    const sum = {
-        remain_vol: 0,
-        pkgs: 0
-    }
-    filteredInventory.value.forEach(item => {
-        sum.remain_vol += Number(item.remain_vol) || 0
-        sum.pkgs += Number(item.package_intake) || 0
-    })
-    return sum
-})
-
-const fetchInventory = async () => {
-    try {
-      inventoryLoading.value = true
-      const data = await $fetch<InventoryItem[]>(`${appConfig.apiBaseUrl}/ingredient-intake-lists/`, {
-        headers: getAuthHeader() as Record<string, string>
-      })
-      inventoryRows.value = data
-    } catch (error) {
-      console.error('Error fetching inventory:', error)
-    } finally {
-      inventoryLoading.value = false
-    }
-}
-const updateInventoryStatus = async (item: InventoryItem, newStatus: string) => {
-    try {
-        await $fetch(`${appConfig.apiBaseUrl}/ingredient-intake-lists/${item.id}`, {
-            method: 'PUT',
-            body: { ...item, status: newStatus },
-            headers: getAuthHeader() as Record<string, string>
-        })
-        $q.notify({ type: 'positive', message: `Status updated to ${newStatus}`, position: 'top' })
-        await fetchInventory()
-    } catch (e) {
-        console.error('Error updating status', e)
-        $q.notify({ type: 'negative', message: 'Failed to update status', position: 'top' })
-    }
-}
-
-// Handle inventory row selection
-const onInventoryRowClick = (evt: any, row: InventoryItem) => {
-    if (isFIFOCompliant(row)) {
-        selectedInventoryItem.value = [row]
-        selectedIntakeLotId.value = row.intake_lot_id
-        
-        $q.notify({
-            type: 'positive',
-            message: `Selected: ${row.intake_lot_id}`,
-            position: 'top',
-            timeout: 1000
-        })
-    } else {
-         const fifoItem = filteredInventory.value[0]
-         if (fifoItem) {
-             $q.notify({
-                 type: 'negative',
-                 message: `FIFO Violation! Expected Lot: ${fifoItem.intake_lot_id} (Exp: ${formatDate(fifoItem.expire_date) || 'N/A'})`,
-                 position: 'top',
-                 timeout: 3000
-             })
-         }
-         // Do not select
-    }
-}
-
-
-// Watch for production plan changes
-watch(selectedProductionPlan, () => {
-  filterBatchesByPlan()
-  fetchPreBatchRecords()
-})
-
-// Watch for batch selection changes
-watch(selectedBatchIndex, () => {
-  updateRequireVolume()
-  fetchPreBatchRecords()
-})
-
-onUnmounted(() => {
-  // cleanup if needed
-})
-
-// Control Fields
-const requireVolume = ref(0)
-const packageSize = ref(0)
-
-const totalCompletedWeight = computed(() => {
-    if (!selectedBatch.value || !selectedReCode.value) return 0
-    const batchId = selectedBatch.value.batch_id
-    const ingLogs = preBatchLogs.value.filter(log => 
-        log.re_code === selectedReCode.value && 
-        log.batch_record_id.startsWith(batchId)
-    )
-    return ingLogs.reduce((sum, log) => sum + (Number(log.net_volume) || 0), 0)
-})
-
-const completedCount = computed(() => {
-    if (!selectedBatch.value || !selectedReCode.value) return 0
-    const batchId = selectedBatch.value.batch_id
-    return preBatchLogs.value.filter(log => 
-        log.re_code === selectedReCode.value && 
-        log.batch_record_id.startsWith(batchId)
-    ).length
-})
-
-const nextPackageNo = computed(() => {
-    if (!selectedBatch.value || !selectedReCode.value) return 1
-    const batchId = selectedBatch.value.batch_id
-    
-    // Get all existing package numbers for this ingredient in this batch
-    const existingNos = preBatchLogs.value
-        .filter(log => log.re_code === selectedReCode.value && log.batch_record_id.startsWith(batchId))
-        .map(log => Number(log.package_no))
-        .sort((a, b) => a - b)
-    
-    // Find the first hole or the next number
-    let next = 1
-    while (existingNos.includes(next)) {
-        next++
-    }
-    return next
-})
-
-const remainToBatch = computed(() => {
-    return Math.max(0, requireVolume.value - totalCompletedWeight.value - actualScaleValue.value)
-})
-
-const targetWeight = computed(() => {
-    if (requireVolume.value <= 0 || packageSize.value <= 0) return 0
-    // Remaining after completed packages only (not current scale reading)
-    const remainAfterCompleted = Math.max(0, requireVolume.value - totalCompletedWeight.value)
-    return Math.min(remainAfterCompleted, packageSize.value)
-})
-
-const requestBatch = computed(() => {
-    if (packageSize.value <= 0) return 0
-    return Math.ceil(requireVolume.value / packageSize.value)
-})
-
-// --- Package Label Dialog State ---
-const showLabelDialog = ref(false)
-const packageLabelId = ref('')
-const capturedScaleValue = ref(0)
-const renderedLabel = ref('')
-
-// --- Shared label-data helpers ---
-const buildLotStrings = (origins: any[] | undefined, fallbackLotId?: string, fallbackVol?: number) => ({
-  Lot1: origins?.[0] ? `1. ${origins[0].intake_lot_id} / ${(origins[0].take_volume || 0).toFixed(4)} kg` : (fallbackLotId ? `1. ${fallbackLotId} / ${(fallbackVol ?? 0).toFixed(4)} kg` : ''),
-  Lot2: origins?.[1] ? `2. ${origins[1].intake_lot_id} / ${(origins[1].take_volume || 0).toFixed(4)} kg` : '',
-})
-
-const buildLabelData = (opts: { batch: any, planId: string, plan: any, reCode: string, ingName: string, matSapCode: string, netVol: number, totalVol: number, pkgNo: number | string, qrCode: string, timestamp: string, origins?: any[], fallbackLotId?: string }) => ({
-  SKU: opts.batch.sku_id || '-',
-  PlanId: opts.planId || '-',
-  BatchId: opts.batch.batch_id || opts.batch.batchId || '-',
-  IngredientID: opts.ingName || '-',
-  Ingredient_ReCode: opts.reCode || '-',
-  mat_sap_code: opts.matSapCode || '-',
-  PlanStartDate: opts.plan?.start_date || '-',
-  PlanFinishDate: opts.plan?.finish_date || '-',
-  PlantId: opts.plan?.plant || '-',
-  PlantName: '-',
-  Timestamp: opts.timestamp,
-  PackageSize: opts.netVol.toFixed(4),
-  BatchRequireSize: opts.totalVol.toFixed(4),
-  PackageNo: opts.pkgNo,
-  QRCode: opts.qrCode,
-  ...buildLotStrings(opts.origins, opts.fallbackLotId, opts.netVol),
-})
-
-const labelDataMapping = computed(() => {
-  if (!selectedBatch.value || !selectedReCode.value) return null
-  const ing = selectableIngredients.value.find(i => i.re_code === selectedReCode.value)
-  const pkgNo = nextPackageNo.value
-
-  return buildLabelData({
-    batch: selectedBatch.value,
-    planId: selectedProductionPlan.value,
-    plan: selectedPlanDetails.value,
-    reCode: selectedReCode.value,
-    ingName: ing?.ingredient_name || '-',
-    matSapCode: ing?.mat_sap_code || '-',
-    netVol: capturedScaleValue.value,
-    totalVol: requireVolume.value,
-    pkgNo,
-    qrCode: `${selectedBatch.value.plan_id},${selectedBatch.value.batch_id},${selectedBatch.value.batch_id}${selectedReCode.value}${String(pkgNo).padStart(2, '0')},${selectedReCode.value},${capturedScaleValue.value}`,
-    timestamp: formatDate(new Date().toISOString()),
-    origins: currentPackageOrigins.value.length > 0 ? currentPackageOrigins.value : undefined,
-  })
-})
-
-const updateDialogPreview = async () => {
-  if (labelDataMapping.value) {
-    const svg = await generateLabelSvg('prebatch-label', labelDataMapping.value)
-    renderedLabel.value = svg || ''
-  }
-}
-
-watch(showLabelDialog, (val) => {
-  if (val) updateDialogPreview()
-})
-
-const packingBoxLabelDataMapping = computed(() => {
-  if (!selectedBatch.value || selectedPreBatchLogs.value.length === 0) return null
-  
-  const totalWeight = selectedPreBatchLogs.value.reduce((sum, row) => sum + (Number(row.net_volume) || 0), 0)
-  const bagCount = selectedPreBatchLogs.value.length
-  
-  return {
-    BoxID: selectedBatch.value.plan_id || '-',
-    BatchID: selectedBatch.value.batch_id || '-',
-    BagCount: bagCount,
-    NetWeight: totalWeight.toFixed(2),
-    Operator: user.value?.username || '-',
-    Timestamp: new Date().toLocaleString('en-GB'),
-    BoxQRCode: `${selectedBatch.value.plan_id},${selectedBatch.value.batch_id},BOX,${bagCount},${totalWeight.toFixed(2)}`
-  }
-})
-
-const updatePackingBoxPreview = async () => {
-  if (packingBoxLabelDataMapping.value) {
-    const svg = await generateLabelSvg('packingbox-label', packingBoxLabelDataMapping.value)
-    renderedPackingBoxLabel.value = svg || ''
-  }
-}
-
-watch(showPackingBoxLabelDialog, (val) => {
-  if (val) updatePackingBoxPreview()
-})
-
-const onPrintPackingBoxLabel = async () => {
-  if (!packingBoxLabelDataMapping.value) return
-  
-  if (renderedPackingBoxLabel.value) {
-    printLabel(renderedPackingBoxLabel.value)
-    $q.notify({ type: 'positive', message: 'Packing Box Label Sent to Printer' })
-    showPackingBoxLabelDialog.value = false
-    selectedPreBatchLogs.value = [] // Clear selection after print
-  }
-}
-
-const batchedVolume = ref(0) // Total volume already batched
-const remainVolume = computed(() => {
-    return Math.max(0, requireVolume.value - batchedVolume.value)
-})
-
-// Computed Actual Scale Value based on selected scale
-const activeScale = computed(() => scales.value.find(s => s.id === selectedScale.value))
-
-const actualScaleValue = computed(() => {
-  return activeScale.value ? activeScale.value.value : 0
-})
-
-// Automate scale selection based on Package Size
-watch(packageSize, (val) => {
-  if (val <= 0) {
-    selectedScale.value = 0
-  } else if (val <= 10) {
-    selectedScale.value = 1
-  } else if (val <= 30) {
-    selectedScale.value = 2
-  } else {
-    selectedScale.value = 3
-  }
-})
-const filteredPreBatchLogs = computed(() => {
-    return preBatchLogs.value
-})
-
-const preBatchSummary = computed(() => {
-    const logs = filteredPreBatchLogs.value
-    const totalNetWeight = logs.reduce((sum, log) => sum + (log.net_volume || 0), 0)
-    const count = logs.length
-    const targetW = requireVolume.value || 0
-    const errorVol = totalNetWeight - targetW
-    
-    return {
-        count,
-        totalNetWeight: totalNetWeight.toFixed(4),
-        targetCount: requestBatch.value || 0,
-        targetWeight: targetW.toFixed(4),
-        errorVolume: errorVol.toFixed(4),
-        errorColor: errorVol > 0 ? 'text-red' : (errorVol < 0 ? 'text-orange' : 'text-green')
-    }
-})
-
-// Check if out of tolerance
-const isToleranceExceeded = computed(() => {
-  if (!activeScale.value) return false
-  const diff = Math.abs(targetWeight.value - actualScaleValue.value)
-  return diff > activeScale.value.tolerance
-})
-
-const isPackagedVolumeInTol = computed(() => {
-  if (!activeScale.value || targetWeight.value <= 0) return false
-  const diff = Math.abs(targetWeight.value - batchedVolume.value)
-  return diff <= activeScale.value.tolerance
-})
-
-const packagedVolumeBgColor = computed(() => {
-  if (batchedVolume.value <= 0) return 'grey-2' // Neutral if empty
-  return isPackagedVolumeInTol.value ? 'green-13' : 'yellow-13'
-})
-
-// Sync Packaged Volume with Active Scale live when ingredient is selected
-watch(actualScaleValue, (newVal) => {
-  if (selectedReCode.value) {
-    batchedVolume.value = newVal
-  } else {
-    batchedVolume.value = 0
-  }
-}, { immediate: true })
-
-// Also sync if ingredient just got selected to catch current scale value immediately
-watch(selectedReCode, (newReCode) => {
-  currentPackageOrigins.value = [] // reset origins when ingredient changes
-  if (newReCode) {
-    batchedVolume.value = actualScaleValue.value
-  } else {
-    batchedVolume.value = 0
-  }
-})
-
-// New state for multi-lot tracking
-const currentPackageOrigins = ref<{intake_lot_id: string, mat_sap_code: string | null, take_volume: number}[]>([])
-
-const getOriginDelta = () => {
-   const reading = actualScaleValue.value
-   const recorded = currentPackageOrigins.value.reduce((s, o) => s + o.take_volume, 0)
-   return reading - recorded
-}
-
-const onAddLot = () => {
-   if (!selectedIntakeLotId.value) return
-   const delta = getOriginDelta()
-   if (delta <= 0.0001) {
-      $q.notify({type: 'warning', message: 'No new net volume to add since last lot'})
-      return
-   }
-   const ing = selectableIngredients.value.find(i => i.re_code === selectedReCode.value)
-   currentPackageOrigins.value.push({ intake_lot_id: selectedIntakeLotId.value, mat_sap_code: ing?.mat_sap_code || null, take_volume: delta })
-   $q.notify({ type: 'positive', message: `Added ${delta.toFixed(4)}kg from lot ${selectedIntakeLotId.value}`, position: 'top' })
-   selectedIntakeLotId.value = ''
-   selectedInventoryItem.value = []
-}
-
-const onRemoveLot = (index: number) => {
-    currentPackageOrigins.value.splice(index, 1)
-}
-
-// PreBatch Records from database
-const preBatchLogs = ref<any[]>([])
-
-const prebatchColumns: QTableColumn[] = [
-    { name: 'batch_id', align: 'left', label: 'Batch ID', field: 'batch_record_id', format: (val: string) => val.split('-').slice(0, 6).join('-'), classes: 'text-caption' },
-    { name: 're_code', align: 'left', label: 'Ingredient', field: 're_code', sortable: true },
-    { name: 'package_no', align: 'center', label: 'Pkg', field: 'package_no' },
-    { name: 'net_volume', align: 'right', label: 'Net (kg)', field: 'net_volume', format: (val: any) => Number(val).toFixed(4) },
-    { name: 'intake_lot_id', align: 'left', label: 'Intake Lot', field: 'intake_lot_id', sortable: true },
-    { name: 'reprint', align: 'center', label: 'Print', field: 'id' },
-    { name: 'actions', align: 'center', label: '', field: 'id' }
-]
-
-const fetchPreBatchRecords = async () => {
-  if (!selectedBatch.value) return
-  try {
-    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-recs/by-batch/${selectedBatch.value.batch_id}`, {
-      headers: getAuthHeader() as Record<string, string>
-    })
-    preBatchLogs.value = data
-  } catch (error) {
-    console.error('Error fetching prebatch records:', error)
-  }
-}
-
-const recordToDelete = ref<any>(null)
-
-const executeDeletion = async (record: any) => {
-    try {
-      await $fetch(`${appConfig.apiBaseUrl}/prebatch-recs/${record.id}`, {
-        method: 'DELETE',
-        headers: getAuthHeader() as Record<string, string>
-      })
-      
-      $q.notify({ 
-        type: 'positive', 
-        message: `Package #${record.package_no} cancelled. Inventory restored.`,
-        icon: 'restore'
-      })
-      
-      showDeleteDialog.value = false
-      recordToDelete.value = null
-      deleteInput.value = ''
-      
-      await fetchPreBatchRecords()
-      if (selectedBatch.value) {
-      await fetchPrebatchItems(selectedBatch.value.batch_id)
-      }
-    } catch (err) {
-      console.error('Error deleting record:', err)
-      $q.notify({ type: 'negative', message: 'Failed to cancel record' })
-    }
-}
-
-const onDeleteRecord = (record: any) => {
-  recordToDelete.value = record
-  deleteInput.value = ''
-  showDeleteDialog.value = true
-}
-
-const onConfirmDeleteManual = async () => {
-    if (!recordToDelete.value) return
-    
-    const val = deleteInput.value.trim()
-    if (val === String(recordToDelete.value.package_no) || val === recordToDelete.value.batch_record_id) {
-        await executeDeletion(recordToDelete.value)
-    } else {
-        $q.notify({ 
-          type: 'negative', 
-          message: 'Invalid input. Please scan the label or type the exact package number.',
-          position: 'top'
-        })
-    }
-}
-
-// Watch for scans during deletion mode
-// Delete confirmation via typed input (keyboard scanner emulator)
-const onDeleteScanEnter = async () => {
-  if (!showDeleteDialog.value || !recordToDelete.value) return
-
-  if (deleteInput.value === recordToDelete.value.batch_record_id) {
-    await executeDeletion(recordToDelete.value)
-  } else {
-    $q.notify({ 
-      type: 'negative', 
-      message: `Invalid code! Expected: ${recordToDelete.value.batch_record_id}`,
-      position: 'top',
-      timeout: 3000
-    })
-  }
-}
-
-const unlockPackageSize = () => {
-    if (!isPackageSizeLocked.value) {
-        isPackageSizeLocked.value = true
-        return
-    }
-    authPassword.value = ''
-    showAuthDialog.value = true
-}
-
-const verifyAuth = async () => {
-    if (!user.value || !authPassword.value) return
-    
-    try {
-        const payload = {
-            username_or_email: user.value.username,
-            password: authPassword.value
-        }
-        
-        await $fetch(`${appConfig.apiBaseUrl}/auth/verify`, {
-            method: 'POST',
-            body: payload
-        })
-        
-        isPackageSizeLocked.value = false
-        showAuthDialog.value = false
-        authPassword.value = ''
-        $q.notify({ type: 'positive', message: 'Authorization successful' })
-    } catch (err) {
-        $q.notify({ type: 'negative', message: 'Invalid password. Authorization failed.' })
-    }
-}
-
-
-
-const onIngredientSelect = () => {
-    // When ingredient is selected, we should fetch/filter the PreBatch List
-    // For now, we simulate this by refreshing the mock logs or showing a notification
-    // If backend existed: fetchPreBatchLogs(planId, reCode)
-    
-    if (selectedReCode.value) {
-        // Auto-select first inventory item (FIFO - First In First Out)
-        // The filteredInventory is already filtered by re_code
-        if (filteredInventory.value.length > 0) {
-            const firstItem = filteredInventory.value[0]
-            if (firstItem) {
-                selectedInventoryItem.value = [firstItem]
-                selectedIntakeLotId.value = firstItem.intake_lot_id
-                
-                $q.notify({
-                    type: 'positive', 
-                    message: t('preBatch.autoSelectedFifo', { id: firstItem.intake_lot_id }),
-                    position: 'top',
-                    timeout: 1000
-                })
-            }
-        } else {
-            // No inventory available
-            selectedInventoryItem.value = []
-            selectedIntakeLotId.value = ''
-            
-            $q.notify({
-                type: 'warning', 
-                message: t('preBatch.noInventoryFor', { id: selectedReCode.value }),
-                position: 'top',
-                timeout: 1000
-            })
-        }
-    }
-}
-
-const onIngredientDoubleClick = (ingredient: any) => {
-    // Fill Require Volume with the calculated total requirement
-    if (ingredient && ingredient.total_require !== undefined) {
-        requireVolume.value = Number(ingredient.total_require.toFixed(3))
-        
-        // Auto-fill Package Size from ingredient standard
-        if (ingredient.std_package_size) {
-            packageSize.value = Number(ingredient.std_package_size)
-        }
-        
-        $q.notify({
-            type: 'positive',
-            message: t('preBatch.initBatching', { id: ingredient.re_code }),
-            position: 'top',
-            timeout: 500
-        })
-    }
-}
-
-// Watch for preBatchLogs or selectedBatch to update isDone status of selectableIngredients
-watch([preBatchLogs, selectedBatch], ([logs, batch]) => {
-    if (!logs || !batch) {
-        selectableIngredients.value.forEach(ing => ing.isDone = false)
-        return
-    }
-    
-    let allDone = true
-    selectableIngredients.value.forEach(ing => {
-        // Filter logs that belong to this specific batch and ingredient
-        const ingLogs = logs.filter(l => l.re_code === ing.re_code && l.batch_record_id.startsWith(batch.batch_id))
-        
-        if (ingLogs.length > 0) {
-            // Find max package_no recorded for this specific batch
-            const maxPkg = Math.max(...ingLogs.map(l => l.package_no || 0))
-            const totalPkgs = ingLogs[0]?.total_packages || 0
-            if (maxPkg >= totalPkgs && totalPkgs > 0) {
-                ing.isDone = true
-            } else {
-                ing.isDone = false
-                allDone = false
-            }
-        } else {
-            ing.isDone = false
-            allDone = false
-        }
-    })
-
-    // If all ingredients for this batch are done, update the ProductionBatch status in backend
-    if (selectableIngredients.value.length > 0 && allDone && !batch.batch_prepare) {
-        finalizeBatchPreparation(batch.id)
-    }
-}, { deep: true })
-
-const finalizeBatchPreparation = async (batchId: number) => {
-    try {
-        await $fetch(`${appConfig.apiBaseUrl}/production-batches/${batchId}`, {
-            method: 'PUT',
-            body: { batch_prepare: true, status: 'Prepared' },
-            headers: getAuthHeader() as Record<string, string>
-        })
-        $q.notify({ type: 'positive', message: t('preBatch.prepFinalized'), position: 'top' })
-        // Refresh all batch info to reflect status change
-        await fetchBatchIds()
-    } catch (e) {
-        console.error('Failed to finalize batch preparation', e)
-    }
-}
-
-// --- Helper for Scale Styling ---
-const getScaleClass = (scale: any) => {
-  if (selectedScale.value !== scale.id) {
-    // Unselected card background
-    return 'scale-card-border bg-grey-1'
-  }
-  // Selected card background (keep neutral to let display color pop)
-  return 'active-scale-border bg-white'
-}
-
-const getDisplayClass = (scale: any) => {
-  // 0. Error state - Red Blink (Priority over selection)
-  if (scale.isError) {
-    return 'bg-red-blink text-white'
-  }
-
-  // 1. Not selected - Gray (Inactive)
-  if (selectedScale.value !== scale.id) {
-    return 'bg-grey-4 text-grey-6' 
-  }
-  
-  // 2. Selected
-  const diff = Math.abs(targetWeight.value - scale.value)
-  // Check if within tolerance
-  if (targetWeight.value > 0 && diff <= scale.tolerance) {
-    // In Range -> Green
-    return 'bg-green-6 text-white'
-  }
-  
-  // 3. Selected but Not in Range (or request is 0) -> Yellow
-  return 'bg-yellow-13 text-black'
-}
-
-// --- Actions ---
-const onTare = (scaleId: number) => {
-  $q.notify({
-    type: 'info',
-    message: `Tare command sent to Scale ${scaleId}`,
-    position: 'top',
-    timeout: 1000,
-  })
-}
-
-// --- Package Label Dialog ---
-const openLabelDialog = () => {
-  capturedScaleValue.value = actualScaleValue.value
-  if (selectedBatch.value && selectedReCode.value) {
-    packageLabelId.value = `${selectedBatch.value.batch_id}-${selectedReCode.value}-${nextPackageNo.value}`
-  } else {
-    packageLabelId.value = ''
-  }
-  showLabelDialog.value = true
-}
-
-// onReprint removed — use onReprintLabel(record) instead
-
-const onPrintLabel = async () => {
-  if (!selectedBatch.value || !selectedReCode.value) {
-    $q.notify({ type: 'warning', message: 'Missing Batch or Ingredient selection' })
-    return
-  }
-
-  try {
-    const pkgNo = nextPackageNo.value
-    const totalPkgs = requestBatch.value
-    
-    if (isNaN(pkgNo) || isNaN(totalPkgs)) {
-        throw new Error('Invalid package numbers')
-    }
-
-    const ing = ingredients.value.find(i => i.re_code === selectedReCode.value)
-
-    // Capture dynamic scale data for record
-    const recordData = {
-      req_id: selectedRequirementId.value,
-      batch_record_id: `${selectedBatch.value.batch_id}-${selectedReCode.value}-${pkgNo}`,
-      plan_id: selectedProductionPlan.value,
-      re_code: selectedReCode.value,
-      package_no: pkgNo,
-      total_packages: totalPkgs,
-      net_volume: capturedScaleValue.value,
-      total_volume: requireVolume.value,
-      total_request_volume: targetWeight.value,
-      intake_lot_id: currentPackageOrigins.value[0]?.intake_lot_id || selectedIntakeLotId.value, // primary lot backward compatibility
-      mat_sap_code: ing?.mat_sap_code || null,
-      recode_batch_id: String(pkgNo).padStart(2, '0'),
-      origins: currentPackageOrigins.value
-    }
-
-    // 1. Save to Database
-    await $fetch(`${appConfig.apiBaseUrl}/prebatch-recs/`, {
-      method: 'POST',
-      body: recordData,
-      headers: getAuthHeader() as Record<string, string>
-    })
-
-    // 2. Generate and Print SVG Label
-    if (labelDataMapping.value) {
-      const svg = await generateLabelSvg('prebatch-label', labelDataMapping.value)
-      if (svg) {
-        printLabel(svg)
-      }
-    }
-
-    $q.notify({ type: 'positive', message: t('preBatch.saveAndPrintSuccess'), position: 'top' })
-    
-    // Refresh prebatch logs
-    await fetchPreBatchRecords()
-    
-    // Check if finished
-    if (pkgNo >= totalPkgs) {
-        $q.notify({ type: 'info', message: t('preBatch.allPkgsCompleted') })
-        if (selectedBatch.value) {
-            const doneBatchId = selectedBatch.value.batch_id
-            const doneReCode = selectedReCode.value
-            await updatePrebatchItemStatus(doneBatchId, doneReCode, 2)
-            
-            // Refresh batch ingredients cache for this batch
-            await onBatchExpand({ batch_id: doneBatchId })
-            
-            // Refresh plan-level summary
-            const plan = productionPlans.value.find(p => p.plan_id === selectedProductionPlan.value)
-            if (plan) await onPlanShow(plan)
-            
-            // Auto-advance to next batch for same ingredient
-            await advanceToNextBatch(doneBatchId, doneReCode)
-        }
-    }
-
-    showLabelDialog.value = false
-    currentPackageOrigins.value = []
-    selectedIntakeLotId.value = ''
-  } catch (error) {
-    console.error('Error saving prebatch record:', error)
-    $q.notify({ type: 'negative', message: 'Failed to save record' })
-  }
-}
-
-const onReprintLabel = async (record: any) => {
-  if (!record || !selectedBatch.value) return
-  try {
-    const data = buildLabelData({
-      batch: selectedBatch.value,
-      planId: record.plan_id || selectedProductionPlan.value,
-      plan: selectedPlanDetails.value,
-      reCode: record.re_code,
-      ingName: record.ingredient_name || '-',
-      matSapCode: record.mat_sap_code || '-',
-      netVol: Number(record.net_volume),
-      totalVol: Number(record.total_volume),
-      pkgNo: record.package_no,
-      qrCode: `${selectedBatch.value.plan_id},${record.batch_record_id},${record.prebatch_id || ''},${record.re_code},${record.net_volume}`,
-      timestamp: new Date(record.created_at || Date.now()).toLocaleString('en-GB'),
-      origins: record.origins?.length > 0 ? record.origins : undefined,
-      fallbackLotId: record.intake_lot_id,
-    })
-    const svg = await generateLabelSvg('prebatch-label', data)
-    if (svg) {
-      printLabel(svg)
-      $q.notify({ type: 'info', message: 'Reprinting label...', position: 'top', timeout: 800 })
-    }
-  } catch (err) {
-    console.error('Reprint failed:', err)
-    $q.notify({ type: 'negative', message: 'Reprint failed' })
-  }
-}
-
-const quickReprint = async (ing: any) => {
-  if (!ing || !selectedBatch.value) return
-  const batchId = selectedBatch.value.batch_id
-  const logs = preBatchLogs.value.filter(l => l.re_code === ing.re_code && l.batch_record_id.startsWith(batchId))
-  if (logs.length > 0) {
-    // Reprint the last one
-    const lastRecord = logs.reduce((prev: any, current: any) => (prev.package_no > current.package_no) ? prev : current)
-    await onReprintLabel(lastRecord)
-  } else {
-    $q.notify({ type: 'warning', message: 'No records found to reprint' })
-  }
-}
-
-const printAllBatchLabels = async (batchId: string, reCode: string, requiredVolume: number) => {
-  const packages = getPackagePlan(batchId, reCode, requiredVolume)
-  if (packages.length === 0) {
-    $q.notify({ type: 'warning', message: 'No packages found for this batch' })
-    return
-  }
-
-  const ing = ingredients.value.find(i => i.re_code === reCode)
-  const plan = selectedPlanDetails.value
-  const batch = { batch_id: batchId, sku_id: plan?.sku_id || '-', plan_id: plan?.plan_id || selectedProductionPlan.value }
-
-  $q.notify({ type: 'info', message: `Generating ${packages.length} labels...`, position: 'top', timeout: 1500 })
-
-  const allSvgs: string[] = []
-
-  for (const pkg of packages) {
-    try {
-      const volume = pkg.actual !== null ? pkg.actual : pkg.target
-      const data = buildLabelData({
-        batch,
-        planId: batch.plan_id,
-        plan,
-        reCode,
-        ingName: ing?.name || reCode,
-        matSapCode: ing?.mat_sap_code || '-',
-        netVol: volume,
-        totalVol: requiredVolume,
-        pkgNo: `${pkg.pkg_no}/${packages.length}`,
-        qrCode: `${batch.plan_id},${batchId}-${reCode}-${pkg.pkg_no},${pkg.log?.prebatch_id || ''},${reCode},${volume}`,
-        timestamp: pkg.log ? new Date(pkg.log.created_at || Date.now()).toLocaleString('en-GB') : new Date().toLocaleString('en-GB'),
-        origins: pkg.log?.origins?.length > 0 ? pkg.log.origins : undefined,
-        fallbackLotId: pkg.log?.intake_lot_id,
-      })
-      const svg = await generateLabelSvg('prebatch-label', data)
-      if (svg) allSvgs.push(svg)
-    } catch (err) {
-      console.error(`Error generating label #${pkg.pkg_no}:`, err)
-    }
-  }
-
-  if (allSvgs.length > 0) {
-    printLabel(allSvgs)
-    $q.notify({ type: 'positive', message: `Printing ${allSvgs.length} labels`, position: 'top' })
-  } else {
-    $q.notify({ type: 'warning', message: 'No labels generated' })
-  }
-}
-
-
-const onDone = async () => {
-  if (!selectedReCode.value) {
-    $q.notify({ type: 'warning', message: 'Please select an ingredient first' })
-    return
-  }
-  
-  if (completedCount.value >= requestBatch.value && requestBatch.value > 0) {
-    $q.notify({ type: 'warning', message: 'All packages for this ingredient are already completed' })
-    return
-  }
-  
-  // Auto-add remaining delta from scale
-  const remainder = getOriginDelta()
-  if (remainder > 0.0001) {
-      if (!selectedIntakeLotId.value) {
-        $q.notify({ type: 'negative', message: 'Please scan or select an Intake Lot ID to record the remaining weight', position: 'top' })
-        return
-      }
-      const ing = selectableIngredients.value.find(i => i.re_code === selectedReCode.value)
-      currentPackageOrigins.value.push({ intake_lot_id: selectedIntakeLotId.value, mat_sap_code: ing?.mat_sap_code || null, take_volume: remainder })
-  }
-
-  if (currentPackageOrigins.value.length === 0) {
-      $q.notify({ type: 'negative', message: 'No volume recorded. Please weigh and scan lot.', position: 'top' })
-      return
-  }
-
-  capturedScaleValue.value = currentPackageOrigins.value.reduce((s, o) => s + o.take_volume, 0)
-
-  // Open label dialog and save record
-  openLabelDialog()
-}
-
-const onSelectBatch = (index: number) => {
-  selectedBatchIndex.value = index
-}
 </script>
-
 <template>
   <q-page class="q-pa-md bg-white">
     <!-- Page Header -->
