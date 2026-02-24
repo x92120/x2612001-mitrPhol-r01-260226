@@ -181,11 +181,7 @@ const scanDialogBags = computed(() => {
   if (selectedBatch.value) {
     const batchReqs = selectedBatch.value.reqs || []
     const requiredReCodes = new Set(batchReqs.map((r: any) => r.re_code))
-    // If batch has no reqs info, match by batch_record_id instead
-    if (requiredReCodes.size === 0) {
-      const batchId = selectedBatch.value.batch_id
-      return whBags.filter(b => b.batch_record_id?.includes(batchId))
-    }
+    if (requiredReCodes.size === 0) return whBags
     return whBags.filter(b => requiredReCodes.has(b.re_code))
   }
   return whBags
@@ -291,8 +287,10 @@ const onSimScanClick = (bag: any) => {
     return
   }
 
-  const batchId = selectedBatch.value.batch_id
-  const belongsToBox = bag.batch_record_id?.includes(batchId)
+  // Check if this bag belongs to the selected batch via req_id
+  const batchReqs = selectedBatch.value.reqs || []
+  const reqIds = new Set(batchReqs.map((r: any) => r.id))
+  const belongsToBox = reqIds.has(bag.req_id)
 
   if (belongsToBox) {
     // Correct — this bag belongs to the selected packing box
@@ -316,7 +314,7 @@ const onSimScanClick = (bag: any) => {
       type: 'negative',
       icon: 'error',
       message: `❌ Wrong box! This bag belongs to a different batch`,
-      caption: `Bag: ${bag.batch_record_id} ≠ Box: ${batchId}`,
+      caption: `Bag: ${bag.batch_record_id} ≠ Box: ${selectedBatch.value.batch_id}`,
       position: 'top',
       timeout: 3000,
     })
