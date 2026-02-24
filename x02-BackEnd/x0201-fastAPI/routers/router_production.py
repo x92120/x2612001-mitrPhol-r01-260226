@@ -79,6 +79,27 @@ def get_production_batches(skip: int = 0, limit: int = 100, db: Session = Depend
     """Get all production batches."""
     return crud.get_production_batches(db, skip=skip, limit=limit)
 
+# NOTE: This must come BEFORE /production-batches/{batch_id} to avoid route conflict
+@router.get("/production-batches/ready-to-deliver")
+def get_ready_to_deliver(db: Session = Depends(get_db)):
+    """Get batches that have at least one boxed warehouse but are not yet delivered."""
+    batches = db.query(models.ProductionBatch).filter(
+        (models.ProductionBatch.fh_boxed_at.isnot(None)) | (models.ProductionBatch.spp_boxed_at.isnot(None)),
+    ).all()
+    result = []
+    for b in batches:
+        result.append({
+            "id": b.id,
+            "batch_id": b.batch_id,
+            "sku_id": b.sku_id,
+            "plant": b.plant,
+            "fh_boxed_at": b.fh_boxed_at.isoformat() if b.fh_boxed_at else None,
+            "spp_boxed_at": b.spp_boxed_at.isoformat() if b.spp_boxed_at else None,
+            "delivered_at": b.delivered_at.isoformat() if b.delivered_at else None,
+            "delivered_by": b.delivered_by,
+        })
+    return result
+
 @router.get("/production-batches/{batch_id}", response_model=schemas.ProductionBatch)
 def get_production_batch(batch_id: int, db: Session = Depends(get_db)):
     """Get a specific production batch by database ID."""
@@ -308,6 +329,65 @@ def update_packing_status(record_id: int, data: PackingStatusUpdate, db: Session
         "packed_at": rec.packed_at,
         "packed_by": rec.packed_by,
     }
+
+# =============================================================================
+# PACKING & DELIVERY ENDPOINTS
+# =============================================================================
+
+@router.patch("/production-batches/by-batch-id/{batch_id_str}/box-close")
+def close_box(batch_id_str: str, data: schemas.BoxCloseRequest, db: Session = Depends(get_db)):
+    """Mark a warehouse box as closed (Boxed) for a batch."""
+    batch = db.query(models.ProductionBatch).filter(
+        models.ProductionBatch.batch_id == batch_id_str
+    ).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    wh = data.wh.upper()
+    now = datetime.now()
+    if wh == "FH":
+        batch.fh_boxed_at = now
+    elif wh == "SPP":
+        batch.spp_boxed_at = now
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid warehouse: {wh}. Must be FH or SPP.")
+
+    db.commit()
+    db.refresh(batch)
+    return {
+        "status": "success",
+        "batch_id": batch.batch_id,
+        "wh": wh,
+        "boxed_at": now.isoformat(),
+        "fh_boxed_at": batch.fh_boxed_at.isoformat() if batch.fh_boxed_at else None,
+        "spp_boxed_at": batch.spp_boxed_at.isoformat() if batch.spp_boxed_at else None,
+    }
+
+
+@router.patch("/production-batches/by-batch-id/{batch_id_str}/deliver")
+def deliver_batch(batch_id_str: str, data: schemas.DeliveryRequest, db: Session = Depends(get_db)):
+    """Mark a batch as delivered."""
+    batch = db.query(models.ProductionBatch).filter(
+        models.ProductionBatch.batch_id == batch_id_str
+    ).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    now = datetime.now()
+    batch.delivered_at = now
+    batch.delivered_by = data.delivered_by or "operator"
+    db.commit()
+    db.refresh(batch)
+    return {
+        "status": "success",
+        "batch_id": batch.batch_id,
+        "delivered_at": now.isoformat(),
+        "delivered_by": batch.delivered_by,
+    }
+
+
+
+
 
 # =============================================================================
 # DASHBOARD & ANALYTICS
