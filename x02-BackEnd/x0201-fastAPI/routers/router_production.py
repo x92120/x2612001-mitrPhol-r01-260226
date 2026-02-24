@@ -6,7 +6,7 @@ Production plans, batches, and related endpoints.
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
 from typing import List, Optional
 from datetime import datetime
 import logging
@@ -461,3 +461,16 @@ def release_batch_to_production(batch_id: str, db: Session = Depends(get_db)):
     db.commit()
 
     return {"status": "success", "message": "Batch released to production"}
+
+
+@router.post("/sync-prebatch-wh")
+def sync_prebatch_warehouse(db: Session = Depends(get_db)):
+    """Sync all prebatch_reqs.wh from ingredient master warehouse field."""
+    result = db.execute(text("""
+        UPDATE prebatch_reqs pr
+        JOIN ingredients i ON pr.re_code = i.re_code
+        SET pr.wh = i.warehouse
+        WHERE i.warehouse IS NOT NULL AND i.warehouse != '' AND pr.wh != i.warehouse
+    """))
+    db.commit()
+    return {"status": "success", "rows_updated": result.rowcount}
