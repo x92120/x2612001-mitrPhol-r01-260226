@@ -1,5 +1,5 @@
 import logging
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from typing import List, Optional
 import models
@@ -9,16 +9,17 @@ logger = logging.getLogger(__name__)
 
 
 def _populate_wh(records: List[models.PreBatchRec]) -> List[models.PreBatchRec]:
-    """Populate the transient `wh` field from the joined PreBatchReq relationship."""
+    """Populate the transient `wh` field from the eager-loaded PreBatchReq relationship."""
     for rec in records:
         rec.wh = rec.req.wh if rec.req else "-"
     return records
 
 
 def _base_rec_query(db: Session):
-    """Base query for PreBatchRec with PreBatchReq outer-join."""
-    return db.query(models.PreBatchRec).outerjoin(
-        models.PreBatchReq, models.PreBatchRec.req_id == models.PreBatchReq.id
+    """Base query for PreBatchRec with eager-loaded relationships (single SQL query)."""
+    return db.query(models.PreBatchRec).options(
+        joinedload(models.PreBatchRec.req),
+        selectinload(models.PreBatchRec.origins),
     )
 
 

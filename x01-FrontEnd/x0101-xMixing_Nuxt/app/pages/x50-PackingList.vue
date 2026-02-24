@@ -102,6 +102,12 @@ const sppWeight = computed(() =>
 )
 const totalWeight = computed(() => fhWeight.value + sppWeight.value)
 
+/** Check if all bags are packed per warehouse */
+const fhPackedCount = computed(() => bagsByWarehouse.value.FH.filter(b => isPacked(b)).length)
+const sppPackedCount = computed(() => bagsByWarehouse.value.SPP.filter(b => isPacked(b)).length)
+const allFhPacked = computed(() => bagsByWarehouse.value.FH.length > 0 && fhPackedCount.value === bagsByWarehouse.value.FH.length)
+const allSppPacked = computed(() => bagsByWarehouse.value.SPP.length > 0 && sppPackedCount.value === bagsByWarehouse.value.SPP.length)
+
 /** Sort helper for warehouse records */
 const sortWarehouseRecords = (list: any[]) => {
   const col = whSortCol.value
@@ -204,7 +210,7 @@ const fetchPlans = async () => {
 const fetchAllRecords = async () => {
   loadingRecords.value = true
   try {
-    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-recs/?limit=200`, {
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-recs/?limit=50`, {
       headers: getAuthHeader() as Record<string, string>
     })
     allRecords.value = data || []
@@ -248,6 +254,26 @@ const getBagStatusColor = (bag: any) => isPacked(bag) ? 'green' : 'grey-5'
 const getBagStatusIcon = (bag: any) => isPacked(bag) ? 'check_circle' : 'radio_button_unchecked'
 const getBagStatusLabel = (bag: any) => isPacked(bag) ? 'Packed' : 'Waiting'
 const getBagRowClass = (bag: any) => isPacked(bag) ? 'bg-green-1' : ''
+
+/** Close packing box — ready to transfer */
+const onCloseBox = (wh: 'FH' | 'SPP') => {
+  $q.dialog({
+    title: `Close ${wh} Packing Box`,
+    message: `All ${wh} pre-batch bags are packed. Mark this box as Ready to Transfer?`,
+    cancel: true,
+    persistent: true,
+    ok: { label: 'Confirm Transfer', color: wh === 'FH' ? 'green' : 'teal', icon: 'local_shipping' },
+  }).onOk(() => {
+    playSound('correct')
+    $q.notify({
+      type: 'positive',
+      icon: 'local_shipping',
+      message: `✅ ${wh} Packing Box closed — Ready to Transfer`,
+      position: 'top',
+      timeout: 3000,
+    })
+  })
+}
 
 // ── Scan Simulation ─────────────────────────────────────────────
 const openScanSimulator = (wh: 'FH' | 'SPP') => {
@@ -651,7 +677,18 @@ onMounted(() => {
                         <q-icon name="science" size="xs" />
                         <span class="text-weight-bold text-caption">FH Pre-Batch Packing</span>
                       </div>
-                      <q-badge color="white" text-color="green-9">{{ bagsByWarehouse.FH.length }}</q-badge>
+                      <div class="row items-center q-gutter-xs">
+                        <q-badge color="white" text-color="green-9">{{ fhPackedCount }}/{{ bagsByWarehouse.FH.length }}</q-badge>
+                        <q-btn
+                          dense flat size="xs" icon="local_shipping" label="Transfer"
+                          :color="allFhPacked ? 'white' : 'green-3'"
+                          :disable="!allFhPacked"
+                          @click="onCloseBox('FH')"
+                          class="text-weight-bold"
+                        >
+                          <q-tooltip>{{ allFhPacked ? 'Close box — Ready to transfer' : `${bagsByWarehouse.FH.length - fhPackedCount} bags remaining` }}</q-tooltip>
+                        </q-btn>
+                      </div>
                     </div>
                   </q-card-section>
 
@@ -701,7 +738,18 @@ onMounted(() => {
                         <q-icon name="inventory_2" size="xs" />
                         <span class="text-weight-bold text-caption">SPP Pre-Batch Packing</span>
                       </div>
-                      <q-badge color="white" text-color="teal-9">{{ bagsByWarehouse.SPP.length }}</q-badge>
+                      <div class="row items-center q-gutter-xs">
+                        <q-badge color="white" text-color="teal-9">{{ sppPackedCount }}/{{ bagsByWarehouse.SPP.length }}</q-badge>
+                        <q-btn
+                          dense flat size="xs" icon="local_shipping" label="Transfer"
+                          :color="allSppPacked ? 'white' : 'teal-3'"
+                          :disable="!allSppPacked"
+                          @click="onCloseBox('SPP')"
+                          class="text-weight-bold"
+                        >
+                          <q-tooltip>{{ allSppPacked ? 'Close box — Ready to transfer' : `${bagsByWarehouse.SPP.length - sppPackedCount} bags remaining` }}</q-tooltip>
+                        </q-btn>
+                      </div>
                     </div>
                   </q-card-section>
 
