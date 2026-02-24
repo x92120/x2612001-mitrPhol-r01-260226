@@ -93,10 +93,13 @@ def get_ready_to_deliver(db: Session = Depends(get_db)):
             "batch_id": b.batch_id,
             "sku_id": b.sku_id,
             "plant": b.plant,
+            "production": bool(b.production),
             "fh_boxed_at": b.fh_boxed_at.isoformat() if b.fh_boxed_at else None,
             "spp_boxed_at": b.spp_boxed_at.isoformat() if b.spp_boxed_at else None,
-            "delivered_at": b.delivered_at.isoformat() if b.delivered_at else None,
-            "delivered_by": b.delivered_by,
+            "fh_delivered_at": b.fh_delivered_at.isoformat() if b.fh_delivered_at else None,
+            "fh_delivered_by": b.fh_delivered_by,
+            "spp_delivered_at": b.spp_delivered_at.isoformat() if b.spp_delivered_at else None,
+            "spp_delivered_by": b.spp_delivered_by,
         })
     return result
 
@@ -366,23 +369,33 @@ def close_box(batch_id_str: str, data: schemas.BoxCloseRequest, db: Session = De
 
 @router.patch("/production-batches/by-batch-id/{batch_id_str}/deliver")
 def deliver_batch(batch_id_str: str, data: schemas.DeliveryRequest, db: Session = Depends(get_db)):
-    """Mark a batch as delivered."""
+    """Mark a batch warehouse as delivered. FH→SPP or SPP→Production Hall."""
     batch = db.query(models.ProductionBatch).filter(
         models.ProductionBatch.batch_id == batch_id_str
     ).first()
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
 
+    wh = data.wh.upper()
     now = datetime.now()
-    batch.delivered_at = now
-    batch.delivered_by = data.delivered_by or "operator"
+    operator = data.delivered_by or "operator"
+    if wh == "FH":
+        batch.fh_delivered_at = now
+        batch.fh_delivered_by = operator
+    elif wh == "SPP":
+        batch.spp_delivered_at = now
+        batch.spp_delivered_by = operator
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid warehouse: {wh}. Must be FH or SPP.")
+
     db.commit()
     db.refresh(batch)
     return {
         "status": "success",
         "batch_id": batch.batch_id,
+        "wh": wh,
         "delivered_at": now.isoformat(),
-        "delivered_by": batch.delivered_by,
+        "delivered_by": operator,
     }
 
 

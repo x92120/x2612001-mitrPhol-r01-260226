@@ -407,6 +407,7 @@ const fetchReadyToDeliver = async () => {
           batch_id: b.batch_id,
           bagsCount: 0,
           time: new Date(b.fh_boxed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          inProduction: !!b.production,
         })
       }
       if (b.spp_boxed_at) {
@@ -416,11 +417,15 @@ const fetchReadyToDeliver = async () => {
           batch_id: b.batch_id,
           bagsCount: 0,
           time: new Date(b.spp_boxed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          inProduction: !!b.production,
         })
       }
-      // Populate deliveredMap from DB
-      if (b.delivered_at) {
-        deliveredMap.value.set(b.batch_id, new Date(b.delivered_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      // Populate deliveredMap from DB (keyed per WH: "batch_id-FH" / "batch_id-SPP")
+      if (b.fh_delivered_at) {
+        deliveredMap.value.set(`${b.batch_id}-FH`, new Date(b.fh_delivered_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      }
+      if (b.spp_delivered_at) {
+        deliveredMap.value.set(`${b.batch_id}-SPP`, new Date(b.spp_delivered_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
       }
     }
     transferredBoxes.value = boxes
@@ -540,6 +545,7 @@ interface TransferredBox {
   batch_id: string
   bagsCount: number
   time: string
+  inProduction: boolean  // batch.production flag — hides from delivery panel
 }
 const transferredBoxes = ref<TransferredBox[]>([])
 
@@ -547,22 +553,24 @@ const transferredBoxes = ref<TransferredBox[]>([])
 const showTransferDialog   = ref(false)
 const selectedForTransfer  = ref<string[]>([])   // list of TransferredBox.id
 const filterDeliveryWh     = ref<'ALL'|'FH'|'SPP'>('ALL')
-const deliveredMap         = ref<Map<string, string>>(new Map())  // batch_id → delivery time
+const filterDeliveryStatus = ref<'ALL'|'WAITING'>('WAITING')  // ALL=show delivered too, WAITING=pending only
+const deliveredMap         = ref<Map<string, string>>(new Map())  // "batch_id-WH" → delivery time
 
-const markDelivered = async (batch_id: string) => {
+const markDelivered = async (batch_id: string, wh: 'FH' | 'SPP') => {
+  const label = wh === 'FH' ? 'FH → SPP' : 'SPP → Production'
   try {
     await $fetch(`${appConfig.apiBaseUrl}/production-batches/by-batch-id/${batch_id}/deliver`, {
       method: 'PATCH',
       headers: getAuthHeader() as Record<string, string>,
-      body: { delivered_by: 'operator' },
+      body: { wh, delivered_by: 'operator' },
     })
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    deliveredMap.value = new Map(deliveredMap.value).set(batch_id, time)
+    deliveredMap.value = new Map(deliveredMap.value).set(`${batch_id}-${wh}`, time)
     playSound('correct')
-    $q.notify({ type: 'positive', icon: 'local_shipping', message: `✅ Batch ${batch_id} delivered at ${time}`, position: 'top', timeout: 2500 })
+    $q.notify({ type: 'positive', icon: 'local_shipping', message: `✅ ${label}: ${batch_id} delivered at ${time}`, position: 'top', timeout: 2500 })
   } catch (e) {
     console.error('Error marking delivery:', e)
-    $q.notify({ type: 'negative', message: `Failed to mark ${batch_id} as delivered` })
+    $q.notify({ type: 'negative', message: `Failed to mark ${batch_id} ${wh} as delivered` })
   }
 }
 
@@ -576,17 +584,19 @@ interface TransferredBatchRow {
   fh: TransferredBox | null
   spp: TransferredBox | null
   time: string
+  inProduction: boolean
 }
 const groupedTransferredBoxes = computed((): TransferredBatchRow[] => {
   const map = new Map<string, TransferredBatchRow>()
   for (const box of transferredBoxes.value) {
     if (!map.has(box.batch_id)) {
-      map.set(box.batch_id, { batch_id: box.batch_id, fh: null, spp: null, time: box.time })
+      map.set(box.batch_id, { batch_id: box.batch_id, fh: null, spp: null, time: box.time, inProduction: box.inProduction })
     }
     const row = map.get(box.batch_id)!
     if (box.wh === 'FH') row.fh = box
     else row.spp = box
     if (box.time !== '—') row.time = box.time
+    if (box.inProduction) row.inProduction = true
   }
   return Array.from(map.values())
 })
@@ -965,69 +975,106 @@ onMounted(async () => {
 
           <div class="col relative-position">
             <q-scroll-area class="fit">
-              <q-list dense separator class="text-caption">
-                <template v-for="plan in activePlans" :key="plan.plan_id">
-                  <q-expansion-item
-                    expand-separator
-                    :icon="selectedPlan?.plan_id === plan.plan_id ? 'radio_button_checked' : 'radio_button_unchecked'"
-                    :label="plan.plan_id"
-                    :caption="`${plan.sku_name || plan.sku_id} — ${plan.num_batches || 0} batches`"
-                    :header-class="selectedPlan?.plan_id === plan.plan_id ? 'bg-blue-1 text-blue-9 text-weight-bold' : 'text-weight-medium'"
-                    dense dense-toggle
-                    @show="onPlanClick(plan)"
-                  >
-                    <q-list dense class="q-pl-md">
-                      <template v-for="batch in (plan.batches || [])" :key="batch.batch_id">
-                        <q-expansion-item
-                          dense dense-toggle expand-separator
-                          :icon="batch.batch_prepare ? 'check_circle' : 'pending'"
-                          :icon-color="batch.batch_prepare ? 'blue' : 'grey-5'"
-                          :label="batch.batch_id.split('-').slice(-1)[0]"
-                          :caption="batch.batch_prepare ? 'Prepared' : batch.status"
-                          :header-class="selectedBatch?.batch_id === batch.batch_id ? 'bg-blue-1 text-blue-9' : (batch.batch_prepare ? 'bg-blue-1 text-grey-6' : '')"
-                          @show="onBatchClick(batch, plan)"
-                        >
-                          <q-list dense class="q-pl-md">
-                            <q-item
-                              v-for="req in (batch.reqs || [])" :key="req.id" dense
-                              style="min-height: 24px;"
-                              :class="req.status === 2 ? 'bg-blue-1 text-grey-6' : ''"
-                            >
-                              <q-item-section avatar style="min-width: 20px;">
-                                <q-icon
-                                  :name="req.status === 2 ? 'check_circle' : (req.status === 1 ? 'hourglass_top' : 'circle')"
-                                  :color="req.status === 2 ? 'blue' : (req.status === 1 ? 'orange' : 'grey-4')"
-                                  size="xs"
-                                />
-                              </q-item-section>
-                              <q-item-section>
-                                <q-item-label style="font-size: 0.7rem;">
-                                  {{ req.re_code }} — {{ req.ingredient_name || req.re_code }}
-                                </q-item-label>
-                              </q-item-section>
-                              <q-item-section side>
-                                <q-item-label style="font-size: 0.65rem;" class="text-weight-bold">
-                                  {{ req.required_volume?.toFixed(1) }} kg
-                                </q-item-label>
-                              </q-item-section>
-                            </q-item>
-                            <q-item v-if="!batch.reqs || batch.reqs.length === 0" style="min-height: 24px;">
-                              <q-item-section class="text-grey text-italic" style="font-size: 0.65rem;">No requirements</q-item-section>
-                            </q-item>
-                          </q-list>
-                        </q-expansion-item>
-                      </template>
-                      <q-item v-if="!plan.batches || plan.batches.length === 0" style="min-height: 28px;">
-                        <q-item-section class="text-grey text-italic" style="font-size: 0.7rem;">No batches</q-item-section>
-                      </q-item>
-                    </q-list>
-                  </q-expansion-item>
-                </template>
+              <q-list dense separator class="bg-white">
+                <q-expansion-item
+                  v-for="plan in activePlans" :key="plan.plan_id"
+                  dense expand-separator
+                  :header-class="selectedPlan?.plan_id === plan.plan_id ? 'bg-blue-1 text-blue-10' : 'bg-grey-1 text-grey-9'"
+                  @show="onPlanClick(plan)"
+                >
+                  <!-- Level 1 header: plan_id + batch count -->
+                  <template v-slot:header>
+                    <q-item-section>
+                      <q-item-label class="text-weight-bold" style="font-size:0.8rem">
+                        {{ plan.plan_id }}
+                      </q-item-label>
+                      <q-item-label caption style="font-size:0.65rem">{{ plan.sku_name || plan.sku_id }}</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge color="blue-7" class="text-weight-bold" style="font-size:0.7rem">
+                        {{ (plan.batches || []).length }} batch
+                      </q-badge>
+                    </q-item-section>
+                  </template>
 
-                <div v-if="activePlans.length === 0" class="text-center q-pa-lg text-grey">
-                  <q-icon name="inbox" size="lg" class="q-mb-sm" /><br>
-                  No active plans
-                </div>
+                  <!-- Level 2: per-batch expansion -->
+                  <q-list dense separator class="q-pl-sm">
+                    <q-expansion-item
+                      v-for="batch in (plan.batches || [])" :key="batch.batch_id"
+                      dense expand-separator
+                      :header-class="selectedBatch?.batch_id === batch.batch_id ? 'bg-blue-1 text-blue-9' : 'bg-grey-1 text-grey-9'"
+                      @show="onBatchClick(batch, plan)"
+                    >
+                      <template v-slot:header>
+                        <q-item-section avatar style="min-width:20px">
+                          <q-icon
+                            :name="batch.batch_prepare ? 'check_circle' : 'pending'"
+                            :color="batch.batch_prepare ? 'blue-7' : 'grey-5'"
+                            size="xs"
+                          />
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label style="font-size:0.72rem" class="text-weight-medium">
+                            {{ batch.batch_id.split('-').slice(-1)[0] }}
+                            <span class="text-grey-5" style="font-size:0.65rem"> — {{ batch.batch_id }}</span>
+                          </q-item-label>
+                        </q-item-section>
+                        <q-item-section side>
+                          <q-badge
+                            :color="batch.batch_prepare ? 'blue-7' : 'grey-5'"
+                            :label="batch.batch_prepare ? 'Prepared' : batch.status"
+                            style="font-size:0.6rem"
+                          />
+                        </q-item-section>
+                      </template>
+
+                      <!-- Level 3: ingredients -->
+                      <q-list dense class="q-pl-md bg-white">
+                        <q-item
+                          v-for="req in (batch.reqs || [])" :key="req.id"
+                          dense style="min-height:28px"
+                        >
+                          <q-item-section avatar style="min-width:18px">
+                            <q-icon
+                              :name="req.status === 2 ? 'check_circle' : (req.status === 1 ? 'hourglass_top' : 'radio_button_unchecked')"
+                              :color="req.status === 2 ? 'blue-7' : (req.status === 1 ? 'orange-7' : 'grey-4')"
+                              size="xs"
+                            />
+                          </q-item-section>
+                          <q-item-section>
+                            <q-item-label style="font-size:0.7rem" class="text-mono">
+                              {{ req.re_code }}
+                            </q-item-label>
+                          </q-item-section>
+                          <q-item-section side>
+                            <span class="text-weight-bold" style="font-size:0.7rem">
+                              {{ req.required_volume?.toFixed(1) }} kg
+                            </span>
+                          </q-item-section>
+                          <q-item-section side style="min-width:52px">
+                            <q-badge
+                              :color="req.status === 2 ? 'blue-7' : (req.status === 1 ? 'orange-7' : 'grey-4')"
+                              :label="req.status === 2 ? 'Done' : (req.status === 1 ? 'In-Prog' : 'Waiting')"
+                              style="font-size:0.6rem"
+                            />
+                          </q-item-section>
+                        </q-item>
+                        <q-item v-if="!batch.reqs || batch.reqs.length === 0" style="min-height:28px">
+                          <q-item-section class="text-grey text-italic" style="font-size:0.65rem">No requirements</q-item-section>
+                        </q-item>
+                      </q-list>
+                    </q-expansion-item>
+                    <q-item v-if="!plan.batches || plan.batches.length === 0" style="min-height:28px">
+                      <q-item-section class="text-grey text-italic" style="font-size:0.7rem">No batches</q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-expansion-item>
+
+                <q-item v-if="activePlans.length === 0">
+                  <q-item-section class="text-center text-grey q-pa-lg text-caption">
+                    <q-icon name="inbox" size="sm" class="q-mb-xs" /><br>No active plans
+                  </q-item-section>
+                </q-item>
               </q-list>
             </q-scroll-area>
           </div>
@@ -1438,33 +1485,29 @@ onMounted(async () => {
             <div class="row items-center justify-between no-wrap">
               <div class="row items-center q-gutter-xs">
                 <q-icon name="local_shipping" size="sm" />
-                <div class="text-subtitle2 text-weight-bold">Ready to Delivery</div>
+                <div class="text-subtitle2 text-weight-bold">
+                  Ready to Delivery
+                  <span class="text-caption" style="opacity:0.8">— {{ filterMiddleWh === 'FH' ? 'FH → SPP' : 'SPP → Prod' }}</span>
+                </div>
               </div>
               <div class="row items-center q-gutter-xs">
-                <!-- WH Filter -->
-                <q-btn-group flat dense>
-                  <q-btn flat dense no-caps size="xs" label="All"
-                    :color="filterDeliveryWh === 'ALL' ? 'yellow' : 'white'"
-                    :text-color="filterDeliveryWh === 'ALL' ? 'indigo-9' : 'white'"
-                    @click="filterDeliveryWh = 'ALL'"
-                  />
-                  <q-btn flat dense no-caps size="xs" label="FH"
-                    :color="filterDeliveryWh === 'FH' ? 'yellow' : 'white'"
-                    :text-color="filterDeliveryWh === 'FH' ? 'indigo-9' : 'white'"
-                    @click="filterDeliveryWh = 'FH'"
-                  />
-                  <q-btn flat dense no-caps size="xs" label="SPP"
-                    :color="filterDeliveryWh === 'SPP' ? 'yellow' : 'white'"
-                    :text-color="filterDeliveryWh === 'SPP' ? 'indigo-9' : 'white'"
-                    @click="filterDeliveryWh = 'SPP'"
-                  />
-                </q-btn-group>
+                <q-select
+                  v-model="filterDeliveryStatus"
+                  :options="[{ label: 'All', value: 'ALL' }, { label: 'Waiting', value: 'WAITING' }]"
+                  emit-value map-options dense outlined
+                  style="min-width:80px;background:rgba(255,255,255,0.15);border-radius:4px;"
+                  input-class="text-white text-caption"
+                  popup-content-class="text-caption"
+                  color="white"
+                  dark
+                />
                 <q-badge color="white" text-color="indigo-7" class="text-weight-bold">
-                  {{ groupedTransferredBoxes.filter(r =>
-                      filterDeliveryWh === 'ALL' ||
-                      (filterDeliveryWh === 'FH' && r.fh) ||
-                      (filterDeliveryWh === 'SPP' && r.spp)
-                    ).length }}
+                  {{ groupedTransferredBoxes.filter(r => {
+                    if (r.inProduction) return false
+                    const hasWh = filterMiddleWh === 'FH' ? !!r.fh : !!r.spp
+                    const isDelivered = filterMiddleWh === 'FH' ? !!deliveredMap.get(`${r.batch_id}-FH`) : !!deliveredMap.get(`${r.batch_id}-SPP`)
+                    return hasWh && (filterDeliveryStatus === 'ALL' || !isDelivered)
+                  }).length }}
                 </q-badge>
                 <q-btn
                   flat round dense icon="local_shipping" size="sm" color="white"
@@ -1489,47 +1532,52 @@ onMounted(async () => {
               <q-list dense separator>
                 <template v-for="row in groupedTransferredBoxes" :key="row.batch_id">
                   <q-item
-                    v-if="filterDeliveryWh === 'ALL' || (filterDeliveryWh === 'FH' && row.fh) || (filterDeliveryWh === 'SPP' && row.spp)"
+                    v-if="(() => {
+                      if (row.inProduction) return false
+                      const hasWh = filterMiddleWh === 'FH' ? !!row.fh : !!row.spp
+                      const isDelivered = filterMiddleWh === 'FH' ? !!deliveredMap.get(`${row.batch_id}-FH`) : !!deliveredMap.get(`${row.batch_id}-SPP`)
+                      return hasWh && (filterDeliveryStatus === 'ALL' || !isDelivered)
+                    })()"
                     class="q-pa-xs"
                   >
-                    <q-item-section avatar style="min-width:28px;">
-                      <q-icon
-                        :name="deliveredMap.get(row.batch_id) ? 'verified' : 'check_circle'"
-                        :color="deliveredMap.get(row.batch_id) ? 'green-8' : 'green'"
-                        size="sm"
-                      />
-                    </q-item-section>
                     <q-item-section>
                       <q-item-label class="text-weight-bold text-caption">
                         {{ row.batch_id?.split('-').slice(0, -1).join('-') }} — <span class="text-indigo-8">{{ row.batch_id?.split('-').slice(-1)[0] }}</span>
                       </q-item-label>
-                      <q-item-label caption style="font-size:0.62rem;">Boxed: {{ row.time }}</q-item-label>
                     </q-item-section>
-                    <!-- WH badges -->
-                    <q-item-section side style="min-width:60px;">
-                      <div class="row q-gutter-xs">
-                        <q-badge :color="row.fh ? 'blue-7' : 'grey-4'" class="text-weight-bold" style="font-size:0.6rem;">FH</q-badge>
-                        <q-badge :color="row.spp ? 'light-blue-7' : 'grey-4'" class="text-weight-bold" style="font-size:0.6rem;">SPP</q-badge>
-                      </div>
-                    </q-item-section>
-                    <!-- Delivery column -->
+
+                    <!-- Per-WH delivery: only shows the section matching the Packing Box dropdown -->
                     <q-item-section side>
-                      <template v-if="deliveredMap.get(row.batch_id)">
-                        <q-badge color="green-8" class="text-weight-bold" style="font-size:0.62rem;">
-                          <q-icon name="local_shipping" size="10px" class="q-mr-xs"/>
-                          {{ deliveredMap.get(row.batch_id) }}
-                        </q-badge>
-                      </template>
-                      <template v-else>
-                        <q-btn
-                          dense unelevated no-caps size="xs"
-                          color="amber-7" text-color="white"
-                          icon="local_shipping" label="Deliver"
-                          @click="markDelivered(row.batch_id)"
-                        >
-                          <q-tooltip>Mark as Delivered</q-tooltip>
-                        </q-btn>
-                      </template>
+                      <div class="column q-gutter-xs items-end">
+                        <!-- FH boxed → deliver to SPP (only when FH dropdown selected) -->
+                        <template v-if="row.fh && filterMiddleWh === 'FH'">
+                          <div class="row items-center q-gutter-xs">
+                            <q-badge color="blue-7" style="font-size:0.58rem;">
+                              FH <q-icon name="unarchive" size="10px" class="q-ml-xs"/> {{ row.fh.time }}
+                            </q-badge>
+                            <q-badge v-if="deliveredMap.get(`${row.batch_id}-FH`)" color="green-8" class="text-weight-bold" style="font-size:0.58rem;">
+                              <q-icon name="local_shipping" size="10px" class="q-mr-xs"/>→SPP {{ deliveredMap.get(`${row.batch_id}-FH`) }}
+                            </q-badge>
+                            <q-btn v-else dense unelevated no-caps size="xs" color="blue-7" text-color="white" icon="local_shipping" label="→SPP" @click="markDelivered(row.batch_id, 'FH')">
+                              <q-tooltip>Deliver FH to SPP</q-tooltip>
+                            </q-btn>
+                          </div>
+                        </template>
+                        <!-- SPP boxed → deliver to Production Hall (only when SPP dropdown selected) -->
+                        <template v-if="row.spp && filterMiddleWh === 'SPP'">
+                          <div class="row items-center q-gutter-xs">
+                            <q-badge color="light-blue-7" style="font-size:0.58rem;">
+                              SPP <q-icon name="unarchive" size="10px" class="q-ml-xs"/> {{ row.spp.time }}
+                            </q-badge>
+                            <q-badge v-if="deliveredMap.get(`${row.batch_id}-SPP`)" color="green-8" class="text-weight-bold" style="font-size:0.58rem;">
+                              <q-icon name="local_shipping" size="10px" class="q-mr-xs"/>→Prod {{ deliveredMap.get(`${row.batch_id}-SPP`) }}
+                            </q-badge>
+                            <q-btn v-else dense unelevated no-caps size="xs" color="amber-7" text-color="white" icon="local_shipping" label="→Prod" @click="markDelivered(row.batch_id, 'SPP')">
+                              <q-tooltip>Deliver SPP to Production Hall</q-tooltip>
+                            </q-btn>
+                          </div>
+                        </template>
+                      </div>
                     </q-item-section>
                   </q-item>
                 </template>
@@ -1554,7 +1602,10 @@ onMounted(async () => {
         <q-card-section class="bg-indigo-9 text-white q-py-sm">
           <div class="row items-center q-gutter-sm">
             <q-icon name="print" size="sm" />
-            <div class="text-subtitle1 text-weight-bold">Transfer Report</div>
+            <div class="text-subtitle1 text-weight-bold">
+              Transfer Report
+              <span class="text-caption" style="opacity:0.8"> — {{ filterMiddleWh === 'FH' ? 'FH → SPP' : 'SPP → Production' }}</span>
+            </div>
             <q-space />
             <q-btn flat round dense icon="close" v-close-popup />
           </div>
@@ -1565,7 +1616,7 @@ onMounted(async () => {
             <div class="text-caption text-grey-7">Select boxes to include in report</div>
             <div class="row q-gutter-xs">
               <q-btn flat dense no-caps size="sm" label="All" color="indigo"
-                @click="selectedForTransfer = transferredBoxes.map(b => b.id)" />
+                @click="selectedForTransfer = transferredBoxes.filter(b => b.wh === filterMiddleWh).map(b => b.id)" />
               <q-btn flat dense no-caps size="sm" label="None" color="grey"
                 @click="selectedForTransfer = []" />
             </div>
@@ -1573,7 +1624,7 @@ onMounted(async () => {
           <q-scroll-area style="height:320px;">
             <q-list dense separator>
               <q-item
-                v-for="box in transferredBoxes" :key="box.id"
+                v-for="box in transferredBoxes.filter(b => b.wh === filterMiddleWh)" :key="box.id"
                 clickable @click="() => {
                   const idx = selectedForTransfer.indexOf(box.id)
                   if (idx >= 0) selectedForTransfer.splice(idx, 1)
@@ -1608,7 +1659,7 @@ onMounted(async () => {
                 <q-item-section side>
                   <q-badge
                     :color="box.wh === 'FH' ? 'blue-7' : 'light-blue-7'"
-                    :label="box.wh"
+                    :label="box.wh === 'FH' ? 'FH→SPP' : 'SPP→Prod'"
                     class="text-weight-bold"
                   />
                 </q-item-section>
@@ -1620,7 +1671,7 @@ onMounted(async () => {
         <q-separator />
         <q-card-actions align="between" class="q-px-md q-py-sm">
           <div class="text-caption text-grey-6">
-            {{ selectedForTransfer.length }} / {{ transferredBoxes.length }} selected
+            {{ selectedForTransfer.length }} / {{ transferredBoxes.filter(b => b.wh === filterMiddleWh).length }} selected
           </div>
           <div class="row q-gutter-sm">
             <q-btn flat no-caps label="Cancel" color="grey" v-close-popup />

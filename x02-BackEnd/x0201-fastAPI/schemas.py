@@ -342,8 +342,10 @@ class ProductionBatchBase(BaseModel):
     # Packing & Delivery
     fh_boxed_at: Optional[datetime] = None
     spp_boxed_at: Optional[datetime] = None
-    delivered_at: Optional[datetime] = None
-    delivered_by: Optional[str] = None
+    fh_delivered_at: Optional[datetime] = None
+    fh_delivered_by: Optional[str] = None
+    spp_delivered_at: Optional[datetime] = None
+    spp_delivered_by: Optional[str] = None
 
 class ProductionBatchCreate(ProductionBatchBase):
     plan_id: int
@@ -363,8 +365,10 @@ class ProductionBatchUpdate(BaseModel):
     plan_id: Optional[int] = None
     fh_boxed_at: Optional[datetime] = None
     spp_boxed_at: Optional[datetime] = None
-    delivered_at: Optional[datetime] = None
-    delivered_by: Optional[str] = None
+    fh_delivered_at: Optional[datetime] = None
+    fh_delivered_by: Optional[str] = None
+    spp_delivered_at: Optional[datetime] = None
+    spp_delivered_by: Optional[str] = None
 
 class ProductionBatch(ProductionBatchBase):
     id: int
@@ -421,7 +425,8 @@ class BoxCloseRequest(BaseModel):
     operator: Optional[str] = None
 
 class DeliveryRequest(BaseModel):
-    """Request to mark a batch as delivered."""
+    """Request to mark a batch warehouse as delivered."""
+    wh: str  # 'FH' (FH→SPP) or 'SPP' (SPP→Production Hall)
     delivered_by: Optional[str] = None
 
 # SkuAction Schemas

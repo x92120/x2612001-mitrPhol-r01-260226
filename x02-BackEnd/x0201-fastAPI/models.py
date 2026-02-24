@@ -282,8 +282,10 @@ class ProductionBatch(Base):
     # Packing & Delivery tracking
     fh_boxed_at = Column(TIMESTAMP, nullable=True)       # When FH box was closed
     spp_boxed_at = Column(TIMESTAMP, nullable=True)      # When SPP box was closed
-    delivered_at = Column(TIMESTAMP, nullable=True)       # When batch was delivered
-    delivered_by = Column(String(50), nullable=True)      # Who confirmed delivery
+    fh_delivered_at = Column(TIMESTAMP, nullable=True)    # FH delivered to SPP
+    fh_delivered_by = Column(String(50), nullable=True)
+    spp_delivered_at = Column(TIMESTAMP, nullable=True)   # SPP delivered to Production Hall
+    spp_delivered_by = Column(String(50), nullable=True)
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
     plan = relationship("ProductionPlan", back_populates="batches")
