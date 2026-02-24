@@ -23,12 +23,7 @@ const formatDate = (date: any) => {
   return d.toLocaleDateString('en-GB')
 }
 
-const formatDateTime = (date: any) => {
-  if (!date) return '-'
-  const d = new Date(date)
-  if (isNaN(d.getTime())) return date
-  return d.toLocaleString('en-GB')
-}
+
 
 // ─── Shared refs (owned by page, passed into composables) ───
 const selectedReCode = ref('')
@@ -39,7 +34,7 @@ const isBatchSelected = ref(false)
 const ingredients = ref<any[]>([])
 
 // Cast getAuthHeader for composable compatibility
-const authHeader = getAuthHeader as () => Record<string, string>
+const authHeader = () => getAuthHeader() as Record<string, string>
 
 // ─── 1. Inventory ───
 const {
@@ -195,7 +190,7 @@ const {
   quickReprint, printAllBatchLabels, onPrintPackingBoxLabel, onDone,
 } = usePreBatchLabels({
   $q, getAuthHeader: authHeader, t, user, formatDate,
-  generateLabelSvg: generateLabelSvg as (template: string, data: any) => Promise<string>,
+  generateLabelSvg: (async (template: string, data: any) => (await generateLabelSvg(template, data)) ?? '') as (template: string, data: any) => Promise<string>,
   printLabel,
   selectedBatch,
   selectedReCode,
@@ -325,7 +320,7 @@ onMounted(() => {
                                 </q-item-label>
                               </q-item-section>
                             </q-item>
-                            <q-item v-if="!batchIngredients[batch.batch_id] || batchIngredients[batch.batch_id].length === 0" style="min-height: 24px;">
+                            <q-item v-if="!batchIngredients[batch.batch_id] || batchIngredients[batch.batch_id]?.length === 0" style="min-height: 24px;">
                               <q-item-section class="text-grey text-italic" style="font-size: 0.65rem;">Loading...</q-item-section>
                             </q-item>
                           </q-list>
@@ -513,7 +508,7 @@ onMounted(() => {
                                                         </td>
                                                     </tr>
                                                 </template>
-                                                <tr v-if="!ingredientBatchDetail[ing.re_code] || ingredientBatchDetail[ing.re_code].length === 0">
+                                                <tr v-if="!ingredientBatchDetail[ing.re_code] || ingredientBatchDetail[ing.re_code]?.length === 0">
                                                     <td colspan="5" class="text-center text-grey text-italic">Loading...</td>
                                                 </tr>
                                             </tbody>
@@ -615,7 +610,7 @@ onMounted(() => {
                         @keyup.enter="onIntakeLotScanEnter"
                     >
                         <template v-slot:after>
-                           <q-btn icon="add" color="primary" round dense @click="onAddLot">
+                           <q-btn icon="add" color="primary" round dense @click="() => onAddLot(selectedIntakeLotId, selectableIngredients, selectedInventoryItem)">
                                <q-tooltip>Add Lot & weight</q-tooltip>
                            </q-btn>
                         </template>

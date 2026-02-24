@@ -1,24 +1,35 @@
-from sqlalchemy import Column, Integer, String, Enum, TIMESTAMP, text, DateTime, JSON, Float, ForeignKey, Date, Boolean, func
+"""
+SQLAlchemy ORM Models
+=====================
+All database tables and read-only views for the xMixing system.
+"""
+from sqlalchemy import (
+    Column, Integer, String, Enum, TIMESTAMP, text, DateTime,
+    JSON, Float, ForeignKey, Date, Boolean, func,
+)
 from sqlalchemy.orm import relationship
 from database import Base
 import enum
 
-# Enums
+
+# ── Enums ────────────────────────────────────────────────────────────────────
+
 class UserRole(str, enum.Enum):
     Admin = "Admin"
     Manager = "Manager"
     Operator = "Operator"
     QC_Inspector = "QC Inspector"
     Viewer = "Viewer"
-    
+
 class UserStatus(str, enum.Enum):
     Active = "Active"
     Inactive = "Inactive"
 
-# User Model
+
+# ── Core Tables ──────────────────────────────────────────────────────────────
+
 class User(Base):
     __tablename__ = "users"
-
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, nullable=False)
     email = Column(String(100), unique=True, nullable=False)
@@ -32,26 +43,26 @@ class User(Base):
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
-# Ingredient Model
+
 class Ingredient(Base):
     __tablename__ = "ingredients"
-
     id = Column(Integer, primary_key=True, index=True)
     blind_code = Column(String(50), index=True)
     mat_sap_code = Column(String(50), index=True, nullable=True)
-    re_code = Column(String(50)) # Re-Code
-    ingredient_id = Column(String(50), nullable=False, index=True) # Ingredient code (not unique)
+    re_code = Column(String(50))
+    ingredient_id = Column(String(50), nullable=False, index=True)
     name = Column(String(150), nullable=False)
     unit = Column(String(20), default="kg")
-    Group = Column(String(50))  # Colour, Flavor, etc.
-    std_package_size = Column(Float, default=25.0) # Added standard package size
-    std_prebatch_batch_size = Column(Float, default=0.0) # Added standard prebatch batch size
-    warehouse = Column(String(50), default="")  # Default warehouse location
-    status = Column(String(20), default="Active")  # Active, Inactive
-    creat_by = Column(String(50), nullable=False)  # Username who created
+    Group = Column(String(50))
+    std_package_size = Column(Float, default=25.0)
+    std_prebatch_batch_size = Column(Float, default=0.0)
+    warehouse = Column(String(50), default="")
+    status = Column(String(20), default="Active")
+    creat_by = Column(String(50), nullable=False)
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-    update_by = Column(String(50))  # Username who last updated
+    update_by = Column(String(50))
     updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
+
 
 class IngredientIntakeFrom(Base):
     __tablename__ = "ingredient_intake_from"
@@ -59,20 +70,21 @@ class IngredientIntakeFrom(Base):
     name = Column(String(100), unique=True, nullable=False)
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
-# Ingredient Intake List Model (formerly Ingredient Receive History / Ingredient Receipt)
+
+# ── Ingredient Intake ────────────────────────────────────────────────────────
+
 class IngredientIntakeList(Base):
     __tablename__ = "ingredient_intake_lists"
-
     id = Column(Integer, primary_key=True, index=True)
     intake_lot_id = Column(String(50), nullable=False, index=True)
     lot_id = Column(String(50), nullable=False)
-    intake_from = Column(String(50)) # Renamed from warehouse_location
-    intake_to = Column(String(50))   # Destination warehouse
+    intake_from = Column(String(50))
+    intake_to = Column(String(50))
     blind_code = Column(String(50), index=True)
     mat_sap_code = Column(String(50), nullable=False, index=True)
     re_code = Column(String(50))
-    material_description = Column(String(200)) # Merged from Receipt
-    uom = Column(String(20)) # Merged from Receipt
+    material_description = Column(String(200))
+    uom = Column(String(20))
     intake_vol = Column(Float, nullable=False)
     remain_vol = Column(Float, nullable=False)
     intake_package_vol = Column(Float)
@@ -83,51 +95,43 @@ class IngredientIntakeList(Base):
     intake_by = Column(String(50), nullable=False)
     edit_by = Column(String(50))
     edit_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
-    
-    # New fields
     po_number = Column(String(50))
     manufacturing_date = Column(DateTime)
-    batch_prepare_vol = Column(Float) # Merged from Receipt
-    std_package_size = Column(Float, default=25.0) # Merged from Receipt
-
-    # Relationship to history and packages
+    batch_prepare_vol = Column(Float)
+    std_package_size = Column(Float, default=25.0)
+    # Relationships
     history = relationship("IngredientIntakeHistory", back_populates="intake_record", cascade="all, delete-orphan")
     packages = relationship("IntakePackageReceive", back_populates="intake_record", cascade="all, delete-orphan")
 
-# Ingredient Intake History Model
+
 class IngredientIntakeHistory(Base):
     __tablename__ = "ingredient_intake_history"
-
     id = Column(Integer, primary_key=True, index=True)
     intake_list_id = Column(Integer, ForeignKey("ingredient_intake_lists.id"), nullable=False)
-    action = Column(String(50), nullable=False) # e.g. "Status Change", "Created", "Modified"
+    action = Column(String(50), nullable=False)
     old_status = Column(String(20))
     new_status = Column(String(20))
     remarks = Column(String(255))
     changed_by = Column(String(50), nullable=False)
     changed_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-
-    # Relationship back to the main intake record
     intake_record = relationship("IngredientIntakeList", back_populates="history")
 
-# Intake Package Receive Model
+
 class IntakePackageReceive(Base):
     __tablename__ = "intake_package_receive"
-
     id = Column(Integer, primary_key=True, index=True)
     intake_list_id = Column(Integer, ForeignKey("ingredient_intake_lists.id"), nullable=False)
     package_no = Column(Integer, nullable=False)
     weight = Column(Float, nullable=False)
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     created_by = Column(String(50))
-
-    # Relationship back to the main intake record
     intake_record = relationship("IngredientIntakeList", back_populates="packages")
 
-# SkuGroup Model
+
+# ── SKU / Recipe ─────────────────────────────────────────────────────────────
+
 class SkuGroup(Base):
     __tablename__ = "sku_groups"
-
     id = Column(Integer, primary_key=True, index=True)
     group_code = Column(String(50), unique=True, nullable=False, index=True)
     group_name = Column(String(100), nullable=False)
@@ -136,10 +140,9 @@ class SkuGroup(Base):
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
-# Sku Model (formerly Recipe)
+
 class Sku(Base):
     __tablename__ = "sku_masters"
-
     id = Column(Integer, primary_key=True, index=True)
     sku_id = Column(String(50), unique=True, nullable=False, index=True)
     sku_name = Column(String(200), nullable=False)
@@ -151,79 +154,95 @@ class Sku(Base):
     update_by = Column(String(50))
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
-
-    # Relationships
     steps = relationship("SkuStep", back_populates="sku", foreign_keys="[SkuStep.sku_id]", primaryjoin="Sku.sku_id == SkuStep.sku_id")
     group = relationship("SkuGroup", foreign_keys=[sku_group])
 
+
 class SkuStep(Base):
     __tablename__ = "sku_steps"
-
     id = Column(Integer, primary_key=True, index=True)
     sku_id = Column(String(50), ForeignKey("sku_masters.sku_id"), index=True, nullable=True)
-    phase_number = Column(String(20), index=True, nullable=True) # Added index
-    phase_id = Column(String(50), index=True, nullable=True) # Added index
+    phase_number = Column(String(20), index=True, nullable=True)
+    phase_id = Column(String(50), index=True, nullable=True)
     master_step = Column(Boolean, default=False)
     sub_step = Column(Integer, nullable=False)
     action = Column(String(100))
     re_code = Column(String(50))
     action_code = Column(String(50))
-    setup_step = Column(String(100)) # Store as string or JSON
+    setup_step = Column(String(100))
     destination = Column(String(100))
     require = Column(Float)
-    uom = Column(String(20)) # Added UOM
+    uom = Column(String(20))
     low_tol = Column(Float)
     high_tol = Column(Float)
-    step_condition = Column(String(100)) # Renamed from condition to avoid reserved word
+    step_condition = Column(String(100))
     agitator_rpm = Column(Float)
     high_shear_rpm = Column(Float)
     temperature = Column(Float)
-    temp_low = Column(Float) # Temperature Offset Low / Min
-    temp_high = Column(Float) # Temperature Offset High / Max
-    step_time = Column(Integer) # Seconds
-    step_timer_control = Column(Integer) # 0 or 1
-    
-    # Flags from image
+    temp_low = Column(Float)
+    temp_high = Column(Float)
+    step_time = Column(Integer)
+    step_timer_control = Column(Integer)
     qc_temp = Column(Boolean, default=False)
     record_steam_pressure = Column(Boolean, default=False)
     record_ctw = Column(Boolean, default=False)
     operation_brix_record = Column(Boolean, default=False)
     operation_ph_record = Column(Boolean, default=False)
-    
-    # Setpoints
     brix_sp = Column(String(50))
     ph_sp = Column(String(50))
+    action_description = Column(String(200))
+    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
+    sku = relationship("Sku", back_populates="steps", foreign_keys=[sku_id], primaryjoin="Sku.sku_id == SkuStep.sku_id")
 
-    action_description = Column(String(200)) # Added specific action description
-    
+
+class SkuAction(Base):
+    __tablename__ = "sku_actions"
+    action_code = Column(String(50), primary_key=True)
+    action_description = Column(String(200), nullable=False)
+    component_filter = Column(String(255), nullable=True)
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
-    sku = relationship("Sku", back_populates="steps", foreign_keys=[sku_id], primaryjoin="Sku.sku_id == SkuStep.sku_id")
 
-# Production Plan Model
+class SkuPhase(Base):
+    __tablename__ = "sku_phases"
+    phase_id = Column(Integer, primary_key=True)
+    phase_code = Column(String(50), nullable=True)
+    phase_description = Column(String(200), nullable=False)
+    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
+
+
+class SkuDestination(Base):
+    __tablename__ = "sku_destinations"
+    id = Column(Integer, primary_key=True, index=True)
+    destination_code = Column(String(50), unique=True, nullable=False, index=True)
+    description = Column(String(200))
+
+
+# ── Production ───────────────────────────────────────────────────────────────
+
 class ProductionPlanHistory(Base):
     __tablename__ = "production_plan_history"
-
     id = Column(Integer, primary_key=True, index=True)
     plan_db_id = Column(Integer, ForeignKey("production_plans.id"), nullable=False)
-    action = Column(String(50), nullable=False)  # e.g., 'cancel', 'create', 'update'
+    action = Column(String(50), nullable=False)
     old_status = Column(String(20))
     new_status = Column(String(20))
     remarks = Column(String(255))
     changed_by = Column(String(50), nullable=False)
     changed_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-
     plan = relationship("ProductionPlan", backref="history")
+
 
 class ProductionPlan(Base):
     __tablename__ = "production_plans"
-
     id = Column(Integer, primary_key=True, index=True)
     plan_id = Column(String(50), unique=True, nullable=False, index=True)
     sku_id = Column(String(50), nullable=False)
     sku_name = Column(String(200))
-    plant = Column(String(50))  # Mixing 1, 2, 3
+    plant = Column(String(50))
     total_volume = Column(Float)
     total_plan_volume = Column(Float)
     batch_size = Column(Float)
@@ -238,25 +257,22 @@ class ProductionPlan(Base):
     ready_to_product = Column(Boolean, default=False)
     production = Column(Boolean, default=False)
     done = Column(Boolean, default=False)
-    # User tracking
     created_by = Column(String(50))
     updated_by = Column(String(50))
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
-
     batches = relationship("ProductionBatch", back_populates="plan", cascade="all, delete-orphan")
+
 
 class ProductionBatch(Base):
     __tablename__ = "production_batches"
-
     id = Column(Integer, primary_key=True, index=True)
     plan_id = Column(Integer, ForeignKey("production_plans.id"), nullable=False)
-    batch_id = Column(String(100), unique=True, nullable=False, index=True) # e.g. 2025-11-12-01001
+    batch_id = Column(String(100), unique=True, nullable=False, index=True)
     sku_id = Column(String(50), nullable=False)
     plant = Column(String(50))
     batch_size = Column(Float)
     status = Column(String(50), default="Created")
-    # Status flags
     flavour_house = Column(Boolean, default=False)
     spp = Column(Boolean, default=False)
     batch_prepare = Column(Boolean, default=False)
@@ -265,12 +281,13 @@ class ProductionBatch(Base):
     done = Column(Boolean, default=False)
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
-
     plan = relationship("ProductionPlan", back_populates="batches")
+
+
+# ── PreBatch ─────────────────────────────────────────────────────────────────
 
 class PreBatchReq(Base):
     __tablename__ = "prebatch_reqs"
-
     id = Column(Integer, primary_key=True, index=True)
     batch_db_id = Column(Integer, ForeignKey("production_batches.id"), nullable=False)
     plan_id = Column(String(50), index=True)
@@ -278,17 +295,15 @@ class PreBatchReq(Base):
     re_code = Column(String(50), index=True)
     ingredient_name = Column(String(200))
     required_volume = Column(Float)
-    wh = Column(String(50)) # warehouse location
-    status = Column(Integer, default=0) # 0=Pending, 1=In-Progress, 2=Completed
-    
+    wh = Column(String(50))
+    status = Column(Integer, default=0)  # 0=Pending, 1=In-Progress, 2=Completed
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
-
     batch = relationship("ProductionBatch", backref="reqs")
+
 
 class PreBatchRec(Base):
     __tablename__ = "prebatch_recs"
-
     id = Column(Integer, primary_key=True, index=True)
     req_id = Column(Integer, ForeignKey("prebatch_reqs.id"), nullable=True)
     batch_record_id = Column(String(100), unique=True, nullable=False, index=True)
@@ -299,62 +314,36 @@ class PreBatchRec(Base):
     net_volume = Column(Float)
     total_volume = Column(Float)
     total_request_volume = Column(Float)
-    intake_lot_id = Column(String(50), index=True, nullable=True) # Now nullable for multiple lots
+    intake_lot_id = Column(String(50), index=True, nullable=True)
     mat_sap_code = Column(String(50), index=True)
     prebatch_id = Column(String(100), index=True)
     recode_batch_id = Column(String(50), index=True)
-    
-    # Re-check fields
-    recheck_status = Column(Integer, default=0) # 0=Pending, 1=OK, 2=Error
+    recheck_status = Column(Integer, default=0)   # 0=Pending, 1=OK, 2=Error
     recheck_at = Column(TIMESTAMP, nullable=True)
     recheck_by = Column(String(50), nullable=True)
-    
+    packing_status = Column(Integer, default=0)    # 0=Unpacked, 1=Packed
+    packed_at = Column(TIMESTAMP, nullable=True)
+    packed_by = Column(String(50), nullable=True)
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-
     req = relationship("PreBatchReq", backref="recs")
     origins = relationship("PreBatchRecFrom", back_populates="prebatch_rec", cascade="all, delete-orphan")
 
+
 class PreBatchRecFrom(Base):
     __tablename__ = "prebatch_rec_from"
-
     id = Column(Integer, primary_key=True, index=True)
     prebatch_rec_id = Column(Integer, ForeignKey("prebatch_recs.id"), nullable=False, index=True)
     intake_lot_id = Column(String(50), nullable=False, index=True)
     mat_sap_code = Column(String(50), index=True)
     take_volume = Column(Float, nullable=False)
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-
     prebatch_rec = relationship("PreBatchRec", back_populates="origins")
 
-class SkuAction(Base):
-    __tablename__ = "sku_actions"
 
-    action_code = Column(String(50), primary_key=True)
-    action_description = Column(String(200), nullable=False)
-    component_filter = Column(String(255), nullable=True)
-    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
+# ── Reference Tables ─────────────────────────────────────────────────────────
 
-class SkuPhase(Base):
-    __tablename__ = "sku_phases"
-
-    phase_id = Column(Integer, primary_key=True)  # e.g., 10, 20, 30
-    phase_code = Column(String(50), nullable=True) # e.g., "B001"
-    phase_description = Column(String(200), nullable=False)  # e.g., "Mixing", "Heating", "Cooling"
-    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-    updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
-
-class SkuDestination(Base):
-    __tablename__ = "sku_destinations"
-
-    id = Column(Integer, primary_key=True, index=True)
-    destination_code = Column(String(50), unique=True, nullable=False, index=True)
-    description = Column(String(200))
-
-# Plant Model
 class Plant(Base):
     __tablename__ = "plants"
-
     id = Column(Integer, primary_key=True, index=True)
     plant_id = Column(String(50), unique=True, nullable=False, index=True)
     plant_name = Column(String(100), nullable=False)
@@ -364,10 +353,9 @@ class Plant(Base):
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
-# Warehouse Model
+
 class Warehouse(Base):
     __tablename__ = "warehouses"
-
     id = Column(Integer, primary_key=True, index=True)
     warehouse_id = Column(String(50), unique=True, nullable=False, index=True)
     name = Column(String(100), nullable=False)
@@ -376,15 +364,16 @@ class Warehouse(Base):
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
-# ============================================================================
-# DATABASE VIEWS (Read-Only Models)
-# ============================================================================
+
+# ── Database Views (Read-Only) ───────────────────────────────────────────────
+
+_VIEW = {'info': {'is_view': True}}
+
 
 class VSkuMasterDetail(Base):
-    """View: SKU Master with step counts and metadata"""
+    """v_sku_master_detail — SKU master with step counts"""
     __tablename__ = "v_sku_master_detail"
-    __table_args__ = {'info': {'is_view': True}}
-    
+    __table_args__ = _VIEW
     id = Column(Integer, primary_key=True)
     sku_id = Column(String(50))
     sku_name = Column(String(200))
@@ -404,11 +393,10 @@ class VSkuMasterDetail(Base):
 
 
 class VSkuStepDetail(Base):
-    """View: SKU Steps with all lookups and computed fields"""
+    """v_sku_step_detail — SKU steps with lookups and computed fields"""
     __tablename__ = "v_sku_step_detail"
-    __table_args__ = {'info': {'is_view': True}}
-    
-    step_id = Column("step_id", Integer, primary_key=True) # Matches view alias
+    __table_args__ = _VIEW
+    step_id = Column("step_id", Integer, primary_key=True)
     sku_id = Column(String(50))
     phase_number = Column(String(20))
     phase_id = Column(String(50))
@@ -430,10 +418,8 @@ class VSkuStepDetail(Base):
     temp_high = Column(Float)
     step_time = Column(Integer)
     step_timer_control = Column(Integer)
-    
     ph = Column(Float, nullable=True)
     brix = Column(Float, nullable=True)
-    
     qc_temp = Column(Boolean)
     record_steam_pressure = Column(Boolean)
     record_ctw = Column(Boolean)
@@ -441,19 +427,15 @@ class VSkuStepDetail(Base):
     operation_ph_record = Column(Boolean)
     brix_sp = Column(String(50))
     ph_sp = Column(String(50))
-    
     step_created_at = Column(TIMESTAMP)
     step_updated_at = Column(TIMESTAMP)
-    
-    # SKU Master info
+    # SKU master info
     sku_name = Column(String(200))
     std_batch_size = Column(Float)
-    uom_master = Column(String(20)) # Renamed to avoid collision or clarify
+    uom_master = Column(String(20))
     sku_status = Column(String(20))
-    
     # Lookups
-    action_description = Column(String(200)) # Matches view column name
-
+    action_description = Column(String(200))
     destination_description = Column(String(200))
     ingredient_name = Column(String(200))
     mat_sap_code = Column(String(50))
@@ -461,43 +443,34 @@ class VSkuStepDetail(Base):
     ingredient_category = Column(String(100))
     ingredient_unit = Column(String(20))
     std_package_size = Column(Float)
-    
-    # Computed fields
+    # Computed
     step_label = Column(String(20))
     full_action_description = Column(String(300))
     full_destination_description = Column(String(300))
 
 
 class VSkuComplete(Base):
-    """View: Complete denormalized SKU data for export/reporting"""
+    """v_sku_complete — Denormalized SKU data for export/reporting"""
     __tablename__ = "v_sku_complete"
-    __table_args__ = {'info': {'is_view': True}}
-    
-    # Composite primary key workaround - use sku_id + step_number
+    __table_args__ = _VIEW
     sku_id = Column(String(50), primary_key=True)
     step_number = Column(String(20), primary_key=True)
-    
     sku_name = Column(String(200))
     std_batch_size = Column(Float)
     uom = Column(String(20))
     status = Column(String(20))
-    
     phase_number = Column(String(20))
     phase_id = Column(String(50))
     sub_step = Column(Integer)
-    
     action = Column(String(100))
     action_code = Column(String(50))
     action_description = Column(String(200))
-    
     re_code = Column(String(50))
     ingredient_name = Column(String(200))
     mat_sap_code = Column(String(50))
     blind_code = Column(String(50))
-    
     destination = Column(String(100))
     destination_description = Column(String(200))
-    
     required_amount = Column(Float)
     low_tol = Column(Float)
     high_tol = Column(Float)
@@ -505,13 +478,8 @@ class VSkuComplete(Base):
     high_shear_rpm = Column(Float)
     temperature = Column(Float)
     step_time = Column(Integer)
-    
     setup_step = Column(String(100))
-    
     creat_by = Column(String(50))
     created_at = Column(TIMESTAMP)
     update_by = Column(String(50))
     updated_at = Column(TIMESTAMP)
-
-
-
