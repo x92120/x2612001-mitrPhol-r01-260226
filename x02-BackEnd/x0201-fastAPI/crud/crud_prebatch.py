@@ -31,7 +31,7 @@ def get_prebatch_recs(db: Session, skip: int = 0, limit: int = 100, wh: Optional
     """Get PreBatch records with pagination, optionally filtered by warehouse."""
     query = _base_rec_query(db)
     if wh and wh != "All Warehouse":
-        query = query.filter(models.PreBatchReq.wh == wh)
+        query = query.join(models.PreBatchReq, models.PreBatchRec.req_id == models.PreBatchReq.id).filter(models.PreBatchReq.wh == wh)
     records = query.order_by(models.PreBatchRec.created_at.desc()).offset(skip).limit(limit).all()
     return _populate_wh(records)
 
@@ -43,10 +43,10 @@ def get_prebatch_recs_by_plan(db: Session, plan_id: str) -> List[models.PreBatch
 
 
 def get_prebatch_recs_by_batch(db: Session, batch_id: str) -> List[models.PreBatchRec]:
-    """Get PreBatch records for a specific batch (prefix match on batch_record_id)."""
-    records = _base_rec_query(db).filter(
-        models.PreBatchRec.batch_record_id.like(f"{batch_id}%")
-    ).all()
+    """Get PreBatch records for a specific batch."""
+    records = _base_rec_query(db).join(
+        models.PreBatchReq, models.PreBatchRec.req_id == models.PreBatchReq.id
+    ).filter(models.PreBatchReq.batch_id == batch_id).all()
     return _populate_wh(records)
 
 
@@ -235,19 +235,13 @@ def ensure_prebatch_reqs_for_batch(db: Session, batch_id: str) -> bool:
             if std_batch_size > 0:
                 req_vol = (req_vol / std_batch_size) * batch.batch_size
 
-            # Warehouse from ingredient master (primary), fallback to first inventory lot
+            # Warehouse from ingredient master
             wh_loc = "-"
             ing = db.query(models.Ingredient.warehouse).filter(
                 models.Ingredient.re_code == re_code
             ).first()
             if ing and ing[0]:
                 wh_loc = ing[0]
-            else:
-                first_stock = db.query(models.IngredientIntakeList.warehouse_location).filter(
-                    models.IngredientIntakeList.re_code == re_code
-                ).first()
-                if first_stock:
-                    wh_loc = first_stock[0]
 
             db.add(models.PreBatchReq(
                 batch_db_id=batch.id,
@@ -259,14 +253,10 @@ def ensure_prebatch_reqs_for_batch(db: Session, batch_id: str) -> bool:
                 wh=wh_loc,
                 status=0,
             ))
-            created = True
 
-        if created:
-            db.commit()
-            return True
+        db.commit()
+        return True
     except Exception as e:
         db.rollback()
         logger.error("Error creating requirements for %s: %s", batch_id, e)
         return False
-
-    return False
