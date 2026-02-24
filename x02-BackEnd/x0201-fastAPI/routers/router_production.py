@@ -466,7 +466,10 @@ def release_batch_to_production(batch_id: str, db: Session = Depends(get_db)):
 @router.post("/sync-prebatch-wh")
 def sync_prebatch_warehouse(db: Session = Depends(get_db)):
     """Sync all prebatch_reqs.wh from ingredient master warehouse field.
-    Also sets ingredients with empty warehouse to 'MIX'."""
+    Also normalizes SSP→SPP and sets empty warehouses to MIX."""
+    # Step 0: Normalize SSP → SPP everywhere
+    r0a = db.execute(text("UPDATE ingredients SET warehouse = 'SPP' WHERE warehouse = 'SSP'"))
+    r0b = db.execute(text("UPDATE prebatch_reqs SET wh = 'SPP' WHERE wh = 'SSP'"))
     # Step 1: Set empty ingredient warehouses to MIX
     r1 = db.execute(text("""
         UPDATE ingredients SET warehouse = 'MIX'
@@ -482,6 +485,7 @@ def sync_prebatch_warehouse(db: Session = Depends(get_db)):
     db.commit()
     return {
         "status": "success",
+        "ssp_to_spp": r0a.rowcount + r0b.rowcount,
         "ingredients_set_to_mix": r1.rowcount,
         "prebatch_reqs_synced": r2.rowcount
     }

@@ -20,8 +20,9 @@ const { lastScan, connect } = useMqttLocalDevice()
 const loading = ref(false)
 const loadingRecords = ref(false)
 const plans = ref<any[]>([])
-const allRecords = ref<any[]>([])       // All prebatch_recs (middle panel)
-const batchRecords = ref<any[]>([])     // Records for selected batch (right panel)
+const fhRecords = ref<any[]>([])         // FH prebatch_recs (middle panel)
+const sppRecords = ref<any[]>([])        // SPP prebatch_recs (middle panel)
+const batchRecords = ref<any[]>([])      // Records for selected batch (right panel)
 const selectedBatch = ref<any>(null)
 const selectedPlan = ref<any>(null)
 const scanBatchId = ref('')
@@ -77,17 +78,22 @@ const activePlans = computed(() =>
 const isFH = (wh: string) =>
   wh?.toUpperCase().includes('FH') || wh?.toUpperCase().includes('FLAVOUR')
 
-/** Get bags for the selected batch, grouped by warehouse using req_id linkage */
+const isSPP = (wh: string) =>
+  wh?.toUpperCase().includes('SPP')
+
+/** Get bags for the selected batch, grouped by warehouse (FH/SPP only, excludes MIX) */
 const bagsByWarehouse = computed((): { FH: any[]; SPP: any[] } => {
   const result = { FH: [] as any[], SPP: [] as any[] }
   if (!selectedBatch.value) return result
   // Use batch-specific records (fetched via /prebatch-recs/by-batch/)
   batchRecords.value.forEach(bag => {
-    if (isFH(bag.wh || '')) {
+    const wh = bag.wh || ''
+    if (isFH(wh)) {
       result.FH.push(bag)
-    } else {
+    } else if (isSPP(wh)) {
       result.SPP.push(bag)
     }
+    // MIX and other warehouses are excluded
   })
   return result
 })
@@ -146,13 +152,9 @@ const whSortIcon = (col: string) => {
   return whSortAsc.value ? 'arrow_upward' : 'arrow_downward'
 }
 
-/** Middle panel: ALL records grouped by warehouse, sorted */
-const middlePanelFH = computed(() =>
-  sortWarehouseRecords(allRecords.value.filter(r => isFH(r.wh || '')))
-)
-const middlePanelSPP = computed(() =>
-  sortWarehouseRecords(allRecords.value.filter(r => !isFH(r.wh || '')))
-)
+/** Middle panel: records per warehouse, sorted */
+const middlePanelFH = computed(() => sortWarehouseRecords(fhRecords.value))
+const middlePanelSPP = computed(() => sortWarehouseRecords(sppRecords.value))
 
 /** Batch info for right panel */
 const batchInfo = computed(() => {
@@ -205,10 +207,16 @@ const fetchPlans = async () => {
 const fetchAllRecords = async () => {
   loadingRecords.value = true
   try {
-    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-recs/?limit=50`, {
-      headers: getAuthHeader() as Record<string, string>
-    })
-    allRecords.value = data || []
+    const [fh, spp] = await Promise.all([
+      $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-recs/?limit=200&wh=FH`, {
+        headers: getAuthHeader() as Record<string, string>
+      }),
+      $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-recs/?limit=200&wh=SPP`, {
+        headers: getAuthHeader() as Record<string, string>
+      }),
+    ])
+    fhRecords.value = fh || []
+    sppRecords.value = spp || []
   } catch (e) {
     console.error('Error fetching records:', e)
   } finally {
@@ -479,7 +487,7 @@ onMounted(() => {
               <q-spinner-gears size="40px" color="blue-grey" />
             </q-inner-loading>
             <q-scroll-area class="fit">
-              <div v-if="!loadingRecords && allRecords.length === 0" class="text-center q-pa-lg text-grey">
+              <div v-if="!loadingRecords && fhRecords.length === 0 && sppRecords.length === 0" class="text-center q-pa-lg text-grey">
                 <q-icon name="inbox" size="lg" class="q-mb-sm" /><br>
                 No pre-batch records found
               </div>

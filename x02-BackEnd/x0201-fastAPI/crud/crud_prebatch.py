@@ -1,9 +1,15 @@
 import logging
-from sqlalchemy.orm import Session, joinedload, selectinload
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+import sys
+from pathlib import Path
+
+# Ensure parent dir (x0201-fastAPI/) is on sys.path so models/schemas resolve
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from sqlalchemy.orm import Session, joinedload, selectinload  # type: ignore[import-untyped]
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError  # type: ignore[import-untyped]
 from typing import List, Optional
-import models
-import schemas
+import models  # type: ignore[import-untyped]
+import schemas  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +79,7 @@ def _restore_inventory(db: Session, re_code: str, intake_lot_id: str, volume: fl
 def create_prebatch_rec(db: Session, record: schemas.PreBatchRecCreate) -> models.PreBatchRec:
     """Create a new PreBatch record (transaction) and update inventory."""
     try:
-        record_data = record.dict(exclude={'origins'})
+        record_data = record.model_dump(exclude={'origins'})
         db_record = models.PreBatchRec(**record_data)
 
         # Auto-format prebatch_id
@@ -229,7 +235,6 @@ def ensure_prebatch_reqs_for_batch(db: Session, batch_id: str) -> bool:
             ingredient_info[step.re_code]['qty'] += (step.require or 0)
 
     try:
-        created = False
         for re_code, info in ingredient_info.items():
             req_vol = info['qty']
             if std_batch_size > 0:
