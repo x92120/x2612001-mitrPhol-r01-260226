@@ -1,4 +1,6 @@
 {
+    "venvPath": "/home/x92120/xApp/x01-mitrPhol/x01-localApp",
+    "venv": "venv",
     "executionEnvironments": [
         {
             "root": ".",

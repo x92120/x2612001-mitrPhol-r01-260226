@@ -3,12 +3,12 @@ SQLAlchemy ORM Models
 =====================
 All database tables and read-only views for the xMixing system.
 """
-from sqlalchemy import (
+from sqlalchemy import (  # type: ignore[import-untyped]
     Column, Integer, String, Enum, TIMESTAMP, text, DateTime,
     JSON, Float, ForeignKey, Date, Boolean, func,
 )
-from sqlalchemy.orm import relationship
-from database import Base
+from sqlalchemy.orm import relationship  # type: ignore[import-untyped]
+from database import Base  # type: ignore[import-untyped]
 import enum
 
 
@@ -367,13 +367,10 @@ class Warehouse(Base):
 
 # ── Database Views (Read-Only) ───────────────────────────────────────────────
 
-_VIEW = {'info': {'is_view': True}}
-
-
 class VSkuMasterDetail(Base):
     """v_sku_master_detail — SKU master with step counts"""
     __tablename__ = "v_sku_master_detail"
-    __table_args__ = _VIEW
+    __table_args__ = {'info': {'is_view': True}}
     id = Column(Integer, primary_key=True)
     sku_id = Column(String(50))
     sku_name = Column(String(200))
@@ -395,7 +392,7 @@ class VSkuMasterDetail(Base):
 class VSkuStepDetail(Base):
     """v_sku_step_detail — SKU steps with lookups and computed fields"""
     __tablename__ = "v_sku_step_detail"
-    __table_args__ = _VIEW
+    __table_args__ = {'info': {'is_view': True}}
     step_id = Column("step_id", Integer, primary_key=True)
     sku_id = Column(String(50))
     phase_number = Column(String(20))
@@ -452,7 +449,7 @@ class VSkuStepDetail(Base):
 class VSkuComplete(Base):
     """v_sku_complete — Denormalized SKU data for export/reporting"""
     __tablename__ = "v_sku_complete"
-    __table_args__ = _VIEW
+    __table_args__ = {'info': {'is_view': True}}
     sku_id = Column(String(50), primary_key=True)
     step_number = Column(String(20), primary_key=True)
     sku_name = Column(String(200))
