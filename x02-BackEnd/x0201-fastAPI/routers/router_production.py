@@ -465,12 +465,23 @@ def release_batch_to_production(batch_id: str, db: Session = Depends(get_db)):
 
 @router.post("/sync-prebatch-wh")
 def sync_prebatch_warehouse(db: Session = Depends(get_db)):
-    """Sync all prebatch_reqs.wh from ingredient master warehouse field."""
-    result = db.execute(text("""
+    """Sync all prebatch_reqs.wh from ingredient master warehouse field.
+    Also sets ingredients with empty warehouse to 'MIX'."""
+    # Step 1: Set empty ingredient warehouses to MIX
+    r1 = db.execute(text("""
+        UPDATE ingredients SET warehouse = 'MIX'
+        WHERE warehouse IS NULL OR warehouse = ''
+    """))
+    # Step 2: Sync prebatch_reqs.wh from ingredient master
+    r2 = db.execute(text("""
         UPDATE prebatch_reqs pr
         JOIN ingredients i ON pr.re_code = i.re_code
         SET pr.wh = i.warehouse
         WHERE i.warehouse IS NOT NULL AND i.warehouse != '' AND pr.wh != i.warehouse
     """))
     db.commit()
-    return {"status": "success", "rows_updated": result.rowcount}
+    return {
+        "status": "success",
+        "ingredients_set_to_mix": r1.rowcount,
+        "prebatch_reqs_synced": r2.rowcount
+    }
