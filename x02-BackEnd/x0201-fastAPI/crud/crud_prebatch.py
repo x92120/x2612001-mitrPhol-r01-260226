@@ -235,13 +235,19 @@ def ensure_prebatch_reqs_for_batch(db: Session, batch_id: str) -> bool:
             if std_batch_size > 0:
                 req_vol = (req_vol / std_batch_size) * batch.batch_size
 
-            # Default warehouse from first inventory lot
+            # Warehouse from ingredient master (primary), fallback to first inventory lot
             wh_loc = "-"
-            first_stock = db.query(models.IngredientIntakeList.warehouse_location).filter(
-                models.IngredientIntakeList.re_code == re_code
+            ing = db.query(models.Ingredient.warehouse).filter(
+                models.Ingredient.re_code == re_code
             ).first()
-            if first_stock:
-                wh_loc = first_stock[0]
+            if ing and ing[0]:
+                wh_loc = ing[0]
+            else:
+                first_stock = db.query(models.IngredientIntakeList.warehouse_location).filter(
+                    models.IngredientIntakeList.re_code == re_code
+                ).first()
+                if first_stock:
+                    wh_loc = first_stock[0]
 
             db.add(models.PreBatchReq(
                 batch_db_id=batch.id,

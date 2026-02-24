@@ -20,7 +20,8 @@ const { lastScan, connect } = useMqttLocalDevice()
 const loading = ref(false)
 const loadingRecords = ref(false)
 const plans = ref<any[]>([])
-const allRecords = ref<any[]>([])
+const allRecords = ref<any[]>([])       // All prebatch_recs (middle panel)
+const batchRecords = ref<any[]>([])     // Records for selected batch (right panel)
 const selectedBatch = ref<any>(null)
 const selectedPlan = ref<any>(null)
 const scanBatchId = ref('')
@@ -80,13 +81,8 @@ const isFH = (wh: string) =>
 const bagsByWarehouse = computed((): { FH: any[]; SPP: any[] } => {
   const result = { FH: [] as any[], SPP: [] as any[] }
   if (!selectedBatch.value) return result
-  // Build a set of req IDs that belong to this batch
-  const batchReqs = selectedBatch.value.reqs || []
-  const reqIds = new Set(batchReqs.map((r: any) => r.id))
-  if (reqIds.size === 0) return result
-  // Filter records whose req_id matches this batch's requirements
-  const bags = allRecords.value.filter(r => reqIds.has(r.req_id))
-  bags.forEach(bag => {
+  // Use batch-specific records (fetched via /prebatch-recs/by-batch/)
+  batchRecords.value.forEach(bag => {
     if (isFH(bag.wh || '')) {
       result.FH.push(bag)
     } else {
@@ -220,6 +216,18 @@ const fetchAllRecords = async () => {
   }
 }
 
+const fetchBatchRecords = async (batchId: string) => {
+  try {
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-recs/by-batch/${batchId}`, {
+      headers: getAuthHeader() as Record<string, string>
+    })
+    batchRecords.value = data || []
+  } catch (e) {
+    console.error('Error fetching batch records:', e)
+    batchRecords.value = []
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // ACTIONS
 // ═══════════════════════════════════════════════════════════════════
@@ -232,6 +240,7 @@ const onBatchClick = (batch: any, plan: any) => {
   selectedBatch.value = batch
   selectedPlan.value = plan
   scanBatchId.value = batch.batch_id
+  fetchBatchRecords(batch.batch_id)
 }
 
 const onScanBatchEnter = () => {
@@ -241,6 +250,7 @@ const onScanBatchEnter = () => {
     if (batch) {
       selectedBatch.value = batch
       selectedPlan.value = plan
+      fetchBatchRecords(batch.batch_id)
       $q.notify({ type: 'positive', message: `Batch ${batch.batch_id} loaded`, position: 'top' })
       return
     }
