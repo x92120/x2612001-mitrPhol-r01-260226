@@ -279,6 +279,36 @@ def delete_prebatch_rec(record_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Record not found")
     return {"status": "success"}
 
+
+class PackingStatusUpdate(BaseModel):
+    packing_status: int  # 0=Unpacked, 1=Packed
+    packed_by: Optional[str] = None
+
+
+@router.patch("/prebatch-recs/{record_id}/packing-status")
+def update_packing_status(record_id: int, data: PackingStatusUpdate, db: Session = Depends(get_db)):
+    """Update the packing status of a prebatch record (0=Unpacked, 1=Packed)."""
+    rec = db.query(models.PreBatchRec).filter(models.PreBatchRec.id == record_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    rec.packing_status = data.packing_status
+    if data.packing_status == 1:
+        rec.packed_at = datetime.now()
+        rec.packed_by = data.packed_by or "operator"
+    else:
+        rec.packed_at = None
+        rec.packed_by = None
+
+    db.commit()
+    db.refresh(rec)
+    return {
+        "id": rec.id,
+        "packing_status": rec.packing_status,
+        "packed_at": rec.packed_at,
+        "packed_by": rec.packed_by,
+    }
+
 # =============================================================================
 # DASHBOARD & ANALYTICS
 # =============================================================================

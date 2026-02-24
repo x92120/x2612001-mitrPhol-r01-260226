@@ -34,36 +34,170 @@ const showScanDialog = ref(false)
 const scanDialogWh = ref<'FH' | 'SPP'>('FH')
 
 // Warehouse sort
-const whSortCol = ref<'bag_id' | 're_code' | 'weight' | 'status'>('re_code')
+const whSortCol = ref<'bag_id' | 're_code' | 'weight' | 'status' | 'batch_id' | 'plan_id'>('re_code')
 const whSortAsc = ref(true)
+
+// ═══════════════════════════════════════════════════════════════════
+// SOUND SETTINGS
+// ═══════════════════════════════════════════════════════════════════
+const showSoundSettings = ref(false)
+
+interface SoundSettings {
+  enabled: boolean
+  volume: number           // 0 - 100
+  correctSound: 'beep' | 'chime' | 'bell' | 'ding'
+  wrongSound: 'buzzer' | 'error' | 'alarm' | 'honk'
+}
+
+const defaultSoundSettings: SoundSettings = {
+  enabled: true,
+  volume: 60,
+  correctSound: 'chime',
+  wrongSound: 'buzzer',
+}
+
+const soundSettings = ref<SoundSettings>({ ...defaultSoundSettings })
+
+// Load from localStorage
+const loadSoundSettings = () => {
+  try {
+    const saved = localStorage.getItem('packinglist_sound_settings')
+    if (saved) {
+      soundSettings.value = { ...defaultSoundSettings, ...JSON.parse(saved) }
+    }
+  } catch { /* ignore */ }
+}
+
+const saveSoundSettings = () => {
+  try {
+    localStorage.setItem('packinglist_sound_settings', JSON.stringify(soundSettings.value))
+  } catch { /* ignore */ }
+}
+
+watch(soundSettings, saveSoundSettings, { deep: true })
 
 // ═══════════════════════════════════════════════════════════════════
 // SOUND EFFECTS
 // ═══════════════════════════════════════════════════════════════════
+const correctSoundOptions = [
+  { value: 'beep',  label: '🔔 Beep',  desc: 'Simple beep tone' },
+  { value: 'chime', label: '🎵 Chime', desc: 'Two-tone ascending chime' },
+  { value: 'bell',  label: '🔔 Bell',  desc: 'Bright bell ring' },
+  { value: 'ding',  label: '✨ Ding',  desc: 'Soft ding notification' },
+]
+const wrongSoundOptions = [
+  { value: 'buzzer', label: '🚨 Buzzer', desc: 'Low buzzer tone' },
+  { value: 'error',  label: '❌ Error',  desc: 'Error alert sound' },
+  { value: 'alarm',  label: '⚠️ Alarm',  desc: 'Warning alarm' },
+  { value: 'honk',   label: '📢 Honk',   desc: 'Short horn honk' },
+]
+
 const playSound = async (type: 'correct' | 'wrong') => {
+  if (!soundSettings.value.enabled) return
+
+  const vol = soundSettings.value.volume / 100
   try {
     const ctx = new AudioContext()
     await ctx.resume()
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    gain.gain.value = 0.4
+
     if (type === 'correct') {
+      await _playCorrectSound(ctx, vol)
+    } else {
+      await _playWrongSound(ctx, vol)
+    }
+  } catch (e) {
+    console.warn('Sound playback failed:', e)
+  }
+}
+
+const _playCorrectSound = async (ctx: AudioContext, vol: number) => {
+  const osc = ctx.createOscillator()
+  const gain = ctx.createGain()
+  osc.connect(gain)
+  gain.connect(ctx.destination)
+  gain.gain.value = vol * 0.5
+
+  const soundType = soundSettings.value.correctSound
+  switch (soundType) {
+    case 'beep':
+      osc.frequency.value = 1000
+      osc.type = 'sine'
+      osc.start()
+      setTimeout(() => { osc.stop(); ctx.close() }, 200)
+      break
+    case 'chime':
       osc.frequency.value = 880
       osc.type = 'sine'
       osc.start()
       setTimeout(() => { osc.frequency.value = 1320 }, 100)
-      setTimeout(() => { osc.stop(); ctx.close() }, 250)
-    } else {
+      setTimeout(() => { osc.stop(); ctx.close() }, 280)
+      break
+    case 'bell': {
+      osc.frequency.value = 1200
+      osc.type = 'sine'
+      gain.gain.setValueAtTime(vol * 0.6, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5)
+      osc.start()
+      setTimeout(() => { osc.stop(); ctx.close() }, 500)
+      break
+    }
+    case 'ding': {
+      osc.frequency.value = 1500
+      osc.type = 'sine'
+      gain.gain.setValueAtTime(vol * 0.4, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3)
+      osc.start()
+      setTimeout(() => { osc.stop(); ctx.close() }, 350)
+      break
+    }
+  }
+}
+
+const _playWrongSound = async (ctx: AudioContext, vol: number) => {
+  const osc = ctx.createOscillator()
+  const gain = ctx.createGain()
+  osc.connect(gain)
+  gain.connect(ctx.destination)
+  gain.gain.value = vol * 0.5
+
+  const soundType = soundSettings.value.wrongSound
+  switch (soundType) {
+    case 'buzzer':
       osc.frequency.value = 200
       osc.type = 'square'
       osc.start()
       setTimeout(() => { osc.frequency.value = 150 }, 150)
       setTimeout(() => { osc.stop(); ctx.close() }, 400)
+      break
+    case 'error': {
+      osc.frequency.value = 400
+      osc.type = 'sawtooth'
+      osc.start()
+      setTimeout(() => { osc.frequency.value = 300 }, 100)
+      setTimeout(() => { osc.frequency.value = 200 }, 200)
+      setTimeout(() => { osc.stop(); ctx.close() }, 350)
+      break
     }
-  } catch (e) {
-    console.warn('Sound playback failed:', e)
+    case 'alarm': {
+      osc.frequency.value = 600
+      osc.type = 'square'
+      gain.gain.value = vol * 0.35
+      osc.start()
+      setTimeout(() => { osc.frequency.value = 400 }, 120)
+      setTimeout(() => { osc.frequency.value = 600 }, 240)
+      setTimeout(() => { osc.frequency.value = 400 }, 360)
+      setTimeout(() => { osc.stop(); ctx.close() }, 480)
+      break
+    }
+    case 'honk': {
+      osc.frequency.value = 250
+      osc.type = 'sawtooth'
+      gain.gain.setValueAtTime(vol * 0.5, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3)
+      osc.start()
+      setTimeout(() => { osc.stop(); ctx.close() }, 350)
+      break
+    }
   }
 }
 
@@ -122,6 +256,12 @@ const sortWarehouseRecords = (list: any[]) => {
     if (col === 'bag_id') {
       va = a.batch_record_id || ''
       vb = b.batch_record_id || ''
+    } else if (col === 'batch_id') {
+      va = a.batch_id || ''
+      vb = b.batch_id || ''
+    } else if (col === 'plan_id') {
+      va = a.plan_id || ''
+      vb = b.plan_id || ''
     } else if (col === 're_code') {
       va = a.re_code || ''
       vb = b.re_code || ''
@@ -138,7 +278,7 @@ const sortWarehouseRecords = (list: any[]) => {
   })
 }
 
-const toggleWhSort = (col: 'bag_id' | 're_code' | 'weight' | 'status') => {
+const toggleWhSort = (col: 'bag_id' | 're_code' | 'weight' | 'status' | 'batch_id' | 'plan_id') => {
   if (whSortCol.value === col) {
     whSortAsc.value = !whSortAsc.value
   } else {
@@ -153,8 +293,8 @@ const whSortIcon = (col: string) => {
 }
 
 /** Middle panel: records per warehouse, sorted */
-const middlePanelFH = computed(() => sortWarehouseRecords(fhRecords.value))
-const middlePanelSPP = computed(() => sortWarehouseRecords(sppRecords.value))
+const middlePanelFH = computed(() => sortWarehouseRecords(fhRecords.value.filter((b: any) => b.packing_status !== 1)))
+const middlePanelSPP = computed(() => sortWarehouseRecords(sppRecords.value.filter((b: any) => b.packing_status !== 1)))
 
 /** Batch info for right panel */
 const batchInfo = computed(() => {
@@ -298,7 +438,7 @@ const openScanSimulator = (wh: 'FH' | 'SPP') => {
   showScanDialog.value = true
 }
 
-const onSimScanClick = (bag: any) => {
+const onSimScanClick = async (bag: any) => {
   if (!selectedBatch.value) {
     playSound('wrong')
     $q.notify({ type: 'negative', message: 'Please select a Packing Box first!', icon: 'warning', position: 'top' })
@@ -313,7 +453,28 @@ const onSimScanClick = (bag: any) => {
   if (belongsToBox) {
     // Correct — this bag belongs to the selected packing box
     playSound('correct')
-    bag.packing_status = 1 // Mark as packed locally
+
+    // Persist packing_status=1 to backend
+    try {
+      await $fetch(`${appConfig.apiBaseUrl}/prebatch-recs/${bag.id}/packing-status`, {
+        method: 'PATCH',
+        headers: getAuthHeader() as Record<string, string>,
+        body: { packing_status: 1, packed_by: 'operator' },
+      })
+    } catch (e) {
+      console.error('Failed to update packing status:', e)
+    }
+
+    // Update ALL local data sources that may reference this bag
+    const markPacked = (list: any[]) => {
+      const found = list.find((b: any) => b.id === bag.id)
+      if (found) found.packing_status = 1
+    }
+    markPacked(fhRecords.value)       // Middle panel FH
+    markPacked(sppRecords.value)      // Middle panel SPP
+    markPacked(batchRecords.value)    // Right panel (packing box list)
+    bag.packing_status = 1            // Current scan dialog item
+
     const whLabel = scanDialogWh.value
     if (whLabel === 'FH') scanFH.value = bag.batch_record_id
     else scanSPP.value = bag.batch_record_id
@@ -353,6 +514,7 @@ watch(lastScan, (scan) => {
 // ═══════════════════════════════════════════════════════════════════
 
 onMounted(() => {
+  loadSoundSettings()
   fetchPlans()
   fetchAllRecords()
   connect()
@@ -369,10 +531,13 @@ onMounted(() => {
           <div class="text-h6 text-weight-bolder">{{ t('nav.packingList') }}</div>
         </div>
         <div class="row items-center q-gutter-sm">
+          <q-btn flat dense round :icon="soundSettings.enabled ? 'volume_up' : 'volume_off'" color="white" @click="showSoundSettings = true">
+            <q-tooltip>Sound Settings</q-tooltip>
+          </q-btn>
           <q-btn flat dense round icon="refresh" color="white" @click="fetchPlans(); fetchAllRecords()" :loading="loading">
             <q-tooltip>Refresh</q-tooltip>
           </q-btn>
-          <div class="text-caption text-blue-2">v2.1</div>
+          <div class="text-caption text-blue-2">v2.2</div>
         </div>
       </div>
     </div>
@@ -514,6 +679,12 @@ onMounted(() => {
                   <q-markup-table dense flat square separator="cell" class="bg-white" style="font-size: 0.75rem;">
                     <thead class="bg-orange-1 text-orange-10">
                       <tr>
+                        <th class="text-left cursor-pointer" style="font-size: 0.7rem;" @click="toggleWhSort('plan_id')">
+                          Plan <q-icon :name="whSortIcon('plan_id')" size="12px" />
+                        </th>
+                        <th class="text-left cursor-pointer" style="font-size: 0.7rem;" @click="toggleWhSort('batch_id')">
+                          Batch <q-icon :name="whSortIcon('batch_id')" size="12px" />
+                        </th>
                         <th class="text-left cursor-pointer" style="font-size: 0.7rem;" @click="toggleWhSort('bag_id')">
                           Bag ID <q-icon :name="whSortIcon('bag_id')" size="12px" />
                         </th>
@@ -530,6 +701,8 @@ onMounted(() => {
                     </thead>
                     <tbody>
                       <tr v-for="bag in middlePanelFH" :key="bag.id" :class="getBagRowClass(bag)">
+                        <td style="font-size: 0.6rem;" class="text-grey-8">{{ bag.plan_id || '-' }}</td>
+                        <td style="font-size: 0.6rem;" class="text-grey-8">{{ bag.batch_id?.split('-').slice(-1)[0] || '-' }}</td>
                         <td class="text-weight-medium" style="font-size: 0.65rem;">{{ bag.batch_record_id?.split('-').slice(-2).join('-') }}</td>
                         <td style="font-size: 0.7rem;">{{ bag.re_code }}</td>
                         <td class="text-right text-weight-bold" style="font-size: 0.7rem;">{{ bag.net_volume?.toFixed(3) }}</td>
@@ -538,7 +711,7 @@ onMounted(() => {
                         </td>
                       </tr>
                       <tr v-if="middlePanelFH.length === 0">
-                        <td colspan="4" class="text-center text-grey text-italic q-pa-sm">No FH pre-batch</td>
+                        <td colspan="6" class="text-center text-grey text-italic q-pa-sm">No FH pre-batch</td>
                       </tr>
                     </tbody>
                   </q-markup-table>
@@ -565,6 +738,12 @@ onMounted(() => {
                   <q-markup-table dense flat square separator="cell" class="bg-white" style="font-size: 0.75rem;">
                     <thead class="bg-teal-1 text-teal-10">
                       <tr>
+                        <th class="text-left cursor-pointer" style="font-size: 0.7rem;" @click="toggleWhSort('plan_id')">
+                          Plan <q-icon :name="whSortIcon('plan_id')" size="12px" />
+                        </th>
+                        <th class="text-left cursor-pointer" style="font-size: 0.7rem;" @click="toggleWhSort('batch_id')">
+                          Batch <q-icon :name="whSortIcon('batch_id')" size="12px" />
+                        </th>
                         <th class="text-left cursor-pointer" style="font-size: 0.7rem;" @click="toggleWhSort('bag_id')">
                           Bag ID <q-icon :name="whSortIcon('bag_id')" size="12px" />
                         </th>
@@ -581,6 +760,8 @@ onMounted(() => {
                     </thead>
                     <tbody>
                       <tr v-for="bag in middlePanelSPP" :key="bag.id" :class="getBagRowClass(bag)">
+                        <td style="font-size: 0.6rem;" class="text-grey-8">{{ bag.plan_id || '-' }}</td>
+                        <td style="font-size: 0.6rem;" class="text-grey-8">{{ bag.batch_id?.split('-').slice(-1)[0] || '-' }}</td>
                         <td class="text-weight-medium" style="font-size: 0.65rem;">{{ bag.batch_record_id?.split('-').slice(-2).join('-') }}</td>
                         <td style="font-size: 0.7rem;">{{ bag.re_code }}</td>
                         <td class="text-right text-weight-bold" style="font-size: 0.7rem;">{{ bag.net_volume?.toFixed(3) }}</td>
@@ -589,7 +770,7 @@ onMounted(() => {
                         </td>
                       </tr>
                       <tr v-if="middlePanelSPP.length === 0">
-                        <td colspan="4" class="text-center text-grey text-italic q-pa-sm">No SPP pre-batch</td>
+                        <td colspan="6" class="text-center text-grey text-italic q-pa-sm">No SPP pre-batch</td>
                       </tr>
                     </tbody>
                   </q-markup-table>
@@ -880,6 +1061,136 @@ onMounted(() => {
             </q-item>
           </q-list>
         </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- ═══ SOUND SETTINGS DIALOG ═══ -->
+    <q-dialog v-model="showSoundSettings" position="right" full-height>
+      <q-card style="width: 380px; max-width: 90vw;" class="column">
+        <!-- Header -->
+        <q-card-section class="bg-blue-9 text-white q-py-sm">
+          <div class="row items-center justify-between no-wrap">
+            <div class="row items-center q-gutter-sm">
+              <q-icon name="tune" size="sm" />
+              <div class="text-subtitle1 text-weight-bold">Sound Settings</div>
+            </div>
+            <q-btn flat round dense icon="close" color="white" v-close-popup />
+          </div>
+        </q-card-section>
+
+        <q-separator />
+
+        <q-card-section class="col q-pa-md" style="overflow: auto;">
+          <!-- Master Enable -->
+          <div class="row items-center justify-between q-mb-md q-pa-sm rounded-borders" :class="soundSettings.enabled ? 'bg-green-1' : 'bg-grey-2'">
+            <div class="row items-center q-gutter-sm">
+              <q-icon :name="soundSettings.enabled ? 'volume_up' : 'volume_off'" :color="soundSettings.enabled ? 'green' : 'grey'" size="sm" />
+              <div>
+                <div class="text-weight-bold">Sound Effects</div>
+                <div class="text-caption text-grey-7">{{ soundSettings.enabled ? 'Sounds are ON' : 'Sounds are OFF' }}</div>
+              </div>
+            </div>
+            <q-toggle v-model="soundSettings.enabled" color="green" />
+          </div>
+
+          <template v-if="soundSettings.enabled">
+            <!-- Volume Slider -->
+            <div class="q-mb-lg">
+              <div class="row items-center justify-between q-mb-xs">
+                <div class="text-weight-bold text-body2">
+                  <q-icon name="volume_up" size="xs" class="q-mr-xs" />Volume
+                </div>
+                <q-badge color="blue-9" :label="`${soundSettings.volume}%`" />
+              </div>
+              <q-slider
+                v-model="soundSettings.volume"
+                :min="10" :max="100" :step="5"
+                color="blue-9"
+                label
+                :label-value="`${soundSettings.volume}%`"
+                markers marker-labels
+                snap
+              />
+            </div>
+
+            <q-separator class="q-mb-md" />
+
+            <!-- Correct Sound Selection -->
+            <div class="q-mb-md">
+              <div class="row items-center q-gutter-xs q-mb-sm">
+                <q-icon name="check_circle" color="green" size="sm" />
+                <span class="text-weight-bold text-body2">Correct Scan Sound</span>
+              </div>
+              <div class="q-gutter-xs">
+                <q-btn
+                  v-for="opt in correctSoundOptions" :key="opt.value"
+                  :outline="soundSettings.correctSound !== opt.value"
+                  :color="soundSettings.correctSound === opt.value ? 'green' : 'grey-5'"
+                  :text-color="soundSettings.correctSound === opt.value ? 'white' : 'dark'"
+                  dense no-caps size="sm"
+                  class="q-mr-xs q-mb-xs"
+                  @click="soundSettings.correctSound = opt.value as any"
+                >
+                  {{ opt.label }}
+                </q-btn>
+              </div>
+              <div class="text-caption text-grey-6 q-mt-xs">
+                {{ correctSoundOptions.find(o => o.value === soundSettings.correctSound)?.desc }}
+              </div>
+              <q-btn
+                flat dense size="sm" icon="play_circle" label="Preview"
+                color="green" class="q-mt-xs" no-caps
+                @click="playSound('correct')"
+              />
+            </div>
+
+            <q-separator class="q-mb-md" />
+
+            <!-- Wrong Sound Selection -->
+            <div class="q-mb-md">
+              <div class="row items-center q-gutter-xs q-mb-sm">
+                <q-icon name="cancel" color="red" size="sm" />
+                <span class="text-weight-bold text-body2">Wrong Scan Sound</span>
+              </div>
+              <div class="q-gutter-xs">
+                <q-btn
+                  v-for="opt in wrongSoundOptions" :key="opt.value"
+                  :outline="soundSettings.wrongSound !== opt.value"
+                  :color="soundSettings.wrongSound === opt.value ? 'red' : 'grey-5'"
+                  :text-color="soundSettings.wrongSound === opt.value ? 'white' : 'dark'"
+                  dense no-caps size="sm"
+                  class="q-mr-xs q-mb-xs"
+                  @click="soundSettings.wrongSound = opt.value as any"
+                >
+                  {{ opt.label }}
+                </q-btn>
+              </div>
+              <div class="text-caption text-grey-6 q-mt-xs">
+                {{ wrongSoundOptions.find(o => o.value === soundSettings.wrongSound)?.desc }}
+              </div>
+              <q-btn
+                flat dense size="sm" icon="play_circle" label="Preview"
+                color="red" class="q-mt-xs" no-caps
+                @click="playSound('wrong')"
+              />
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="text-center q-pa-lg text-grey">
+              <q-icon name="volume_off" size="xl" class="q-mb-sm" /><br>
+              <div class="text-body2">Sound effects are disabled</div>
+              <div class="text-caption">Toggle the switch above to enable</div>
+            </div>
+          </template>
+        </q-card-section>
+
+        <!-- Footer -->
+        <q-separator />
+        <q-card-actions align="between" class="q-px-md">
+          <q-btn flat dense no-caps color="grey" label="Reset Defaults" icon="restart_alt" @click="soundSettings = { ...defaultSoundSettings }" />
+          <q-btn flat dense no-caps color="blue-9" label="Done" icon="check" v-close-popup />
+        </q-card-actions>
       </q-card>
     </q-dialog>
   </q-page>

@@ -15,9 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 def _populate_wh(records: List[models.PreBatchRec]) -> List[models.PreBatchRec]:
-    """Populate the transient `wh` field from the eager-loaded PreBatchReq relationship."""
+    """Populate transient `wh` and `batch_id` fields from the eager-loaded PreBatchReq relationship."""
     for rec in records:
         rec.wh = rec.req.wh if rec.req else "-"
+        rec.batch_id = rec.req.batch_id if rec.req else None  # type: ignore[attr-defined]
     return records
 
 

@@ -316,6 +316,10 @@ class PreBatchRec(PreBatchRecBase):
     id: int
     created_at: datetime
     wh: Optional[str] = None
+    batch_id: Optional[str] = None
+    packing_status: Optional[int] = 0
+    packed_at: Optional[datetime] = None
+    packed_by: Optional[str] = None
     origins: List[PreBatchRecFrom] = []
     
     class Config:
