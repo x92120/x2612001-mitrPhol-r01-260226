@@ -76,13 +76,16 @@ const activePlans = computed(() =>
 const isFH = (wh: string) =>
   wh?.toUpperCase().includes('FH') || wh?.toUpperCase().includes('FLAVOUR')
 
-/** Get bags for the selected batch, grouped by warehouse using wh from API */
+/** Get bags for the selected batch, grouped by warehouse using req_id linkage */
 const bagsByWarehouse = computed((): { FH: any[]; SPP: any[] } => {
   const result = { FH: [] as any[], SPP: [] as any[] }
   if (!selectedBatch.value) return result
-  const batchId = selectedBatch.value.batch_id
-  // Filter records that belong to this batch
-  const bags = allRecords.value.filter(r => r.batch_record_id?.includes(batchId))
+  // Build a set of req IDs that belong to this batch
+  const batchReqs = selectedBatch.value.reqs || []
+  const reqIds = new Set(batchReqs.map((r: any) => r.id))
+  if (reqIds.size === 0) return result
+  // Filter records whose req_id matches this batch's requirements
+  const bags = allRecords.value.filter(r => reqIds.has(r.req_id))
   bags.forEach(bag => {
     if (isFH(bag.wh || '')) {
       result.FH.push(bag)
