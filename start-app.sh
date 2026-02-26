@@ -29,7 +29,7 @@ cd ../..
 echo "💻 Starting Frontend (Nuxt)..."
 cd x01-FrontEnd/x0101-xMixing_Nuxt
 # Note: npm run build should have been run before for production
-npm run dev > ../../frontend.log 2>&1 &
+npm run dev -- --host 0.0.0.0 > ../../frontend.log 2>&1 &
 cd ../..
 
 echo "✅ All services are being started."
