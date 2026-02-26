@@ -73,7 +73,6 @@ class IngredientBase(BaseModel):
     ingredient_id: str = Field(..., min_length=1, max_length=50)
     name: str = Field(..., min_length=1, max_length=150)
     std_package_size: Optional[float] = Field(25.0, ge=0)
-    std_prebatch_batch_size: Optional[float] = Field(0.0, ge=0)
     unit: str = Field("kg", max_length=20)
     Group: Optional[str] = Field(None, max_length=50)
     warehouse: Optional[str] = Field(None, max_length=50)

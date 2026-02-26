@@ -18,7 +18,6 @@ interface Ingredient {
   creat_by: string
   update_by?: string
   std_package_size?: number
-  std_prebatch_batch_size?: number
 }
 
 const $q = useQuasar()
@@ -93,7 +92,6 @@ const form = ref<Ingredient>({
   creat_by: '',
   update_by: '',
   std_package_size: 25.0,
-  std_prebatch_batch_size: 0.0,
 })
 
 const columns = computed((): QTableColumn[] => [
@@ -124,7 +122,6 @@ const openAddDialog = () => {
     creat_by: '',
     update_by: '',
     std_package_size: 25.0,
-    std_prebatch_batch_size: 0.0,
   }
   showDialog.value = true
 }
@@ -183,7 +180,7 @@ const printLabel = async (row: Ingredient) => {
            <div class="code">${row.re_code || row.ingredient_id}</div>
            <div class="sub">${row.name}</div>
            <div class="sub">MAT: ${row.mat_sap_code}</div>
-           <div class="sub">Std Pkg: ${row.std_package_size} kg</div>
+           <div class="sub">Container: ${row.std_package_size} kg</div>
            <img class="qr" src="${qrDataUrl}" />
         </div>
       </body>
@@ -422,13 +419,7 @@ const onSave = async () => {
             type="number"
             class="q-mb-md"
           />
-          <q-input
-            v-model.number="form.std_prebatch_batch_size"
-            :label="t('ingConfig.stdPrebatchSize')"
-            dense
-            type="number"
-            class="q-mb-md"
-          />
+
           <q-input v-model="form.Group" :label="t('ingConfig.groupColorFlavor')" dense class="q-mb-md" />
           <q-input v-model="form.warehouse" :label="t('ingConfig.warehouse')" dense class="q-mb-md" />
           <q-select

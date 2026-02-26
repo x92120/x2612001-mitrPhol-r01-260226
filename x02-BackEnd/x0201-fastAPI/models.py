@@ -55,7 +55,6 @@ class Ingredient(Base):
     unit = Column(String(20), default="kg")
     Group = Column(String(50))
     std_package_size = Column(Float, default=25.0)
-    std_prebatch_batch_size = Column(Float, default=0.0)
     warehouse = Column(String(50), default="")
     status = Column(String(20), default="Active")
     creat_by = Column(String(50), nullable=False)

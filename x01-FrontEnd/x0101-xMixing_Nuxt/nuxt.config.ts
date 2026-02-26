@@ -40,5 +40,10 @@ export default defineNuxtConfig({
   future: {
     compatibilityVersion: 4,
   },
+  vite: {
+    server: {
+      allowedHosts: ['xmixingcontrolprocess.xdev.co.th', 'localhost']
+    }
+  },
   compatibilityDate: '2024-11-01',
 })
