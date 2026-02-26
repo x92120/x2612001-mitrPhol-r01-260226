@@ -27,6 +27,9 @@ const { t } = useI18n()
 // --- State ---
 const ingredients = ref<Ingredient[]>([])
 const loading = ref(false)
+const warehouses = ref<any[]>([])
+const warehouseOptions = computed(() => warehouses.value.map(w => w.warehouse_id))
+const packageContainerOptions = [1, 5, 10, 15, 20, 25, 30]
 
 const showDialog = ref(false)
 const isEditing = ref(false)
@@ -57,10 +60,23 @@ const fetchIngredients = async () => {
   }
 }
 
+const fetchWarehouses = async () => {
+  try {
+    const response = await fetch(`${appConfig.apiBaseUrl}/warehouses/`, {
+      headers: getHeaders(),
+    })
+    if (response.ok) {
+      warehouses.value = await response.json()
+    }
+  } catch (error) {
+    console.error('Fetch warehouses error:', error)
+  }
+}
+
 // Load data on mount
 onMounted(() => {
   fetchIngredients()
-  fetchIngredients()
+  fetchWarehouses()
 })
 
 const filters = ref<Record<string, string>>({})
@@ -412,16 +428,25 @@ const onSave = async () => {
           <q-input v-model="form.ingredient_id" :label="t('ingConfig.ingredientId') + ' *'" dense class="q-mb-md" />
           <q-input v-model="form.name" :label="t('ingConfig.ingredientName') + ' *'" dense class="q-mb-md" />
           <q-input v-model="form.unit" :label="t('ingConfig.unit')" dense class="q-mb-md" />
-          <q-input
+          
+          <q-select
             v-model.number="form.std_package_size"
+            :options="packageContainerOptions"
             :label="t('ingConfig.batchPrepPkgSize') + ' (kg)'"
             dense
-            type="number"
+            emit-value
+            map-options
             class="q-mb-md"
           />
 
           <q-input v-model="form.Group" :label="t('ingConfig.groupColorFlavor')" dense class="q-mb-md" />
-          <q-input v-model="form.warehouse" :label="t('ingConfig.warehouse')" dense class="q-mb-md" />
+          <q-select
+            v-model="form.warehouse"
+            :options="warehouseOptions"
+            :label="t('ingConfig.warehouse')"
+            dense
+            class="q-mb-md"
+          />
           <q-select
             v-model="form.status"
             :options="['Active', 'Inactive']"
