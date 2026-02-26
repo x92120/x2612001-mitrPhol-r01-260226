@@ -33,7 +33,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV /home/x92120/xApp/x01-mitrPhol/x01-localApp/x02-BackEnd/.venv
+set -gx VIRTUAL_ENV /home/x-root/xApp/x2612001-mitrPhol-r01/x02-BackEnd/.venv
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/"bin $PATH
