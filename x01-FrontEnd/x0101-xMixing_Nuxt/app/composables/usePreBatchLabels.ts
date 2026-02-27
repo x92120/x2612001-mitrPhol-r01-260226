@@ -60,13 +60,34 @@ export function usePreBatchLabels(deps: LabelDeps) {
         Lot2: origins?.[1] ? `2. ${origins[1].intake_lot_id} / ${(origins[1].take_volume || 0).toFixed(4)} kg` : '',
     })
 
-    const buildLabelData = (opts: { batch: any, planId: string, plan: any, reCode: string, ingName: string, matSapCode: string, containerType?: string, netVol: number, totalVol: number, pkgNo: number | string, qrCode: string, timestamp: string, origins?: any[], fallbackLotId?: string }) => {
+    const buildLabelData = (opts: {
+        batch: any,
+        planId: string,
+        plan: any,
+        reCode: string,
+        ingName: string,
+        matSapCode: string,
+        containerType?: string,
+        netVol: number,
+        totalVol: number,
+        pkgNo: number | string,
+        totalPkgs?: number | string,
+        qrCode: string,
+        timestamp: string,
+        origins?: any[],
+        fallbackLotId?: string
+    }) => {
         const batchIdValue = opts.batch.batch_id || opts.batch.batchId || '-'
         const totalBatches = opts.plan?.num_batches || (opts.plan?.batches?.length) || '-'
         const batchMatch = batchIdValue.match(/-(\d+)$/)
         const currentBatchNo = batchMatch ? parseInt(batchMatch[1]) : '-'
 
         const skuFullName = opts.batch.sku_id ? `${opts.batch.sku_id} / ${opts.plan?.sku_name || opts.plan?.name || '-'}` : (opts.plan?.sku_name || '-');
+
+        // Format PackageNo as "1/3" if totalPkgs is available
+        const displayPkgNo = (opts.totalPkgs && opts.totalPkgs !== '-' && opts.totalPkgs !== 1)
+            ? `${opts.pkgNo}/${opts.totalPkgs}`
+            : opts.pkgNo;
 
         return {
             SKU: opts.batch.sku_id || '-',
@@ -87,7 +108,7 @@ export function usePreBatchLabels(deps: LabelDeps) {
             Timestamp: opts.timestamp,
             PackageSize: opts.netVol.toFixed(4),
             BatchRequireSize: opts.totalVol.toFixed(4),
-            PackageNo: opts.pkgNo,
+            PackageNo: displayPkgNo,
             QRCode: opts.qrCode,
             ...buildLotStrings(opts.origins, opts.fallbackLotId, opts.netVol),
         }
@@ -98,6 +119,7 @@ export function usePreBatchLabels(deps: LabelDeps) {
         if (!deps.selectedBatch.value || !deps.selectedReCode.value) return null
         const ing = deps.selectableIngredients.value.find((i: any) => i.re_code === deps.selectedReCode.value)
         const pkgNo = deps.nextPackageNo.value
+        const totalPkgs = deps.requestBatch.value
         return buildLabelData({
             batch: deps.selectedBatch.value,
             planId: deps.selectedProductionPlan.value,
@@ -109,6 +131,7 @@ export function usePreBatchLabels(deps: LabelDeps) {
             netVol: capturedScaleValue.value,
             totalVol: deps.requireVolume.value,
             pkgNo,
+            totalPkgs,
             qrCode: `${deps.selectedBatch.value.plan_id},${deps.selectedBatch.value.batch_id},${deps.selectedBatch.value.batch_id}${deps.selectedReCode.value}${String(pkgNo).padStart(2, '0')},${deps.selectedReCode.value},${capturedScaleValue.value}`,
             timestamp: formatDate(new Date().toISOString()),
             origins: deps.currentPackageOrigins.value.length > 0 ? deps.currentPackageOrigins.value : undefined,
@@ -310,6 +333,7 @@ export function usePreBatchLabels(deps: LabelDeps) {
                     netVol: Number(record.net_volume),
                     totalVol: Number(record.total_volume),
                     pkgNo: record.package_no,
+                    totalPkgs: record.total_packages || 1,
                     qrCode: `${deps.selectedProductionPlan.value},${record.batch_record_id},${record.prebatch_id || ''},${record.re_code},${record.net_volume}`,
                     timestamp: new Date(record.created_at || Date.now()).toLocaleString('en-GB'),
                     origins: record.origins?.length > 0 ? record.origins : undefined,
