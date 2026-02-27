@@ -30,7 +30,7 @@ services:
       - RABBITMQ_DEFAULT_PASS=admin
       - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbitmq_management load_definitions "/etc/rabbitmq/definitions.json"
     volumes:
-      - ./rabbitmq-data:/var/lib/rabbitmq
+#      - ./rabbitmq-data:/var/lib/rabbitmq
       - ./rabbitmq_definitions.json:/etc/rabbitmq/definitions.json:ro
     # Enable MQTT and Web MQTT plugins
     command: >

@@ -74,17 +74,19 @@ export const useLabelPrinter = () => {
         <head>
           <title>Print Label</title>
           <style>
-            @page { size: 4in 6in; margin: 0; }
-            body { margin: 0; padding: 0; background: white; }
+            @page { size: auto; margin: 0 !important; }
+            body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .label-container { 
               width: 4in; 
-              height: 6in; 
-              display: flex; 
-              justify-content: center; 
-              align-items: center; 
+              height: 3in; 
+              display: block; 
               overflow: hidden;
+              position: relative;
+              padding-left: 2.5mm; /* Physical Left Offset */
+              padding-top: 1.5mm;  /* Physical Top Offset */
+              box-sizing: border-box;
             }
-            svg { width: 100%; height: 100%; }
+            svg { width: 100%; height: 100%; display: block; }
           </style>
         </head>
         <body>

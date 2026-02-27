@@ -60,24 +60,33 @@ export function usePreBatchLabels(deps: LabelDeps) {
         Lot2: origins?.[1] ? `2. ${origins[1].intake_lot_id} / ${(origins[1].take_volume || 0).toFixed(4)} kg` : '',
     })
 
-    const buildLabelData = (opts: { batch: any, planId: string, plan: any, reCode: string, ingName: string, matSapCode: string, netVol: number, totalVol: number, pkgNo: number | string, qrCode: string, timestamp: string, origins?: any[], fallbackLotId?: string }) => ({
-        SKU: opts.batch.sku_id || '-',
-        PlanId: opts.planId || '-',
-        BatchId: opts.batch.batch_id || opts.batch.batchId || '-',
-        IngredientID: opts.ingName || '-',
-        Ingredient_ReCode: opts.reCode || '-',
-        mat_sap_code: opts.matSapCode || '-',
-        PlanStartDate: opts.plan?.start_date || '-',
-        PlanFinishDate: opts.plan?.finish_date || '-',
-        PlantId: opts.plan?.plant || '-',
-        PlantName: '-',
-        Timestamp: opts.timestamp,
-        PackageSize: opts.netVol.toFixed(4),
-        BatchRequireSize: opts.totalVol.toFixed(4),
-        PackageNo: opts.pkgNo,
-        QRCode: opts.qrCode,
-        ...buildLotStrings(opts.origins, opts.fallbackLotId, opts.netVol),
-    })
+    const buildLabelData = (opts: { batch: any, planId: string, plan: any, reCode: string, ingName: string, matSapCode: string, containerType?: string, netVol: number, totalVol: number, pkgNo: number | string, qrCode: string, timestamp: string, origins?: any[], fallbackLotId?: string }) => {
+        const batchIdValue = opts.batch.batch_id || opts.batch.batchId || '-'
+        const totalBatches = opts.plan?.num_batches || (opts.plan?.batches?.length) || '-'
+        const batchMatch = batchIdValue.match(/-(\d+)$/)
+        const currentBatchNo = batchMatch ? parseInt(batchMatch[1]) : '-'
+
+        return {
+            SKU: opts.batch.sku_id || '-',
+            PlanId: opts.planId || '-',
+            BatchId: batchIdValue,
+            "Batch_Number/No of Batch": totalBatches !== '-' ? `Batch ${currentBatchNo} of ${totalBatches}` : `Batch ${currentBatchNo}`,
+            IngredientID: opts.ingName || '-',
+            Ingredient_ReCode: opts.reCode || '-',
+            ContainerType: opts.containerType || 'Bag',
+            mat_sap_code: opts.matSapCode || '-',
+            PlanStartDate: opts.plan?.start_date || '-',
+            PlanFinishDate: opts.plan?.finish_date || '-',
+            PlantId: opts.plan?.plant || '-',
+            PlantName: '-',
+            Timestamp: opts.timestamp,
+            PackageSize: opts.netVol.toFixed(4),
+            BatchRequireSize: opts.totalVol.toFixed(4),
+            PackageNo: opts.pkgNo,
+            QRCode: opts.qrCode,
+            ...buildLotStrings(opts.origins, opts.fallbackLotId, opts.netVol),
+        }
+    }
 
     // --- Computed ---
     const labelDataMapping = computed(() => {
@@ -91,6 +100,7 @@ export function usePreBatchLabels(deps: LabelDeps) {
             reCode: deps.selectedReCode.value,
             ingName: ing?.ingredient_name || '-',
             matSapCode: ing?.mat_sap_code || '-',
+            containerType: ing?.package_container_type || 'Bag',
             netVol: capturedScaleValue.value,
             totalVol: deps.requireVolume.value,
             pkgNo,
@@ -118,14 +128,14 @@ export function usePreBatchLabels(deps: LabelDeps) {
     // --- Functions ---
     const updateDialogPreview = async () => {
         if (labelDataMapping.value) {
-            const svg = await generateLabelSvg('prebatch-label', labelDataMapping.value)
+            const svg = await generateLabelSvg('prebatch-label_4x3', labelDataMapping.value)
             renderedLabel.value = svg || ''
         }
     }
 
     const updatePackingBoxPreview = async () => {
         if (packingBoxLabelDataMapping.value) {
-            const svg = await generateLabelSvg('packingbox-label', packingBoxLabelDataMapping.value)
+            const svg = await generateLabelSvg('packingbox-label_4x3', packingBoxLabelDataMapping.value)
             renderedPackingBoxLabel.value = svg || ''
         }
     }
@@ -173,7 +183,7 @@ export function usePreBatchLabels(deps: LabelDeps) {
                 headers: getAuthHeader() as Record<string, string>
             })
             if (labelDataMapping.value) {
-                const svg = await generateLabelSvg('prebatch-label', labelDataMapping.value)
+                const svg = await generateLabelSvg('prebatch-label_4x3', labelDataMapping.value)
                 if (svg) printLabel(svg)
             }
             $q.notify({ type: 'positive', message: t('preBatch.saveAndPrintSuccess'), position: 'top' })
@@ -209,6 +219,7 @@ export function usePreBatchLabels(deps: LabelDeps) {
                 reCode: record.re_code,
                 ingName: record.ingredient_name || '-',
                 matSapCode: record.mat_sap_code || '-',
+                containerType: record.package_container_type || (deps.selectableIngredients.value.find((i: any) => i.re_code === record.re_code)?.package_container_type) || 'Bag',
                 netVol: Number(record.net_volume),
                 totalVol: Number(record.total_volume),
                 pkgNo: record.package_no,
@@ -217,7 +228,7 @@ export function usePreBatchLabels(deps: LabelDeps) {
                 origins: record.origins?.length > 0 ? record.origins : undefined,
                 fallbackLotId: record.intake_lot_id,
             })
-            const svg = await generateLabelSvg('prebatch-label', data)
+            const svg = await generateLabelSvg('prebatch-label_4x3', data)
             if (svg) {
                 printLabel(svg)
                 $q.notify({ type: 'info', message: 'Reprinting label...', position: 'top', timeout: 800 })
@@ -229,14 +240,86 @@ export function usePreBatchLabels(deps: LabelDeps) {
     }
 
     const quickReprint = async (ing: any) => {
-        if (!ing || !deps.selectedBatch.value) return
-        const batchId = deps.selectedBatch.value.batch_id
-        const logs = deps.preBatchLogs.value.filter((l: any) => l.re_code === ing.re_code && l.batch_record_id.startsWith(batchId))
+        if (!ing) return
+
+        let logs = []
+        // 1. Try filtering by selected batch prefix
+        if (deps.selectedBatch.value) {
+            const batchId = deps.selectedBatch.value.batch_id
+            logs = deps.preBatchLogs.value.filter((l: any) => l.re_code === ing.re_code && l.batch_record_id.startsWith(batchId))
+        }
+
+        // 2. Fallback to any log matching this re_code in the plan
+        if (logs.length === 0) {
+            logs = deps.preBatchLogs.value.filter((l: any) => l.re_code === ing.re_code)
+        }
+
         if (logs.length > 0) {
-            const lastRecord = logs.reduce((prev: any, current: any) => (prev.package_no > current.package_no) ? prev : current)
+            // Find record with highest ID (latest created)
+            const lastRecord = logs.reduce((prev: any, current: any) => (prev.id > current.id) ? prev : current)
             await onReprintLabel(lastRecord)
         } else {
             $q.notify({ type: 'warning', message: 'No records found to reprint' })
+        }
+    }
+
+    const printAllPlanLabels = async (ing: any) => {
+        if (!ing || !deps.selectedProductionPlan.value) return
+
+        const logs = deps.preBatchLogs.value.filter((l: any) => l.re_code === ing.re_code)
+
+        if (logs.length === 0) {
+            $q.notify({ type: 'warning', message: 'No records found for this plan' })
+            return
+        }
+
+        $q.notify({ type: 'info', message: `Generating ${logs.length} labels...`, position: 'top', timeout: 1500 })
+
+        const allSvgs: string[] = []
+        // Sort logs by batch and package number to print in logical order
+        const sortedLogs = [...logs].sort((a, b) => {
+            if (a.batch_record_id < b.batch_record_id) return -1
+            if (a.batch_record_id > b.batch_record_id) return 1
+            return a.package_no - b.package_no
+        })
+
+        for (const record of sortedLogs) {
+            try {
+                // Determine batch ID from batch_record_id (strip the suffix)
+                const parts = record.batch_record_id.split('-')
+                // Plan is plan-Line-X-YYYY-MM-DD-001 (6 parts)
+                // Batch is plan-Line-X-YYYY-MM-DD-001-001 (7 parts)
+                const batchId = parts.slice(0, 7).join('-')
+
+                const data = buildLabelData({
+                    batch: {
+                        batch_id: batchId,
+                        sku_id: deps.selectedPlanDetails.value?.sku_id || '-'
+                    },
+                    planId: record.plan_id || deps.selectedProductionPlan.value,
+                    plan: deps.selectedPlanDetails.value,
+                    reCode: record.re_code,
+                    ingName: record.ingredient_name || ing.ingredient_name || '-',
+                    matSapCode: record.mat_sap_code || '-',
+                    containerType: record.package_container_type || (deps.selectableIngredients.value.find((i: any) => i.re_code === record.re_code)?.package_container_type) || 'Bag',
+                    netVol: Number(record.net_volume),
+                    totalVol: Number(record.total_volume),
+                    pkgNo: record.package_no,
+                    qrCode: `${deps.selectedProductionPlan.value},${record.batch_record_id},${record.prebatch_id || ''},${record.re_code},${record.net_volume}`,
+                    timestamp: new Date(record.created_at || Date.now()).toLocaleString('en-GB'),
+                    origins: record.origins?.length > 0 ? record.origins : undefined,
+                    fallbackLotId: record.intake_lot_id,
+                })
+                const svg = await generateLabelSvg('prebatch-label_4x3', data)
+                if (svg) allSvgs.push(svg)
+            } catch (err) {
+                console.error('Error generating label:', err)
+            }
+        }
+
+        if (allSvgs.length > 0) {
+            printLabel(allSvgs)
+            $q.notify({ type: 'positive', message: `Printing ${allSvgs.length} labels`, position: 'top' })
         }
     }
 
@@ -261,6 +344,7 @@ export function usePreBatchLabels(deps: LabelDeps) {
                     reCode,
                     ingName: ing?.name || reCode,
                     matSapCode: ing?.mat_sap_code || '-',
+                    containerType: (deps.selectableIngredients.value.find((i: any) => i.re_code === reCode)?.package_container_type) || ing?.package_container_type || 'Bag',
                     netVol: volume,
                     totalVol: requiredVolume,
                     pkgNo: `${pkg.pkg_no}/${packages.length}`,
@@ -269,7 +353,7 @@ export function usePreBatchLabels(deps: LabelDeps) {
                     origins: pkg.log?.origins?.length > 0 ? pkg.log.origins : undefined,
                     fallbackLotId: pkg.log?.intake_lot_id,
                 })
-                const svg = await generateLabelSvg('prebatch-label', data)
+                const svg = await generateLabelSvg('prebatch-label_4x3', data)
                 if (svg) allSvgs.push(svg)
             } catch (err) {
                 console.error(`Error generating label #${pkg.pkg_no}:`, err)
@@ -347,6 +431,7 @@ export function usePreBatchLabels(deps: LabelDeps) {
         onPrintLabel,
         onReprintLabel,
         quickReprint,
+        printAllPlanLabels,
         printAllBatchLabels,
         onPrintPackingBoxLabel,
         onDone,

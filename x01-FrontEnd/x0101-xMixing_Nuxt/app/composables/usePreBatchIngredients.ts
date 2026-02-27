@@ -68,19 +68,15 @@ export function usePreBatchIngredients(deps: IngredientDeps) {
     const selectableIngredients = computed(() => {
         if (!prebatchItems.value || prebatchItems.value.length === 0) return []
         const invList = deps.inventoryRows.value || []
-        return prebatchItems.value.map((task: any, index: number) => {
+
+        const mapped = prebatchItems.value.map((task: any, index: number) => {
             const ingInfo = deps.ingredients.value.find((i: any) => i.re_code === task.re_code)
             const stock = invList.find((r: any) => r.re_code === task.re_code)
             const warehouse = (task.wh && task.wh !== '-' ? task.wh : (stock?.warehouse_location || '-')).toUpperCase()
-            // When viewing plan-level summary (isBatchSelected=false):
-            //   required_volume = total across all batches, per_batch = single batch amount
-            //   Req (kg) should show total_required
-            // When viewing batch-level (isBatchSelected=true):
-            //   required_volume = that batch's requirement
-            //   Req (kg) should show per-batch required_volume
+
             const batchReq = deps.isBatchSelected.value
                 ? (task.required_volume || 0)
-                : (task.required_volume || 0)  // At plan level, required_volume IS total_required
+                : (task.total_require || 0)
             const perBatch = task.per_batch || task.required_volume || 0
 
             return {
@@ -88,18 +84,29 @@ export function usePreBatchIngredients(deps: IngredientDeps) {
                 re_code: task.re_code,
                 ingredient_name: task.ingredient_name || ingInfo?.name || task.re_code,
                 std_package_size: ingInfo?.std_package_size || 0,
+                package_container_type: ingInfo?.package_container_type || 'Bag',
                 batch_require: batchReq,
                 per_batch: perBatch,
-                total_require: task.required_volume,
+                total_require: task.total_require ?? task.required_volume,
+                total_packaged: task.total_packaged || 0,
                 batch_count: task.batch_count || 1,
                 from_warehouse: warehouse,
-                isDisabled: warehouse !== deps.selectedWarehouse.value.toUpperCase(),
+                isDisabled: deps.selectedWarehouse.value !== 'All' && warehouse !== deps.selectedWarehouse.value.toUpperCase(),
                 isDone: task.status === 2,
                 status: task.status,
                 req_id: task.id,
                 mat_sap_code: ingInfo?.mat_sap_code || ''
             }
         })
+
+        // Apply filter by warehouse if not 'All'
+        let filtered = mapped
+        if (deps.selectedWarehouse.value && deps.selectedWarehouse.value !== 'All') {
+            const whTarget = deps.selectedWarehouse.value.toUpperCase()
+            filtered = mapped.filter(ing => ing.from_warehouse === whTarget)
+        }
+
+        return filtered
     })
 
     const ingredientsByWarehouse = computed(() => {

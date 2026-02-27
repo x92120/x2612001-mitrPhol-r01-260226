@@ -55,10 +55,17 @@ export function usePreBatchInventory(deps: InventoryDeps) {
             const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/warehouses/`, {
                 headers: getAuthHeader() as Record<string, string>
             })
-            warehouses.value = data
+            const mapped = data.map(w => ({
+                warehouse_id: w.warehouse_id,
+                name: w.name
+            }))
+            warehouses.value = [{ warehouse_id: 'All', name: 'All' }, ...mapped]
+
             if (data.length > 0) {
                 const fh = data.find(w => w.warehouse_id === 'FH')
-                selectedWarehouse.value = fh ? fh.warehouse_id : data[0].warehouse_id
+                selectedWarehouse.value = fh ? fh.warehouse_id : 'All'
+            } else {
+                selectedWarehouse.value = 'All'
             }
         } catch (e) {
             console.error('Error fetching warehouses', e)

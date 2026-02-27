@@ -17,7 +17,7 @@ interface Ingredient {
   status: string
   creat_by: string
   update_by?: string
-  std_package_size?: number
+  package_container_type?: string
 }
 
 const $q = useQuasar()
@@ -29,9 +29,12 @@ const ingredients = ref<Ingredient[]>([])
 const loading = ref(false)
 const warehouses = ref<any[]>([])
 const warehouseOptions = computed(() => warehouses.value.map(w => w.warehouse_id))
-const packageContainerOptions = [1, 5, 10, 15, 20, 25, 30]
+
+const containerTypes = ref<any[]>([])
+const packageContainerTypeOptions = computed(() => containerTypes.value.map(ct => ct.name))
 
 const showDialog = ref(false)
+const showContainerTypeDialog = ref(false)
 const isEditing = ref(false)
 
 // Helper for fetch headers
@@ -73,10 +76,24 @@ const fetchWarehouses = async () => {
   }
 }
 
+const fetchContainerTypes = async () => {
+  try {
+    const response = await fetch(`${appConfig.apiBaseUrl}/package-container-types/`, {
+      headers: getHeaders(),
+    })
+    if (response.ok) {
+      containerTypes.value = await response.json()
+    }
+  } catch (error) {
+    console.error('Fetch container types error:', error)
+  }
+}
+
 // Load data on mount
 onMounted(() => {
   fetchIngredients()
   fetchWarehouses()
+  fetchContainerTypes()
 })
 
 const filters = ref<Record<string, string>>({})
@@ -108,6 +125,7 @@ const form = ref<Ingredient>({
   creat_by: '',
   update_by: '',
   std_package_size: 25.0,
+  package_container_type: 'Bag',
 })
 
 const columns = computed((): QTableColumn[] => [
@@ -115,7 +133,7 @@ const columns = computed((): QTableColumn[] => [
   { name: 're_code', label: t('ingConfig.reCode'), field: 're_code', align: 'left', sortable: true },
   { name: 'ingredient_id', label: t('ingConfig.ingredientId'), field: 'ingredient_id', align: 'left', sortable: true },
   { name: 'name', label: t('ingConfig.ingredientName'), field: 'name', align: 'left', sortable: true },
-  { name: 'std_package_size', label: t('ingConfig.batchPrepPkgSize'), field: 'std_package_size', align: 'left', sortable: true },
+  { name: 'package_container_type', label: t('ingConfig.containerType'), field: 'package_container_type', align: 'left', sortable: true },
   { name: 'Group', label: t('ingConfig.group'), field: 'Group', align: 'left', sortable: true },
   { name: 'warehouse', label: t('ingConfig.warehouse'), field: 'warehouse', align: 'left', sortable: true },
 
@@ -138,6 +156,7 @@ const openAddDialog = () => {
     creat_by: '',
     update_by: '',
     std_package_size: 25.0,
+    package_container_type: 'Bag',
   }
   showDialog.value = true
 }
@@ -196,7 +215,7 @@ const printLabel = async (row: Ingredient) => {
            <div class="code">${row.re_code || row.ingredient_id}</div>
            <div class="sub">${row.name}</div>
            <div class="sub">MAT: ${row.mat_sap_code}</div>
-           <div class="sub">Container: ${row.std_package_size} kg</div>
+           <div class="sub">Container: ${row.package_container_type || 'Bag'}</div>
            <img class="qr" src="${qrDataUrl}" />
         </div>
       </body>
@@ -289,6 +308,78 @@ const onSave = async () => {
     console.error('Save error:', error)
     $q.notify({ type: 'negative', message: t('ingConfig.networkError') })
   }
+}
+
+// --- Container Type Management ---
+const containerTypeForm = ref({ id: null as number | null, name: '' })
+const isEditingContainerType = ref(false)
+
+const openContainerTypeManager = () => {
+  showContainerTypeDialog.value = true
+}
+
+const editContainerType = (ct: any) => {
+  containerTypeForm.value = { ...ct }
+  isEditingContainerType.value = true
+}
+
+const resetContainerTypeForm = () => {
+  containerTypeForm.value = { id: null, name: '' }
+  isEditingContainerType.value = false
+}
+
+const onSaveContainerType = async () => {
+  if (!containerTypeForm.value.name) return
+
+  try {
+    const isEdit = !!containerTypeForm.value.id
+    const url = isEdit
+      ? `${appConfig.apiBaseUrl}/package-container-types/${containerTypeForm.value.id}`
+      : `${appConfig.apiBaseUrl}/package-container-types/`
+    const method = isEdit ? 'PUT' : 'POST'
+
+    const response = await fetch(url, {
+      method,
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ name: containerTypeForm.value.name }),
+    })
+
+    if (response.ok) {
+      $q.notify({ type: 'positive', message: 'Container type saved' })
+      resetContainerTypeForm()
+      await fetchContainerTypes()
+    } else {
+      const error = await response.json()
+      $q.notify({ type: 'negative', message: error.detail || 'Save failed' })
+    }
+  } catch (error) {
+    console.error('Save container type error:', error)
+    $q.notify({ type: 'negative', message: 'Network error' })
+  }
+}
+
+const onDeleteContainerType = async (id: number) => {
+  $q.dialog({
+    title: 'Confirm Delete',
+    message: 'Are you sure you want to delete this container type?',
+    cancel: true,
+  }).onOk(async () => {
+    try {
+      const response = await fetch(`${appConfig.apiBaseUrl}/package-container-types/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      })
+      if (response.ok) {
+        $q.notify({ type: 'positive', message: 'Container type deleted' })
+        await fetchContainerTypes()
+      } else {
+        $q.notify({ type: 'negative', message: 'Delete failed' })
+      }
+    } catch (error) {
+      console.error('Delete container type error:', error)
+      $q.notify({ type: 'negative', message: 'Network error' })
+    }
+  })
 }
 </script>
 
@@ -430,14 +521,25 @@ const onSave = async () => {
           <q-input v-model="form.unit" :label="t('ingConfig.unit')" dense class="q-mb-md" />
           
           <q-select
-            v-model.number="form.std_package_size"
-            :options="packageContainerOptions"
-            :label="t('ingConfig.batchPrepPkgSize') + ' (kg)'"
+            v-model="form.package_container_type"
+            :options="packageContainerTypeOptions"
+            :label="t('ingConfig.containerType')"
             dense
-            emit-value
-            map-options
             class="q-mb-md"
-          />
+          >
+            <template v-slot:after>
+              <q-btn
+                round
+                dense
+                flat
+                icon="settings"
+                color="primary"
+                @click.stop="openContainerTypeManager"
+              >
+                <q-tooltip>Manage Container Types</q-tooltip>
+              </q-btn>
+            </template>
+          </q-select>
 
           <q-input v-model="form.Group" :label="t('ingConfig.groupColorFlavor')" dense class="q-mb-md" />
           <q-select
@@ -468,6 +570,57 @@ const onSave = async () => {
           <q-btn flat :label="t('common.cancel')" v-close-popup />
           <q-btn flat :label="t('common.save')" @click="onSave" />
         </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Container Type Management Dialog -->
+    <q-dialog v-model="showContainerTypeDialog">
+      <q-card style="min-width: 350px">
+        <q-card-section class="bg-primary text-white row items-center">
+          <div class="text-h6">Manage Container Types</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section>
+          <div class="row q-gutter-sm items-end q-mb-md">
+            <q-input
+              v-model="containerTypeForm.name"
+              label="New Type Name"
+              dense
+              outlined
+              class="col"
+            />
+            <q-btn
+              :icon="isEditingContainerType ? 'save' : 'add'"
+              :label="isEditingContainerType ? 'Update' : 'Add'"
+              color="primary"
+              @click="onSaveContainerType"
+            />
+            <q-btn
+              v-if="isEditingContainerType"
+              icon="cancel"
+              flat
+              dense
+              bg-color="grey-2"
+              @click="resetContainerTypeForm"
+            />
+          </div>
+
+          <q-list bordered separator>
+            <q-item v-for="ct in containerTypes" :key="ct.id">
+              <q-item-section>
+                {{ ct.name }}
+              </q-item-section>
+              <q-item-section side>
+                <div class="row q-gutter-xs">
+                  <q-btn icon="edit" flat round dense size="sm" color="blue" @click="editContainerType(ct)" />
+                  <q-btn icon="delete" flat round dense size="sm" color="negative" @click="onDeleteContainerType(ct.id)" />
+                </div>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
       </q-card>
     </q-dialog>
   </q-page>

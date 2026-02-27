@@ -21,7 +21,7 @@
      inkscape:showpageshadow="2"
      inkscape:pageopacity="0.0"
      inkscape:pagecheckerboard="0"
-     inkscape:deskcolor="#d1d1d1"
+     inkscape:deskcolor="#000000"
      showgrid="true"
      inkscape:zoom="2"
      inkscape:cx="-24.25"
@@ -94,7 +94,7 @@
   <text
      x="14.713814"
      y="157.73335"
-     fill="#444444"
+     fill="black444"
      font-size="9px"
      font-family="Arial, sans-serif"
      id="text76">SKU</text>
@@ -121,7 +121,7 @@
      y1="113.77952"
      x2="380.77954"
      y2="113.77952"
-     stroke="#cccccc"
+     stroke="blackccc"
      stroke-width="0.8"
      id="line79" />
   <text
@@ -136,7 +136,7 @@
   <text
      x="14.458931"
      y="187.85971"
-     fill="#444444"
+     fill="black444"
      font-size="9px"
      font-family="Arial, sans-serif"
      id="text84">Batch ID</text>
@@ -170,7 +170,7 @@
   <text
      x="14.423775"
      y="218.09592"
-     fill="#444444"
+     fill="black444"
      font-size="9px"
      font-family="Arial, sans-serif"
      id="text92">Plan Date</text>
@@ -186,7 +186,7 @@
   <text
      x="14.423775"
      y="248.33214"
-     fill="#444444"
+     fill="black444"
      font-size="9px"
      font-family="Arial, sans-serif"
      id="text102">Plant</text>

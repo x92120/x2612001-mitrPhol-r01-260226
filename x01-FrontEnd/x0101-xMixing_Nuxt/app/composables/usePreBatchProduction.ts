@@ -33,14 +33,23 @@ export function usePreBatchProduction(deps: ProductionDeps) {
     const selectedBatchIndex = ref(0)
     const isLoading = ref(false)
     const productionPlans = ref<any[]>([])
-    const productionPlanOptions = ref<string[]>([])
+    const planFilter = ref('All')
+    const productionPlanOptions = computed(() => {
+        const ids = productionPlans.value.map((plan: any) => plan.plan_id)
+        return ['All', ...ids]
+    })
     const allBatches = ref<any[]>([])
     const filteredBatches = ref<any[]>([])
     const ingredientOptions = ref<{ label: string, value: string }[]>([])
     const batchIngredients = ref<Record<string, any[]>>({})
 
     // --- Computed ---
-    const batchIds = computed(() => filteredBatches.value.map(b => b.batch_id))
+    const filteredProductionPlans = computed(() => {
+        const base = productionPlans.value.filter((p: any) => p.status !== 'Cancelled')
+        if (planFilter.value === 'All') return base
+        return base.filter((p: any) => p.plan_id === planFilter.value)
+    })
+    const batchIds = computed(() => filteredBatches.value.map((b: any) => b.batch_id))
 
     const selectedBatch = computed(() => {
         if (selectedBatchIndex.value >= 0 && filteredBatches.value.length > 0) {
@@ -90,7 +99,6 @@ export function usePreBatchProduction(deps: ProductionDeps) {
                 headers: getAuthHeader() as Record<string, string>
             })
             productionPlans.value = data
-            productionPlanOptions.value = data.map(plan => plan.plan_id)
         } catch (error) {
             console.error('Error fetching production plans:', error)
             $q.notify({ type: 'negative', message: t('preBatch.errorLoadingPlans'), position: 'top' })
@@ -139,15 +147,16 @@ export function usePreBatchProduction(deps: ProductionDeps) {
                 headers: getAuthHeader() as Record<string, string>
             })
             deps.prebatchItems.value = data.map((item: any) => ({
-                re_code: item.re_code,
-                ingredient_name: item.ingredient_name,
-                required_volume: item.total_required,
-                wh: item.wh,
-                status: item.status,
-                id: null,
-                batch_count: item.batch_count,
-                per_batch: item.per_batch,
-                completed_batches: item.completed_batches
+                id: item.id || null,
+                re_code: item.re_code || '-',
+                ingredient_name: item.ingredient_name || item.name || '-',
+                total_require: item.total_required ?? item.required_volume ?? 0,
+                total_packaged: item.total_packaged || 0,
+                wh: item.wh || item.warehouse || '-',
+                status: item.status ?? 0,
+                batch_count: item.batch_count || 1,
+                per_batch: item.per_batch || item.required_volume || 0,
+                completed_batches: item.completed_batches || 0
             }))
         } catch (error) {
             console.error('Error fetching plan ingredient summary:', error)
@@ -259,12 +268,14 @@ export function usePreBatchProduction(deps: ProductionDeps) {
         selectedBatchIndex,
         isLoading,
         productionPlans,
+        planFilter,
         productionPlanOptions,
         allBatches,
         filteredBatches,
         ingredientOptions,
         batchIngredients,
         // Computed
+        filteredProductionPlans,
         batchIds,
         selectedBatch,
         selectedPlanDetails,

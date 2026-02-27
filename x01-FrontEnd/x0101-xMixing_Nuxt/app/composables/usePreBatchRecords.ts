@@ -13,6 +13,7 @@ export interface RecordDeps {
     formatDate: (date: any) => string
     // Cross-composable refs
     selectedBatch: any
+    selectedProductionPlan: any
     selectedReCode: any
     requireVolume: any
     selectableIngredients: any
@@ -47,7 +48,10 @@ export function usePreBatchRecords(deps: RecordDeps) {
     ]
 
     // --- Computed ---
-    const filteredPreBatchLogs = computed(() => preBatchLogs.value)
+    const filteredPreBatchLogs = computed(() => {
+        if (!deps.selectedBatch.value) return preBatchLogs.value
+        return preBatchLogs.value.filter(l => l.batch_record_id.startsWith(deps.selectedBatch.value.batch_id))
+    })
 
     const totalCompletedWeight = computed(() => {
         if (!deps.selectedBatch.value || !deps.selectedReCode.value) return 0
@@ -84,7 +88,7 @@ export function usePreBatchRecords(deps: RecordDeps) {
 
     const preBatchSummary = computed(() => {
         const logs = filteredPreBatchLogs.value
-        const totalNetWeight = logs.reduce((sum, log) => sum + (log.net_volume || 0), 0)
+        const totalNetWeight = logs.reduce((sum, log) => sum + (Number(log.net_volume) || 0), 0)
         const count = logs.length
         const targetW = deps.requireVolume.value || 0
         const errorVol = totalNetWeight - targetW
@@ -100,9 +104,13 @@ export function usePreBatchRecords(deps: RecordDeps) {
 
     // --- Functions ---
     const fetchPreBatchRecords = async () => {
-        if (!deps.selectedBatch.value) return
+        if (!deps.selectedProductionPlan.value && !deps.selectedBatch.value) return
         try {
-            const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-recs/by-batch/${deps.selectedBatch.value.batch_id}`, {
+            const endpoint = deps.selectedProductionPlan.value
+                ? `${appConfig.apiBaseUrl}/prebatch-recs/by-plan/${deps.selectedProductionPlan.value}`
+                : `${appConfig.apiBaseUrl}/prebatch-recs/by-batch/${deps.selectedBatch.value.batch_id}`
+
+            const data = await $fetch<any[]>(endpoint, {
                 headers: getAuthHeader() as Record<string, string>
             })
             preBatchLogs.value = data

@@ -195,7 +195,14 @@ def get_prebatch_recs(skip: int = 0, limit: int = 100, wh: Optional[str] = None,
 @router.get("/prebatch-reqs/by-batch/{batch_id}", response_model=List[schemas.PreBatchReq])
 def get_prebatch_reqs_by_batch(batch_id: str, db: Session = Depends(get_db)):
     """Get prebatch requirements filtered by batch ID."""
-    return crud.get_prebatch_reqs_by_batch(db, batch_id=batch_id)
+    reqs = crud.get_prebatch_reqs_by_batch(db, batch_id=batch_id)
+    for r in reqs:
+        # Sum actual volume from prebatch_recs for this batch + re_code
+        recs = db.query(models.PreBatchRec).filter(
+            models.PreBatchRec.batch_record_id.like(f"{batch_id}-{r.re_code}%")
+        ).all()
+        r.total_packaged = round(sum(prec.net_volume or 0 for prec in recs), 4)
+    return reqs
 
 @router.get("/prebatch-reqs/summary-by-plan/{plan_id}")
 def get_prebatch_reqs_summary_by_plan(plan_id: str, db: Session = Depends(get_db)):
@@ -217,10 +224,18 @@ def get_prebatch_reqs_summary_by_plan(plan_id: str, db: Session = Depends(get_db
     summary: dict = {}
     for req in reqs:
         if req.re_code not in summary:
+            # Calculate total packaged for this plan + re_code
+            recs = db.query(models.PreBatchRec).filter(
+                models.PreBatchRec.plan_id == plan_id,
+                models.PreBatchRec.re_code == req.re_code
+            ).all()
+            total_pkg = sum(r.net_volume or 0 for r in recs)
+
             summary[req.re_code] = {
                 "re_code": req.re_code,
                 "ingredient_name": req.ingredient_name,
                 "total_required": 0,
+                "total_packaged": round(total_pkg, 4),
                 "batch_count": 0,
                 "per_batch": req.required_volume or 0,
                 "wh": ing_wh_map.get(req.re_code, req.wh or "-"),

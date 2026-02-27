@@ -56,6 +56,7 @@ class Ingredient(Base):
     Group = Column(String(50))
     std_package_size = Column(Float, default=25.0)
     warehouse = Column(String(50), default="")
+    package_container_type = Column(String(50), default="Bag")
     status = Column(String(20), default="Active")
     creat_by = Column(String(50), nullable=False)
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
@@ -67,6 +68,20 @@ class IngredientIntakeFrom(Base):
     __tablename__ = "ingredient_intake_from"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, nullable=False)
+    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+
+class PackageContainerType(Base):
+    __tablename__ = "package_container_types"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), unique=True, nullable=False)
+    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+
+class PackageContainerSize(Base):
+    __tablename__ = "package_container_sizes"
+    id = Column(Integer, primary_key=True, index=True)
+    size = Column(Float, unique=True, nullable=False)
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
 

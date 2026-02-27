@@ -114,6 +114,68 @@ def delete_intake_from(db: Session, intake_from_id: int) -> bool:
         return True
     return False
 
+# Package Container Type CRUD
+def get_container_types(db: Session) -> List[models.PackageContainerType]:
+    """Get all package container types"""
+    return db.query(models.PackageContainerType).order_by(models.PackageContainerType.name).all()
+
+def create_container_type(db: Session, data: schemas.PackageContainerTypeCreate) -> models.PackageContainerType:
+    """Create new package container type"""
+    db_obj = models.PackageContainerType(**data.dict())
+    db.add(db_obj)
+    db.commit()
+    db.refresh(db_obj)
+    return db_obj
+
+def update_container_type(db: Session, type_id: int, data: schemas.PackageContainerTypeCreate) -> Optional[models.PackageContainerType]:
+    """Update package container type"""
+    db_obj = db.query(models.PackageContainerType).filter(models.PackageContainerType.id == type_id).first()
+    if db_obj:
+        db_obj.name = data.name
+        db.commit()
+        db.refresh(db_obj)
+    return db_obj
+
+def delete_container_type(db: Session, type_id: int) -> bool:
+    """Delete package container type"""
+    db_obj = db.query(models.PackageContainerType).filter(models.PackageContainerType.id == type_id).first()
+    if db_obj:
+        db.delete(db_obj)
+        db.commit()
+        return True
+    return False
+
+# Package Container Size CRUD
+def get_container_sizes(db: Session) -> List[models.PackageContainerSize]:
+    """Get all package container sizes"""
+    return db.query(models.PackageContainerSize).order_by(models.PackageContainerSize.size).all()
+
+def create_container_size(db: Session, data: schemas.PackageContainerSizeCreate) -> models.PackageContainerSize:
+    """Create new package container size"""
+    db_obj = models.PackageContainerSize(**data.dict())
+    db.add(db_obj)
+    db.commit()
+    db.refresh(db_obj)
+    return db_obj
+
+def update_container_size(db: Session, size_id: int, data: schemas.PackageContainerSizeCreate) -> Optional[models.PackageContainerSize]:
+    """Update package container size"""
+    db_obj = db.query(models.PackageContainerSize).filter(models.PackageContainerSize.id == size_id).first()
+    if db_obj:
+        db_obj.size = data.size
+        db.commit()
+        db.refresh(db_obj)
+    return db_obj
+
+def delete_container_size(db: Session, size_id: int) -> bool:
+    """Delete package container size"""
+    db_obj = db.query(models.PackageContainerSize).filter(models.PackageContainerSize.id == size_id).first()
+    if db_obj:
+        db.delete(db_obj)
+        db.commit()
+        return True
+    return False
+
 # Ingredient Intake List CRUD
 def get_ingredient_intake_lists(db: Session, skip: int = 0, limit: int = 100) -> List[models.IngredientIntakeList]:
     """Get list of ingredient intake list with pagination"""

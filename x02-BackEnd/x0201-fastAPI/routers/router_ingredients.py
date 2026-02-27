@@ -125,6 +125,66 @@ def delete_intake_from(intake_from_id: int, db: Session = Depends(get_db)):
     if not success:
         raise HTTPException(status_code=404, detail="Intake from location not found")
     return {"status": "success"}
+ 
+# =============================================================================
+# PACKAGE CONTAINER TYPE ENDPOINTS
+# =============================================================================
+
+@router.get("/package-container-types/", response_model=List[schemas.PackageContainerType])
+def read_container_types(db: Session = Depends(get_db)):
+    """Get all package container types."""
+    return crud.get_container_types(db)
+
+@router.post("/package-container-types/", response_model=schemas.PackageContainerType)
+def create_container_type(data: schemas.PackageContainerTypeCreate, db: Session = Depends(get_db)):
+    """Create new package container type."""
+    return crud.create_container_type(db, data)
+
+@router.put("/package-container-types/{type_id}", response_model=schemas.PackageContainerType)
+def update_container_type(type_id: int, data: schemas.PackageContainerTypeCreate, db: Session = Depends(get_db)):
+    """Update package container type."""
+    updated = crud.update_container_type(db, type_id, data)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Container type not found")
+    return updated
+
+@router.delete("/package-container-types/{type_id}")
+def delete_container_type(type_id: int, db: Session = Depends(get_db)):
+    """Delete package container type."""
+    success = crud.delete_container_type(db, type_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Container type not found")
+    return {"status": "success"}
+ 
+# =============================================================================
+# PACKAGE CONTAINER SIZE ENDPOINTS
+# =============================================================================
+
+@router.get("/package-container-sizes/", response_model=List[schemas.PackageContainerSize])
+def read_container_sizes(db: Session = Depends(get_db)):
+    """Get all package container sizes."""
+    return crud.get_container_sizes(db)
+
+@router.post("/package-container-sizes/", response_model=schemas.PackageContainerSize)
+def create_container_size(data: schemas.PackageContainerSizeCreate, db: Session = Depends(get_db)):
+    """Create new package container size."""
+    return crud.create_container_size(db, data)
+
+@router.put("/package-container-sizes/{size_id}", response_model=schemas.PackageContainerSize)
+def update_container_size(size_id: int, data: schemas.PackageContainerSizeCreate, db: Session = Depends(get_db)):
+    """Update package container size."""
+    updated = crud.update_container_size(db, size_id, data)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Container size not found")
+    return updated
+
+@router.delete("/package-container-sizes/{size_id}")
+def delete_container_size(size_id: int, db: Session = Depends(get_db)):
+    """Delete package container size."""
+    success = crud.delete_container_size(db, size_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Container size not found")
+    return {"status": "success"}
 
 # =============================================================================
 # INGREDIENT INTAKE LIST ENDPOINTS

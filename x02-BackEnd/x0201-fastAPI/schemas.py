@@ -64,6 +64,34 @@ class IngredientIntakeFrom(IngredientIntakeFromBase):
     class Config:
         from_attributes = True
 
+# Package Container Type Schemas
+class PackageContainerTypeBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=50)
+
+class PackageContainerTypeCreate(PackageContainerTypeBase):
+    pass
+
+class PackageContainerType(PackageContainerTypeBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Package Container Size Schemas
+class PackageContainerSizeBase(BaseModel):
+    size: float = Field(..., gt=0)
+
+class PackageContainerSizeCreate(PackageContainerSizeBase):
+    pass
+
+class PackageContainerSize(PackageContainerSizeBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 # Ingredient Schemas
 class IngredientBase(BaseModel):
     """Base ingredient model"""
@@ -76,6 +104,7 @@ class IngredientBase(BaseModel):
     unit: str = Field("kg", max_length=20)
     Group: Optional[str] = Field(None, max_length=50)
     warehouse: Optional[str] = Field(None, max_length=50)
+    package_container_type: Optional[str] = Field("Bag", max_length=50)
     status: str = Field("Active", max_length=20)
     creat_by: str = Field(..., min_length=1, max_length=50)
     update_by: Optional[str] = Field(None, max_length=50)
@@ -265,6 +294,7 @@ class PreBatchReqCreate(PreBatchReqBase):
 
 class PreBatchReq(PreBatchReqBase):
     id: int
+    total_packaged: Optional[float] = 0.0
     created_at: datetime
     updated_at: Optional[datetime] = None
 

@@ -141,6 +141,43 @@ const focusScannerInput = () => {
   })
 }
 
+const testPrint1Page = () => {
+  const mockRecord: any = {
+    intake_lot_id: 'TEST-1PG',
+    ingredient_name: 'TEST 1 PAGE',
+    mat_sap_code: 'MAT-1',
+    re_code: 'RE-1',
+    lot_id: 'LOT-1',
+    intake_date: new Date().toISOString(),
+    expire_date: new Date().toISOString(),
+    manufacturing_date: new Date().toISOString(),
+    intake_vol: 10.0,
+    package_intake: 1,
+    intake_package_vol: 10.0,
+    intake_by: 'tester'
+  }
+  printLabel(mockRecord)
+}
+
+// Temporary test function for 2-page print
+const testPrint2Pages = () => {
+  const mockRecord: any = {
+    intake_lot_id: 'FIX-TEST-001',
+    ingredient_name: 'TEST INGREDIENT 4x3',
+    mat_sap_code: 'MAT12345',
+    re_code: 'RE-TEST',
+    lot_id: 'LOT-TEST-999',
+    intake_date: new Date().toISOString(),
+    expire_date: new Date().toISOString(),
+    manufacturing_date: new Date().toISOString(),
+    intake_vol: 50.0,
+    package_intake: 2,
+    intake_package_vol: 25.0,
+    intake_by: user.value?.username || 'tester'
+  }
+  printLabel(mockRecord)
+}
+
 const columns = computed<QTableColumn[]>(() => [
   { name: 'expand', label: '', field: 'expand', align: 'center' },
   { name: 'intake_lot_id', align: 'center', label: t('ingredient.intakeLotId'), field: 'intake_lot_id', sortable: true },
@@ -780,7 +817,7 @@ const printLabel = async (record: IngredientIntake) => {
   iframe.style.opacity = '0.01'
   document.body.appendChild(iframe)
 
-  const templateResponse = await fetch('/labels/ingredient_intake-label.svg')
+  const templateResponse = await fetch('/labels/ingredient_intake-label_4x3.svg')
   const templateStr = await templateResponse.text()
 
   const numPackages = record.package_intake || 1
@@ -816,7 +853,7 @@ const printLabel = async (record: IngredientIntake) => {
       .replace(/\{\{PackageString\}\}/g, `${i} / ${numPackages}`)
       .replace(/\{\{IntakeVol\}\}/g, record.intake_vol?.toFixed(4) || '0.0000')
       .replace(/\{\{PackageVol\}\}/g, currentPkgVol.toFixed(4) || '0.0000')
-      .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="18.9" y="115.2" width="134" height="134" />`)
+      .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="16.3" y="68.0" width="134" height="134" />`)
       .replace(/\{\{Operator\}\}/g, record.intake_by || 'Operator')
       .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
 
@@ -824,42 +861,28 @@ const printLabel = async (record: IngredientIntake) => {
     formattedSvg = formattedSvg.replace(/(<svg[\s\S]*?)width="[^"]*"/, '$1width="100%"')
                                .replace(/(<svg[\s\S]*?)height="[^"]*"/, '$1height="100%"')
 
-    labelsHtml += `<div class="label-container">${formattedSvg}</div>`
+    labelsHtml += `<div class="label-wrapper">${formattedSvg}</div>`
   }
 
-  const html = `
-    <html>
-      <head>
-        <title>Print Labels - ${record.intake_lot_id}</title>
-        <style>
-          @page {
-            size: 4in 6in;
-            margin: 0;
-          }
-          body {
-            margin: 0;
-            padding: 0;
-            background: white;
-            box-sizing: border-box;
-          }
-          .label-container {
-            width: 4in;
-            height: 6in;
-            page-break-after: always;
-            overflow: hidden;
-          }
-          .label-container svg {
-            width: 4in;
-            height: 6in;
-            display: block;
-          }
-        </style>
-      </head>
-      <body>
-        ${labelsHtml}
-      </body>
-    </html>
-  `
+  const html = `<html><head><style>
+    * { margin:0; padding:0; outline:0; border:0; box-sizing:border-box; }
+    @page { size: auto; margin: 0 !important; }
+    html, body { width: 4in; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .label-wrapper { 
+      width: 4in; 
+      height: 3in; 
+      display: block; 
+      overflow: hidden; 
+      position: relative; 
+      page-break-after: always; 
+      padding-left: 2.5mm; 
+      padding-top: 1.5mm; 
+      box-sizing: border-box; 
+    }
+    .label-wrapper:last-child { page-break-after: avoid; }
+    .label-wrapper svg { width: 100%; height: 100%; display: block; }
+    header, footer { display: none !important; }
+  </style></head><body>${labelsHtml}</body></html>`.replace(/>\s+</g, '><').trim()
 
   // Use parent-side onload handler for better reliability
   iframe.onload = () => {
@@ -884,7 +907,7 @@ const printLabel = async (record: IngredientIntake) => {
  */
 const printSinglePackageLabel = async (record: IngredientIntake, pkg: { package_no: number, weight: number }) => {
   const numPackages = record.package_intake || 1
-  const templateResponse = await fetch('/labels/ingredient_intake-label.svg')
+  const templateResponse = await fetch('/labels/ingredient_intake-label_4x3.svg')
   const templateStr = await templateResponse.text()
   
   // QR contains only: intake_lot_id, package_no/total_packages
@@ -901,7 +924,7 @@ const printSinglePackageLabel = async (record: IngredientIntake, pkg: { package_
     .replace(/\{\{PackageString\}\}/g, `${pkg.package_no} / ${numPackages}`)
     .replace(/\{\{IntakeVol\}\}/g, record.intake_vol?.toFixed(4) || '0.0000')
     .replace(/\{\{PackageVol\}\}/g, pkg.weight.toFixed(4) || '0.0000')
-    .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="18.9" y="115.2" width="134" height="134" />`)
+    .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="16.3" y="68.0" width="134" height="134" />`)
     .replace(/\{\{Operator\}\}/g, record.intake_by || 'Operator')
     .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
 
@@ -909,32 +932,32 @@ const printSinglePackageLabel = async (record: IngredientIntake, pkg: { package_
   formattedSvg = formattedSvg.replace(/(<svg[\s\S]*?)width="[^"]*"/, '$1width="100%"')
                              .replace(/(<svg[\s\S]*?)height="[^"]*"/, '$1height="100%"')
 
-  const labelsHtml = `<div class="label-container">${formattedSvg}</div>`
+  const labelsHtml = `<div class="label-wrapper">${formattedSvg}</div>`
   
   // Create iframe for printing
   const iframe = document.createElement('iframe')
   iframe.style.display = 'none'
   document.body.appendChild(iframe)
 
-  const html = `
-    <html>
-      <head>
-        <title>Print Label - ${record.intake_lot_id} - Pkg ${pkg.package_no}</title>
-        <style>
-          @page { size: 4in 6in; margin: 0; }
-          body { margin: 0; padding: 0; background: white; }
-          .label-container { 
-            width: 4in; height: 6in; 
-            overflow: hidden;
-          }
-          .label-container svg { width: 4in; height: 6in; display: block; }
-        </style>
-      </head>
-      <body>
-        ${labelsHtml}
-      </body>
-    </html>
-  `
+  const html = `<html><head><style>
+    * { margin:0; padding:0; outline:0; border:0; box-sizing:border-box; }
+    @page { size: auto; margin: 0 !important; }
+    html, body { width: 4in; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .label-wrapper { 
+      width: 4in; 
+      height: 3in; 
+      display: block; 
+      overflow: hidden; 
+      position: relative; 
+      page-break-after: always; 
+      padding-left: 2.5mm; 
+      padding-top: 1.5mm; 
+      box-sizing: border-box; 
+    }
+    .label-wrapper:last-child { page-break-after: avoid; }
+    .label-wrapper svg { width: 100%; height: 100%; display: block; }
+    header, footer { display: none !important; }
+  </style></head><body>${labelsHtml}</body></html>`.replace(/>\s+</g, '><').trim()
 
   iframe.onload = () => {
     setTimeout(() => {
@@ -1086,6 +1109,8 @@ const onFileSelected = async (event: Event) => {
           <div class="text-h6 text-weight-bolder">{{ t('ingredient.title') }}</div>
         </div>
         <div class="row items-center q-gutter-sm">
+          <q-btn icon="looks_one" round flat text-color="white" @click="testPrint1Page" title="Test 1 Page" />
+          <q-btn icon="looks_two" round flat text-color="white" @click="testPrint2Pages" title="Test 2 Pages" />
           <q-btn icon="save" round flat text-color="white" @click="onSave" :loading="isSaving" title="Save Intake" />
           <q-btn icon="clear_all" round flat text-color="white" @click="onClear" title="Clear Form" />
         </div>

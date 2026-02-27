@@ -121,7 +121,7 @@ const fetchPlants = async () => {
 // Computed Options
 const skuOptions = computed(() => {
   return availableSkus.value.map((r) => ({
-    label: `${r.sku_id} - ${r.sku_name}`,
+    label: r.sku_id,
     value: r.sku_id,
     sku_name: r.sku_name,
   }))
@@ -377,7 +377,7 @@ const printBatchLabel = async (plan: any, batch: any) => {
   document.body.appendChild(iframe)
 
   try {
-    const templateResponse = await fetch('/labels/BatchPlan-Label.svg')
+    const templateResponse = await fetch('/labels/BatchPlan-Label_4x3.svg')
     const templateStr = await templateResponse.text()
 
     // Determine batch index from the batch_id string (e.g. plan-Line-1-2026-02-23-001-003 -> 3)
@@ -399,42 +399,29 @@ const printBatchLabel = async (plan: any, batch: any) => {
       .replace(/\{\{PlanSize\}\}/g, plan.total_plan_volume?.toString() || '0')
       .replace(/\{\{PlantId\}\}/g, plan.plant || '-')
       .replace(/\{\{PlantName\}\}/g, plantName)
-      .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
-      .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="0" y="0" width="100" height="100" />`)
+    // Replace fixed width/height in SVG with 100% so it scales to container
+    formattedSvg = formattedSvg.replace(/(<svg[\s\S]*?)width="[^"]*"/, '$1width="100%"')
+                               .replace(/(<svg[\s\S]*?)height="[^"]*"/, '$1height="100%"')
 
-    const html = `
-      <html>
-        <head>
-          <title>Print Label - ${batch.batch_id}</title>
-          <style>
-            @page {
-              size: 4in 6in;
-              margin: 0;
-            }
-            body {
-              margin: 0;
-              padding: 0;
-              background: white;
-              box-sizing: border-box;
-            }
-            .label-container {
-              width: 4in;
-              height: 6in;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-            }
-            .label-container svg {
-              width: 100%;
-              height: 100%;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="label-container">${formattedSvg}</div>
-        </body>
-      </html>
-    `
+    const html = `<html><head><style>
+    * { margin:0; padding:0; outline:0; border:0; box-sizing:border-box; }
+    @page { size: auto; margin: 0 !important; }
+    html, body { width: 4in; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .label-wrapper { 
+      width: 4in; 
+      height: 3in; 
+      display: block; 
+      overflow: hidden; 
+      position: relative; 
+      padding-left: 2.5mm; 
+      padding-top: 1.5mm; 
+      box-sizing: border-box; 
+      page-break-after: always; 
+    }
+    .label-wrapper:last-child { page-break-after: avoid; }
+    .label-wrapper svg { width: 100%; height: 100%; display: block; }
+    header, footer { display: none !important; }
+  </style></head><body><div class="label-wrapper">${formattedSvg}</div></body></html>`.replace(/>\s+</g, '><').trim()
 
     const doc = iframe.contentWindow?.document
     if (doc) {
@@ -476,7 +463,7 @@ const printAllBatchLabels = async (plan: any) => {
   document.body.appendChild(iframe)
 
   try {
-    const templateResponse = await fetch('/labels/BatchPlan-Label.svg')
+    const templateResponse = await fetch('/labels/BatchPlan-Label_4x3.svg')
     const templateStr = await templateResponse.text()
     const plantName = plantNames.value[plan.plant] || plan.plant || '-'
     const totalBatches = plan.num_batches || batches.length || 1
@@ -501,29 +488,34 @@ const printAllBatchLabels = async (plan: any) => {
         .replace(/\{\{PlantId\}\}/g, plan.plant || '-')
         .replace(/\{\{PlantName\}\}/g, plantName)
         .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
-        .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="0" y="0" width="100" height="100" />`)
+        .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="18.9" y="132.8" width="134" height="134" />`)
 
-      labelsHtml += `<div class="label-container">${svgContent}</div>`
+      // Replace fixed width/height in SVG with 100%
+      const finalSvg = svgContent.replace(/(<svg[\s\S]*?)width="[^"]*"/, '$1width="100%"')
+                                 .replace(/(<svg[\s\S]*?)height="[^"]*"/, '$1height="100%"')
+
+      labelsHtml += `<div class="label-wrapper">${finalSvg}</div>`
     }
 
-    const html = `
-      <html>
-        <head>
-          <title>Batch Labels - ${plan.plan_id}</title>
-          <style>
-            @page { size: 4in 6in; margin: 0; }
-            body { margin: 0; padding: 0; background: white; }
-            .label-container {
-              width: 4in; height: 6in;
-              page-break-after: always;
-              display: flex; justify-content: center; align-items: center;
-            }
-            .label-container svg { width: 100%; height: 100%; }
-          </style>
-        </head>
-        <body>${labelsHtml}</body>
-      </html>
-    `
+    const html = `<html><head><style>
+    * { margin:0; padding:0; outline:0; border:0; box-sizing:border-box; }
+    @page { size: auto; margin: 0 !important; }
+    html, body { width: 4in; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .label-wrapper { 
+      width: 4in; 
+      height: 3in; 
+      display: block; 
+      overflow: hidden; 
+      position: relative; 
+      padding-left: 2.5mm; 
+      padding-top: 1.5mm; 
+      box-sizing: border-box; 
+      page-break-after: always; 
+    }
+    .label-wrapper:last-child { page-break-after: avoid; }
+    .label-wrapper svg { width: 100%; height: 100%; display: block; }
+    header, footer { display: none !important; }
+  </style></head><body>${labelsHtml}</body></html>`.replace(/>\s+</g, '><').trim()
 
     const doc = iframe.contentWindow?.document
     if (doc) {
