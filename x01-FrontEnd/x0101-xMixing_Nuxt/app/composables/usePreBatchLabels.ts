@@ -74,7 +74,7 @@ export function usePreBatchLabels(deps: LabelDeps) {
             "SKU / SKU_Name": skuFullName,
             PlanId: opts.planId || '-',
             BatchId: batchIdValue,
-            "Batch_Number/No of Batch": totalBatches !== '-' ? `Batch ${currentBatchNo} of ${totalBatches}` : `Batch ${currentBatchNo}`,
+            "Batch_Number/No of Batch": totalBatches !== '-' ? `${currentBatchNo}/${totalBatches}` : currentBatchNo,
             IngredientID: opts.ingName || '-',
             Ingredient_ReCode: opts.reCode || '-',
             ContainerType: opts.containerType || 'Bag',
