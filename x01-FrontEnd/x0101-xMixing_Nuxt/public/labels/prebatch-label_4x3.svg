@@ -25,9 +25,9 @@
      inkscape:document-units="in"
      showgrid="true"
      showguides="true"
-     inkscape:zoom="1.3472222"
-     inkscape:cx="12.989691"
-     inkscape:cy="240.12371"
+     inkscape:zoom="3.8105198"
+     inkscape:cx="95.393809"
+     inkscape:cy="205.61499"
      inkscape:window-width="1920"
      inkscape:window-height="945"
      inkscape:window-x="0"
@@ -99,7 +99,7 @@
      font-size="16px"
      font-weight="bold"
      font-family="Arial"
-     id="text12">{{SKU}}</text>
+     id="text12">{{SKU / SKU_Name}}</text>
   <text
      x="14.804688"
      y="98.39193"
@@ -162,18 +162,18 @@
      id="text26">{{PlanStartDate}} // {{PlanFinishDate}}</text>
   <text
      x="14.804688"
-     y="203.02734"
+     y="199.58821"
      fill="#000000"
      font-size="10px"
      font-family="Arial"
-     id="text28">Plant</text>
+     id="text24-3">Prepare Date</text>
   <text
-     x="44.270832"
-     y="203.125"
+     x="77.925781"
+     y="201.40364"
      fill="#000000"
      font-size="12px"
      font-family="Arial"
-     id="text30">{{PlantId}}</text>
+     id="text26-6">{{PrepareDate}}</text>
   <!-- Bottom Section -->
   <text
      x="15.625"

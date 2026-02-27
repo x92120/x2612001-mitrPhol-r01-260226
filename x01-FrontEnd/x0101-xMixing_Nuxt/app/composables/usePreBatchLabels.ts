@@ -66,8 +66,12 @@ export function usePreBatchLabels(deps: LabelDeps) {
         const batchMatch = batchIdValue.match(/-(\d+)$/)
         const currentBatchNo = batchMatch ? parseInt(batchMatch[1]) : '-'
 
+        const skuFullName = opts.batch.sku_id ? `${opts.batch.sku_id} / ${opts.plan?.sku_name || opts.plan?.name || '-'}` : (opts.plan?.sku_name || '-');
+
         return {
             SKU: opts.batch.sku_id || '-',
+            SKU_Name: opts.plan?.sku_name || opts.plan?.name || '-',
+            "SKU / SKU_Name": skuFullName,
             PlanId: opts.planId || '-',
             BatchId: batchIdValue,
             "Batch_Number/No of Batch": totalBatches !== '-' ? `Batch ${currentBatchNo} of ${totalBatches}` : `Batch ${currentBatchNo}`,
@@ -77,6 +81,7 @@ export function usePreBatchLabels(deps: LabelDeps) {
             mat_sap_code: opts.matSapCode || '-',
             PlanStartDate: opts.plan?.start_date || '-',
             PlanFinishDate: opts.plan?.finish_date || '-',
+            PrepareDate: opts.timestamp.split(',')[0], // Use just the date part of the timestamp
             PlantId: opts.plan?.plant || '-',
             PlantName: '-',
             Timestamp: opts.timestamp,
