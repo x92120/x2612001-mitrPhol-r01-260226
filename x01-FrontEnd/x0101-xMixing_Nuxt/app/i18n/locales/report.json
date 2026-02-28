@@ -1,0 +1,28 @@
+{
+    "en": {
+        "report.title": "Ingredient Intake Summary Report",
+        "report.startDate": "Start Date",
+        "report.endDate": "End Date",
+        "report.generateReport": "Generate Report",
+        "report.summaryByIngredient": "Summary by Ingredient",
+        "report.grandTotal": "Grand Total:",
+        "report.selectDates": "Please select both start and end dates",
+        "report.failedLoad": "Failed to load report data",
+        "report.totalVolume": "Total Volume (kg)",
+        "report.totalPackages": "Total Packages",
+        "report.noIntakes": "No. of Intakes"
+    },
+    "th": {
+        "report.title": "รายงานสรุปการรับวัตถุดิบ",
+        "report.startDate": "วันที่เริ่มต้น",
+        "report.endDate": "วันที่สิ้นสุด",
+        "report.generateReport": "สร้างรายงาน",
+        "report.summaryByIngredient": "สรุปตามวัตถุดิบ",
+        "report.grandTotal": "ยอดรวมทั้งหมด:",
+        "report.selectDates": "กรุณาเลือกวันเริ่มต้นและสิ้นสุด",
+        "report.failedLoad": "ไม่สามารถโหลดข้อมูลรายงานได้",
+        "report.totalVolume": "ปริมาณรวม (กก.)",
+        "report.totalPackages": "จำนวนแพ็กรวม",
+        "report.noIntakes": "จำนวนการรับ"
+    }
+}
