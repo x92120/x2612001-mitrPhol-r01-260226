@@ -138,7 +138,7 @@ export function usePreBatchScales(deps: ScaleDeps) {
     const handleMqttMessage = (topic: string, message: any) => {
         if (!topic.startsWith('scale/')) return
 
-        const scaleId = topic.split('/')[1]
+        const scaleId = topic.split('/')[1] || ''
         const scaleIndex = scales.value.findIndex(s => s.targetScaleId === scaleId)
         if (scaleIndex === -1) return
 
