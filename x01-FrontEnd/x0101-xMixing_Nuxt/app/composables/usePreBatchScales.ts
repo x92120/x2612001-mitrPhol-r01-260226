@@ -151,10 +151,17 @@ export function usePreBatchScales(deps: ScaleDeps) {
 
                 scale.value = weightKg
                 // "Auto" precision: use the value as is from the scale payload
-                scale.displayValue = String(rawWeight)
+                // If the bridge sends "error!!!", show it
+                if (data.error_msg === 'error!!!') {
+                    scale.displayValue = 'error!!!'
+                    scale.isError = true
+                } else {
+                    scale.displayValue = String(rawWeight)
+                    scale.isError = !!data.error_msg
+                }
+
                 scale.unit = rawUnit
                 scale.isStable = data.stable !== undefined ? data.stable : true
-                scale.isError = !!data.error_msg
                 scale.connected = true
                 connectedScales.value[scale.id] = true
             }

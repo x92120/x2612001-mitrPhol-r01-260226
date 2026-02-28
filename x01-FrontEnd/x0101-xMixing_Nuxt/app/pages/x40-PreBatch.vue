@@ -751,9 +751,9 @@ onMounted(() => {
                             outlined
                             :model-value="activeScale?.displayValue || '0'"
                             dense
-                            :bg-color="isToleranceExceeded ? 'yellow-4' : 'green-1'"
+                            :bg-color="activeScale?.isError ? 'red-8' : (isToleranceExceeded ? 'yellow-4' : 'green-1')"
                             readonly
-                            input-class="text-right text-weight-bold"
+                            :input-class="(activeScale?.isError ? 'text-white' : 'text-black') + ' text-right text-weight-bold'"
                         >
                             <template v-slot:append>
                                 <div class="text-caption text-weight-bolder">{{ activeScale?.unit || 'kg' }}</div>
