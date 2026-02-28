@@ -1,7 +1,7 @@
 /**
  * usePreBatchScales — Scale connections, weighing, tolerance checks
  */
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 
 export interface ScaleDeps {
     $q: any
@@ -9,10 +9,11 @@ export interface ScaleDeps {
     selectedReCode: any
     requireVolume: any
     packageSize: any
+    mqttClient?: any // Optional MQTT client for real-time updates
 }
 
 export function usePreBatchScales(deps: ScaleDeps) {
-    const { $q, t } = deps
+    const { $q, t, mqttClient } = deps
 
     // --- State ---
     const selectedScale = ref(0)
@@ -25,6 +26,7 @@ export function usePreBatchScales(deps: ScaleDeps) {
             label: 'Scale 1 (10 Kg +/- 0.01)',
             value: 0.0,
             displayValue: '0.0000',
+            unit: 'kg',
             targetScaleId: 'scale-01',
             connected: false,
             tolerance: 0.01,
@@ -36,11 +38,12 @@ export function usePreBatchScales(deps: ScaleDeps) {
             id: 2,
             label: 'Scale 2 (30 Kg +/- 0.02)',
             value: 0.0,
-            displayValue: '0.000',
+            displayValue: '0.0000',
+            unit: 'kg',
             targetScaleId: 'scale-02',
             connected: false,
             tolerance: 0.02,
-            precision: 3,
+            precision: 4,
             isStable: true,
             isError: false
         },
@@ -48,11 +51,12 @@ export function usePreBatchScales(deps: ScaleDeps) {
             id: 3,
             label: 'Scale 3 (150 Kg +/- 0.5)',
             value: 0.0,
-            displayValue: '0.00',
+            displayValue: '0.000',
+            unit: 'kg',
             targetScaleId: 'scale-03',
             connected: false,
             tolerance: 0.5,
-            precision: 2,
+            precision: 3,
             isStable: true,
             isError: false
         },
@@ -118,6 +122,78 @@ export function usePreBatchScales(deps: ScaleDeps) {
         }
     })
 
+    // --- Actions ---
+    const handleMqttMessage = (topic: string, message: any) => {
+        if (!topic.startsWith('scale/')) return
+
+        const scaleId = topic.split('/')[1]
+        const scaleIndex = scales.value.findIndex(s => s.targetScaleId === scaleId)
+        if (scaleIndex === -1) return
+
+        try {
+            const data = JSON.parse(message.toString())
+            const rawWeight = data.weight
+            const rawUnit = data.unit || 'kg'
+
+            // Normalize to KG for internal logic
+            let weightKg = parseFloat(rawWeight) || 0
+            if (rawUnit.toLowerCase() === 'g') {
+                weightKg = weightKg / 1000
+            }
+
+            // Update scale object reactively
+            const scale = scales.value[scaleIndex]
+            if (scale) {
+                // If no scale is selected yet, default to the one that first sends data
+                if (selectedScale.value === 0) {
+                    selectedScale.value = scale.id
+                }
+
+                scale.value = weightKg
+                // "Auto" precision: use the value as is from the scale payload
+                scale.displayValue = String(rawWeight)
+                scale.unit = rawUnit
+                scale.isStable = data.stable !== undefined ? data.stable : true
+                scale.isError = !!data.error_msg
+                scale.connected = true
+                connectedScales.value[scale.id] = true
+            }
+        } catch (e) {
+            console.warn(`[Scale] Parse error for ${scaleId}:`, e)
+        }
+    }
+
+    // --- Lifecycle ---
+    const setupMqttListener = (client: any) => {
+        if (!client) return
+        client.on('message', handleMqttMessage)
+        console.log('📡 usePreBatchScales: MQTT Listener Attached')
+    }
+
+    const removeMqttListener = (client: any) => {
+        if (!client) return
+        client.removeListener('message', handleMqttMessage)
+        console.log('📡 usePreBatchScales: MQTT Listener Removed')
+    }
+
+    onMounted(() => {
+        if (mqttClient.value) {
+            setupMqttListener(mqttClient.value)
+        }
+    })
+
+    onUnmounted(() => {
+        if (mqttClient.value) {
+            removeMqttListener(mqttClient.value)
+        }
+    })
+
+    // Watch for late connection or client swap
+    watch(mqttClient, (newClient, oldClient) => {
+        if (oldClient) removeMqttListener(oldClient)
+        if (newClient) setupMqttListener(newClient)
+    })
+
     // --- Functions ---
     const onScaleInput = (scaleId: number, val: string) => {
         const scale = scales.value.find(s => s.id === scaleId)
@@ -133,6 +209,8 @@ export function usePreBatchScales(deps: ScaleDeps) {
         const scale = scales.value.find((s) => s.id === scaleId)
         if (!scale) return
         connectedScales.value[scaleId] = !connectedScales.value[scaleId]
+        scale.connected = connectedScales.value[scaleId]
+
         $q.notify({
             type: connectedScales.value[scaleId] ? 'positive' : 'info',
             message: connectedScales.value[scaleId] ? `${t('preBatch.connected')} ${scale.label}` : `${t('preBatch.disconnected')} ${scale.label}`,

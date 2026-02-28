@@ -35,20 +35,33 @@ export function usePreBatchProduction(deps: ProductionDeps) {
     const productionPlans = ref<any[]>([])
     const planFilter = ref('All')
     const productionPlanOptions = computed(() => {
-        const ids = productionPlans.value.map((plan: any) => plan.plan_id)
-        return ['All', ...ids]
+        const options = productionPlans.value.map((plan: any) => ({
+            label: `${plan.plan_id} (${plan.sku_id || 'No SKU'})`,
+            value: plan.plan_id
+        }))
+        return [{ label: 'All Plans', value: 'All' }, ...options]
     })
+
     const allBatches = ref<any[]>([])
     const filteredBatches = ref<any[]>([])
     const ingredientOptions = ref<{ label: string, value: string }[]>([])
     const batchIngredients = ref<Record<string, any[]>>({})
 
-    // --- Computed ---
     const filteredProductionPlans = computed(() => {
         const base = productionPlans.value.filter((p: any) => p.status !== 'Cancelled')
         if (planFilter.value === 'All') return base
         return base.filter((p: any) => p.plan_id === planFilter.value)
     })
+
+    const plansWithBatches = computed(() => {
+        return filteredProductionPlans.value.map(plan => {
+            const childBatches = (allBatches.value || [])
+                .filter(b => b.plan_id === plan.id || b.batch_id.includes(plan.plan_id))
+                .sort((a: any, b: any) => a.batch_id.localeCompare(b.batch_id))
+            return { ...plan, batches: childBatches }
+        })
+    })
+
     const batchIds = computed(() => filteredBatches.value.map((b: any) => b.batch_id))
 
     const selectedBatch = computed(() => {
@@ -276,6 +289,7 @@ export function usePreBatchProduction(deps: ProductionDeps) {
         batchIngredients,
         // Computed
         filteredProductionPlans,
+        plansWithBatches,
         batchIds,
         selectedBatch,
         selectedPlanDetails,

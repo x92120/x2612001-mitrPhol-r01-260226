@@ -11,9 +11,9 @@ MQTT_PASS = "admin"
 BAUD = 9600
 
 # Find all matching USB serial ports
-PORTS = glob.glob("/dev/ttyUSB*")
+PORTS = sorted(glob.glob("/dev/ttyUSB*"))
 if not PORTS:
-    print("No serial ports discovered. Waiting...")
+    print("[Scale-Reader] !!! No serial ports discovered. (/dev/ttyUSB*) !!!")
     time.sleep(5)
     PORTS = []
 
@@ -81,26 +81,11 @@ def port_reader(port, mqtt_client):
                                 scale_id = "unknown"
                                 weight_str = ""
                                 
-                                # Dynamic Routing based on Prefix
+                                # Dynamic Routing & Parsing
                                 if payload.startswith('A'):
                                     topic = "scale/scale-01"
                                     scale_id = "scale-01"
                                     weight_str = payload[1:].strip()
-                                elif payload.startswith('B'):
-                                    topic = "scale/scale-02"
-                                    scale_id = "scale-02"
-                                    weight_str = payload[1:].strip()
-                                elif payload.startswith('C'):
-                                    topic = "scale/scale-03"
-                                    scale_id = "scale-03"
-                                    weight_str = payload[1:].strip()
-                                
-                                if topic and weight_str:
-                                    last_topic = topic
-                                    last_scale_id = scale_id
-                                    with heartbeat_lock:
-                                        scale_heartbeats[scale_id] = time.time()
-                                    
                                     try:
                                         if len(weight_str) >= 9:
                                             status_char = weight_str[0]
@@ -110,17 +95,64 @@ def port_reader(port, mqtt_client):
                                             
                                             raw_val = float(data_str)
                                             decimal_places = int(decimal_char)
-                                            
                                             final_weight = raw_val / (10 ** decimal_places)
-                                            if sign_char == '-':
-                                                final_weight = -final_weight
-                                                
+                                            if sign_char == '-': final_weight = -final_weight
                                             is_stable = (status_char == '0')
-                                            json_payload = f'{{"weight": {final_weight}, "scale_id": "{scale_id}", "unit": "kg", "stable": {str(is_stable).lower()}}}'
+                                            
+                                            # Extract unit from packet (usually at index 10)
+                                            unit_part = "kg"
+                                            if len(weight_str) >= 12:
+                                                extracted_unit = weight_str[10:12].strip()
+                                                if extracted_unit: unit_part = extracted_unit
+                                            
+                                            json_payload = f'{{"weight": {final_weight}, "scale_id": "{scale_id}", "unit": "{unit_part.lower()}", "stable": {str(is_stable).lower()}}}'
                                             mqtt_client.publish(topic, json_payload)
-                                            print(f"[{scale_id}] {final_weight} kg (Stable: {is_stable})")
-                                    except ValueError as e:
-                                        print(f"[{scale_id}] Parsing error: {e}")
+                                            print(f"[Echo] {scale_id} on {port}: {final_weight} {unit_part} (Stable: {is_stable})")
+                                    except Exception as e:
+                                        print(f"[{scale_id}] Parse Error: {e}")
+
+                                elif "GS" in payload:
+                                    # Handle Scale 2 Format: ST,GS   533.6,g
+                                    topic = "scale/scale-02"
+                                    scale_id = "scale-02"
+                                    try:
+                                        # Use regex-like approach to find the first GS and extract weight
+                                        # Example payload: "ST,GS   533.6,g ST,GS..."
+                                        import re
+                                        # Find all patterns like ST,GS 123.4,g or US,GS 123.4,g
+                                        match = re.search(r'(ST|US),GS\s*(-?[\d.]+)\s*,(g|kg)', payload)
+                                        if match:
+                                            status_part = match.group(1) # ST or US
+                                            val_str = match.group(2)     # 533.6
+                                            unit_part = match.group(3)   # g or kg
+                                            
+                                            final_weight = float(val_str)
+                                            # Use the unit directly from the scale as requested
+                                            is_stable = (status_part == 'ST')
+                                            json_payload = f'{{"weight": {final_weight}, "scale_id": "{scale_id}", "unit": "{unit_part}", "stable": {str(is_stable).lower()}}}'
+                                            mqtt_client.publish(topic, json_payload)
+                                            print(f"[Echo] {scale_id} on {port}: {final_weight} {unit_part} (Stable: {is_stable})")
+                                    except Exception as e:
+                                        print(f"[{scale_id}] Parse Error: {e}")
+
+                                elif payload.startswith('B'):
+                                    topic = "scale/scale-02"
+                                    scale_id = "scale-02"
+                                    weight_str = payload[1:].strip()
+                                    # (Use existing logic if B ever appears)
+                                elif payload.startswith('C'):
+                                    topic = "scale/scale-03"
+                                    scale_id = "scale-03"
+                                    weight_str = payload[1:].strip()
+                                else:
+                                    if len(payload) > 3:
+                                        print(f"[Port:{port}] Unknown format: {payload[:20]}...")
+                                
+                                if topic:
+                                    last_topic = topic
+                                    last_scale_id = scale_id
+                                    with heartbeat_lock:
+                                        scale_heartbeats[scale_id] = time.time()
                         else:
                             timeout_count += 1
                             if timeout_count >= MAX_TIMEOUTS:
@@ -128,7 +160,7 @@ def port_reader(port, mqtt_client):
                                     err_payload = f'{{"weight": 0.0, "scale_id": "{last_scale_id}", "error_msg": "----"}}'
                                     mqtt_client.publish(last_topic, err_payload)
                                 timeout_count = 0
-                        time.sleep(0.02)
+                        time.sleep(0.25)
                     except serial.SerialTimeoutException:
                         pass
         except Exception as e:
@@ -141,17 +173,19 @@ def main():
     try:
         client.connect(BROKER, 1883, 60)
         client.loop_start()
-        print("Scale-Reader: Connected to MQTT")
+        print("[Scale-Reader] Successfully Connected to RabbitMQ Broker")
     except Exception as e:
-        print(f"Scale-Reader: Failed to connect to MQTT: {e}")
+        print(f"[Scale-Reader] !!! Failed to connect to MQTT: {e} !!!")
         return
 
     threading.Thread(target=scale_monitor, args=(client,), daemon=True).start()
 
     for port in PORTS:
-        threading.Thread(target=port_reader, args=(port, client), daemon=True).start()
+        t = threading.Thread(target=port_reader, args=(port, client), daemon=True)
+        t.start()
+        print(f"[Scale-Reader] Initializing thread for {port}")
 
-    print(f"Scale-Reader Monitoring: {', '.join(PORTS)}")
+    print(f"[Scale-Reader] Active Monitoring Ports: {', '.join(PORTS)}")
     try:
         while True:
             time.sleep(1)

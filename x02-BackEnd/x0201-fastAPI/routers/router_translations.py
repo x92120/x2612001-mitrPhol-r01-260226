@@ -1,69 +1,98 @@
 """
 Translations Router
 ===================
-Serves i18n translations from a local SQLite database.
-The SQLite file (translations.db) can be edited with any SQLite tool
-(e.g. DB Browser for SQLite, DBeaver, or command-line sqlite3).
+Serves i18n translations from multiple local JSON files in the 'locales' folder.
+Translations are grouped by their key prefix (e.g., prodPlan.json, preBatch.json).
 
 Endpoints:
-  GET  /translations/              → all translations (both locales)
+  GET  /translations/              → all translations (all locales and sections)
   GET  /translations/{locale}      → all key-value pairs for a locale
-  PUT  /translations/{locale}/{key} → update a single translation
+  PUT  /translations/{locale}/{key} → update/create a single translation
   POST /translations/bulk          → bulk upsert translations
 """
 
-import sqlite3
+import json
 import os
 import logging
+import threading
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Translations"])
 
-# SQLite database path — sits in the frontend i18n folder alongside dictionary.ts
-DB_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
-    "x01-FrontEnd", "x0101-xMixing_Nuxt", "app", "i18n"
-)
-DB_PATH = os.path.join(DB_DIR, "translations.db")
+# Base Directory Setup
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+I18N_DIR = os.path.join(BASE_DIR, "x01-FrontEnd", "x0101-xMixing_Nuxt", "app", "i18n")
+LOCALES_DIR = os.path.join(I18N_DIR, "locales")
+IMPORT_PATH = os.path.join(I18N_DIR, "translations_import.json")
 
+# Ensure locales directory exists
+if not os.path.exists(LOCALES_DIR):
+    os.makedirs(LOCALES_DIR)
 
-def get_conn():
-    """Get a connection to the translations SQLite database."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+# Thread safety for file operations
+file_lock = threading.Lock()
 
+def get_prefix(key: str) -> str:
+    """Extract section prefix from translation key."""
+    return key.split('.')[0] if '.' in key else 'common'
 
-def init_db():
-    """Create the translations table if it doesn't exist."""
-    conn = get_conn()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS translations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT NOT NULL,
-            locale TEXT NOT NULL DEFAULT 'en',
-            value TEXT NOT NULL DEFAULT '',
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(key, locale)
-        )
-    """)
-    conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_translations_locale
-        ON translations(locale)
-    """)
-    conn.commit()
-    conn.close()
-    logger.info(f"✅ Translations DB ready at: {DB_PATH}")
+def get_file_path(prefix: str) -> str:
+    """Get absolute path for a section's JSON file."""
+    return os.path.join(LOCALES_DIR, f"{prefix}.json")
 
+def load_translations():
+    """Aggregate all translations from files in the locales directory."""
+    full_dict = {"en": {}, "th": {}}
+    
+    with file_lock:
+        if not os.listdir(LOCALES_DIR):
+            logger.warning(f"Locales directory empty. No translations loaded.")
+            return full_dict
 
-# Initialize on module import
-init_db()
+        for filename in os.listdir(LOCALES_DIR):
+            if filename.endswith(".json"):
+                file_path = os.path.join(LOCALES_DIR, filename)
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        # Merge into full_dict
+                        for locale in ["en", "th"]:
+                            if locale in data:
+                                full_dict[locale].update(data[locale])
+                except Exception as e:
+                    logger.error(f"Error loading {filename}: {e}")
+                    
+    return full_dict
 
+def update_single_file(prefix: str, locale: str, key: str, value: str):
+    """Update or create a translation entry in a specific section file."""
+    file_path = get_file_path(prefix)
+    
+    with file_lock:
+        data = {"en": {}, "th": {}}
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except Exception as e:
+                logger.error(f"Error reading {file_path} for update: {e}")
+        
+        if locale not in data:
+            data[locale] = {}
+        
+        data[locale][key] = value
+        
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
+            return True
+        except Exception as e:
+            logger.error(f"Error writing to {file_path}: {e}")
+            return False
 
 # =============================================================================
 # ENDPOINTS
@@ -71,49 +100,27 @@ init_db()
 
 @router.get("/translations/")
 def get_all_translations():
-    """Get all translations grouped by locale."""
-    conn = get_conn()
-    rows = conn.execute(
-        "SELECT key, locale, value FROM translations ORDER BY locale, key"
-    ).fetchall()
-    conn.close()
-
-    result: dict = {}
-    for row in rows:
-        locale = row["locale"]
-        if locale not in result:
-            result[locale] = {}
-        result[locale][row["key"]] = row["value"]
-
-    return result
+    """Get all translations aggregated from all section files."""
+    return load_translations()
 
 
 @router.get("/translations/stats")
 def get_translation_stats():
-    """Get statistics about translations."""
-    conn = get_conn()
-
-    total = conn.execute("SELECT COUNT(*) as cnt FROM translations").fetchone()["cnt"]
-    en_count = conn.execute("SELECT COUNT(*) as cnt FROM translations WHERE locale='en'").fetchone()["cnt"]
-    th_count = conn.execute("SELECT COUNT(*) as cnt FROM translations WHERE locale='th'").fetchone()["cnt"]
-
-    # Find keys missing in Thai
-    missing_th = conn.execute("""
-        SELECT t1.key FROM translations t1
-        WHERE t1.locale = 'en'
-        AND NOT EXISTS (
-            SELECT 1 FROM translations t2
-            WHERE t2.key = t1.key AND t2.locale = 'th'
-        )
-    """).fetchall()
-
-    conn.close()
+    """Get statistics about translations across all files."""
+    data = load_translations()
+    
+    en_keys = set(data.get("en", {}).keys())
+    th_keys = set(data.get("th", {}).keys())
+    
+    all_keys = en_keys.union(th_keys)
+    missing_th = [k for k in en_keys if k not in th_keys]
 
     return {
-        "total_entries": total,
-        "en_count": en_count,
-        "th_count": th_count,
-        "missing_in_th": [r["key"] for r in missing_th],
+        "total_keys": len(all_keys),
+        "en_count": len(en_keys),
+        "th_count": len(th_keys),
+        "missing_in_th": missing_th,
+        "sections_count": len([f for f in os.listdir(LOCALES_DIR) if f.endswith('.json')])
     }
 
 
@@ -125,37 +132,52 @@ class BulkTranslation(BaseModel):
 
 @router.post("/translations/bulk")
 def bulk_upsert_translations(items: list[BulkTranslation]):
-    """Bulk upsert translations. Used by the seed script."""
-    conn = get_conn()
-    inserted = 0
+    """Bulk upsert translations. Sorts items by prefix to minimize file writes."""
+    # Group by prefix
+    by_prefix = {}
     for item in items:
-        conn.execute("""
-            INSERT INTO translations (key, locale, value, updated_at)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(key, locale)
-            DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
-        """, (item.key, item.locale, item.value))
-        inserted += 1
-    conn.commit()
-    conn.close()
+        prefix = get_prefix(item.key)
+        if prefix not in by_prefix:
+            by_prefix[prefix] = []
+        by_prefix[prefix].append(item)
 
-    return {"status": "ok", "upserted": inserted}
+    success_count = 0
+    with file_lock:
+        for prefix, items_in_prefix in by_prefix.items():
+            file_path = get_file_path(prefix)
+            data = {"en": {}, "th": {}}
+            
+            if os.path.exists(file_path):
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                except Exception: pass
+            
+            for item in items_in_prefix:
+                if item.locale not in data:
+                    data[item.locale] = {}
+                data[item.locale][item.key] = item.value
+                success_count += 1
+            
+            try:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=4, ensure_ascii=False)
+            except Exception as e:
+                logger.error(f"Bulk write failed for {prefix}: {e}")
+    
+    return {"status": "ok", "upserted": success_count}
 
 
 @router.get("/translations/{locale}")
 def get_translations_by_locale(locale: str):
-    """Get all translations for a specific locale as a flat key-value object."""
-    if locale not in ("en", "th"):
+    """Get all translations for a specific locale."""
+    data = load_translations()
+    if locale not in data:
+        if locale in ("en", "th"):
+            return {}
         raise HTTPException(status_code=400, detail="Locale must be 'en' or 'th'")
-
-    conn = get_conn()
-    rows = conn.execute(
-        "SELECT key, value FROM translations WHERE locale = ? ORDER BY key",
-        (locale,)
-    ).fetchall()
-    conn.close()
-
-    return {row["key"]: row["value"] for row in rows}
+    
+    return data[locale]
 
 
 class TranslationUpdate(BaseModel):
@@ -164,21 +186,13 @@ class TranslationUpdate(BaseModel):
 
 @router.put("/translations/{locale}/{key:path}")
 def update_translation(locale: str, key: str, body: TranslationUpdate):
-    """Update a single translation value."""
+    """Update a single translation value in the appropriate section file."""
     if locale not in ("en", "th"):
         raise HTTPException(status_code=400, detail="Locale must be 'en' or 'th'")
 
-    conn = get_conn()
-
-    # Upsert: insert or update
-    conn.execute("""
-        INSERT INTO translations (key, locale, value, updated_at)
-        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(key, locale)
-        DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
-    """, (key, locale, body.value))
-    conn.commit()
-    conn.close()
-
-    return {"status": "ok", "key": key, "locale": locale, "value": body.value}
+    prefix = get_prefix(key)
+    if update_single_file(prefix, locale, key, body.value):
+        return {"status": "ok", "key": key, "locale": locale, "value": body.value, "file": f"{prefix}.json"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to save translation to file")
 

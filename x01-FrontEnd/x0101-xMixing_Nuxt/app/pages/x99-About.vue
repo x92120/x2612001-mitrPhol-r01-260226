@@ -49,6 +49,7 @@ interface TranslationRow {
   key: string
   en: string
   th: string
+  section: string
 }
 
 const allTranslations = ref<Record<string, Record<string, string>>>({})
@@ -57,6 +58,7 @@ const isLoadingTranslations = ref(false)
 const translationSearch = ref('')
 const translationSectionFilter = ref('all')
 const showTranslationEditor = ref(false)
+const backendStats = ref({ total_keys: 0, sections_count: 0 })
 
 // Edit dialog
 const showEditDialog = ref(false)
@@ -69,6 +71,11 @@ const isSaving = ref(false)
 const fetchAllTranslations = async () => {
   isLoadingTranslations.value = true
   try {
+    const statsRes = await fetch(`${appConfig.apiBaseUrl}/translations/stats`)
+    if (statsRes.ok) {
+        backendStats.value = await statsRes.json()
+    }
+
     const res = await fetch(`${appConfig.apiBaseUrl}/translations/`)
     if (res.ok) {
       const data = await res.json()
@@ -85,6 +92,7 @@ const fetchAllTranslations = async () => {
           key,
           en: data.en?.[key] || '',
           th: data.th?.[key] || '',
+          section: key.split('.')[0] || 'common'
         }))
     }
   } catch (e) {
@@ -99,14 +107,13 @@ const fetchAllTranslations = async () => {
 const sectionOptions = computed(() => {
   const sections = new Set<string>()
   translationRows.value.forEach(row => {
-    const section = row.key.split('.')[0]
-    if (section) sections.add(section)
+    sections.add(row.section)
   })
   return [
     { label: `${t('about.section')}: All (${translationRows.value.length})`, value: 'all' },
     ...Array.from(sections).sort().map(s => {
-      const count = translationRows.value.filter(r => r.key.startsWith(s + '.')).length
-      return { label: `${s} (${count})`, value: s }
+      const count = translationRows.value.filter(r => r.section === s).length
+      return { label: `${s}.json (${count})`, value: s }
     })
   ]
 })
@@ -117,7 +124,7 @@ const filteredTranslationRows = computed(() => {
 
   // Section filter
   if (translationSectionFilter.value !== 'all') {
-    rows = rows.filter(r => r.key.startsWith(translationSectionFilter.value + '.'))
+    rows = rows.filter(r => r.section === translationSectionFilter.value)
   }
 
   // Text search
@@ -220,6 +227,7 @@ const saveNewTranslation = async () => {
       key: newKey.value,
       en: newEn.value,
       th: newTh.value,
+      section: newKey.value.split('.')[0] || 'common'
     })
     translationRows.value.sort((a, b) => a.key.localeCompare(b.key))
 
@@ -243,12 +251,13 @@ const translationStats = computed(() => {
   const total = translationRows.value.length
   const missingTh = translationRows.value.filter(r => !r.th).length
   const missingEn = translationRows.value.filter(r => !r.en).length
-  return { total, missingTh, missingEn }
+  return { ...translationStats, total, missingTh, missingEn, sections: backendStats.value.sections_count }
 })
 
 // Table columns
 const translationColumns = [
-  { name: 'key', label: t('about.keyLabel'), field: 'key', align: 'left' as const, sortable: true, style: 'width: 250px; font-family: monospace; font-size: 12px; color: #1565c0' },
+  { name: 'section', label: 'File', field: 'section', align: 'left' as const, sortable: true, style: 'width: 120px; color: #666' },
+  { name: 'key', label: t('about.keyLabel'), field: 'key', align: 'left' as const, sortable: true, style: 'width: 250px; font-family: monospace; font-size: 11px; color: #1565c0' },
   { name: 'en', label: '🇬🇧 English', field: 'en', align: 'left' as const, sortable: true },
   { name: 'th', label: '🇹🇭 ไทย', field: 'th', align: 'left' as const, sortable: true },
   { name: 'actions', label: '', field: 'actions', align: 'center' as const, style: 'width: 60px' },
