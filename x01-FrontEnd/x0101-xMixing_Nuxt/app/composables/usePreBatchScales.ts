@@ -63,6 +63,18 @@ export function usePreBatchScales(deps: ScaleDeps) {
     ])
 
     const connectedScales = ref<Record<number, boolean>>({})
+    const watchdogs: Record<string, any> = {}
+
+    const resetWatchdog = (scaleId: string) => {
+        if (watchdogs[scaleId]) clearTimeout(watchdogs[scaleId])
+        watchdogs[scaleId] = setTimeout(() => {
+            const scale = scales.value.find(s => s.targetScaleId === scaleId)
+            if (scale) {
+                scale.isError = true
+                scale.displayValue = 'error!!!'
+            }
+        }, 5000)
+    }
 
     // --- Computed ---
     const activeScale = computed(() => scales.value.find(s => s.id === selectedScale.value))
@@ -164,6 +176,9 @@ export function usePreBatchScales(deps: ScaleDeps) {
                 scale.isStable = data.stable !== undefined ? data.stable : true
                 scale.connected = true
                 connectedScales.value[scale.id] = true
+
+                // Reset frontend-side watchdog
+                resetWatchdog(scaleId)
             }
         } catch (e) {
             console.warn(`[Scale] Parse error for ${scaleId}:`, e)
@@ -193,6 +208,8 @@ export function usePreBatchScales(deps: ScaleDeps) {
         if (mqttClient.value) {
             removeMqttListener(mqttClient.value)
         }
+        // Clear all watchdogs
+        Object.values(watchdogs).forEach(t => clearTimeout(t))
     })
 
     // Watch for late connection or client swap
