@@ -17,11 +17,16 @@ if not PORTS:
     time.sleep(5)
     PORTS = []
 
-# Shared state for heartbeats
+# Shared state for heartbeats and last payloads
 scale_heartbeats = {
     "scale-01": 0.0,
     "scale-02": 0.0,
     "scale-03": 0.0
+}
+last_payloads = {
+    "scale-01": {"weight": 0.0, "unit": "kg", "stable": True},
+    "scale-02": {"weight": 0.0, "unit": "kg", "stable": True},
+    "scale-03": {"weight": 0.0, "unit": "kg", "stable": True}
 }
 heartbeat_lock = threading.Lock()
 
@@ -44,7 +49,11 @@ def scale_monitor(mqtt_client):
             
             if current_time - last_seen > 5.0:
                 topic = f"scale/{scale_id}"
-                err_payload = f'{{"weight": 0.0, "scale_id": "{scale_id}", "error_msg": "----", "detail": "Watchdog Timeout"}}'
+                # Keep last scale value and show error
+                with heartbeat_lock:
+                    last = last_payloads.get(scale_id, {"weight": 0.0, "unit": "kg"})
+                
+                err_payload = f'{{"weight": "{last["weight"]}", "scale_id": "{scale_id}", "unit": "{last["unit"]}", "error_msg": "error!!!", "detail": "Watchdog Timeout"}}'
                 try:
                     mqtt_client.publish(topic, err_payload)
                 except Exception as e:
@@ -56,7 +65,7 @@ def port_reader(port, mqtt_client):
     last_topic = None
     last_scale_id = None
     timeout_count = 0
-    MAX_TIMEOUTS = 5
+    MAX_TIMEOUTS = 20 # 5 seconds at 0.25s sleep
 
     while True:
         try:
@@ -107,6 +116,12 @@ def port_reader(port, mqtt_client):
                                             
                                             json_payload = f'{{"weight": {final_weight}, "scale_id": "{scale_id}", "unit": "{unit_part.lower()}", "stable": {str(is_stable).lower()}}}'
                                             mqtt_client.publish(topic, json_payload)
+                                            
+                                            # Update last known payload
+                                            with heartbeat_lock:
+                                                last_payloads[scale_id] = {"weight": final_weight, "unit": unit_part.lower(), "stable": is_stable}
+                                                scale_heartbeats[scale_id] = time.time()
+                                            
                                             print(f"[Echo] {scale_id} on {port}: {final_weight} {unit_part} (Stable: {is_stable})")
                                     except Exception as e:
                                         print(f"[{scale_id}] Parse Error: {e}")
@@ -116,10 +131,7 @@ def port_reader(port, mqtt_client):
                                     topic = "scale/scale-02"
                                     scale_id = "scale-02"
                                     try:
-                                        # Use regex-like approach to find the first GS and extract weight
-                                        # Example payload: "ST,GS   533.6,g ST,GS..."
                                         import re
-                                        # Find all patterns like ST,GS 123.4,g or US,GS 123.4,g
                                         match = re.search(r'(ST|US),GS\s*(-?[\d.]+)\s*,(g|kg)', payload)
                                         if match:
                                             status_part = match.group(1) # ST or US
@@ -127,10 +139,15 @@ def port_reader(port, mqtt_client):
                                             unit_part = match.group(3)   # g or kg
                                             
                                             final_weight = float(val_str)
-                                            # Use the unit directly from the scale as requested
                                             is_stable = (status_part == 'ST')
                                             json_payload = f'{{"weight": {final_weight}, "scale_id": "{scale_id}", "unit": "{unit_part}", "stable": {str(is_stable).lower()}}}'
                                             mqtt_client.publish(topic, json_payload)
+                                            
+                                            # Update last known payload
+                                            with heartbeat_lock:
+                                                last_payloads[scale_id] = {"weight": final_weight, "unit": unit_part, "stable": is_stable}
+                                                scale_heartbeats[scale_id] = time.time()
+                                            
                                             print(f"[Echo] {scale_id} on {port}: {final_weight} {unit_part} (Stable: {is_stable})")
                                     except Exception as e:
                                         print(f"[{scale_id}] Parse Error: {e}")
@@ -138,12 +155,10 @@ def port_reader(port, mqtt_client):
                                 elif payload.startswith('B'):
                                     topic = "scale/scale-02"
                                     scale_id = "scale-02"
-                                    weight_str = payload[1:].strip()
                                     # (Use existing logic if B ever appears)
                                 elif payload.startswith('C'):
                                     topic = "scale/scale-03"
                                     scale_id = "scale-03"
-                                    weight_str = payload[1:].strip()
                                 else:
                                     if len(payload) > 3:
                                         print(f"[Port:{port}] Unknown format: {payload[:20]}...")
@@ -151,13 +166,13 @@ def port_reader(port, mqtt_client):
                                 if topic:
                                     last_topic = topic
                                     last_scale_id = scale_id
-                                    with heartbeat_lock:
-                                        scale_heartbeats[scale_id] = time.time()
                         else:
                             timeout_count += 1
                             if timeout_count >= MAX_TIMEOUTS:
-                                if last_topic:
-                                    err_payload = f'{{"weight": 0.0, "scale_id": "{last_scale_id}", "error_msg": "----"}}'
+                                if last_topic and last_scale_id:
+                                    with heartbeat_lock:
+                                        last = last_payloads.get(last_scale_id, {"weight": 0.0, "unit": "kg"})
+                                    err_payload = f'{{"weight": "{last["weight"]}", "scale_id": "{last_scale_id}", "unit": "{last["unit"]}", "error_msg": "error!!!"}}'
                                     mqtt_client.publish(last_topic, err_payload)
                                 timeout_count = 0
                         time.sleep(0.25)
