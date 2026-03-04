@@ -146,6 +146,10 @@ class IngredientIntakeListBase(BaseModel):
     manufacturing_date: Optional[datetime] = None
     batch_prepare_vol: Optional[float] = None # Merged
     std_package_size: Optional[float] = Field(25.0, ge=0) # Merged
+    ext_date: Optional[datetime] = None
+    reserv_no: Optional[str] = Field(None, max_length=50)
+    stock_zone: Optional[str] = Field(None, max_length=50)
+    material_type: Optional[str] = Field(None, max_length=50)
 
 class IngredientIntakeListCreate(IngredientIntakeListBase):
     """Ingredient intake list creation model"""

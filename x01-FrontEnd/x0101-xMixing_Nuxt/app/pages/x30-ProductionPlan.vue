@@ -88,6 +88,8 @@ const plantNames = ref<Record<string, string>>({})
 // Data from API
 const availableSkus = ref<any[]>([])
 const plans = ref<any[]>([])
+const ingredientsMaster = ref<any[]>([])
+const ingredientWhFilter = ref('All')
 const showAll = ref(false)
 
 // Filtered plans based on showAll checkbox
@@ -435,14 +437,14 @@ const printBatchLabel = async (plan: any, batch: any) => {
     }
   } catch (error) {
     console.error('Failed to print batch label:', error)
-    $q.notify({ type: 'negative', message: 'Failed to generate label' })
+    $q.notify({ type: 'negative', message: t('prodPlan.failedGenerateLabel') })
   }
 }
 
 const printAllBatchLabels = async (plan: any) => {
   const batches = plan.batches
   if (!batches || batches.length === 0) {
-    $q.notify({ type: 'warning', message: 'No batches to print' })
+    $q.notify({ type: 'warning', message: t('prodPlan.noBatchesToPrint') })
     return
   }
 
@@ -529,7 +531,7 @@ const printAllBatchLabels = async (plan: any) => {
     }
   } catch (error) {
     console.error('Failed to print all batch labels:', error)
-    $q.notify({ type: 'negative', message: 'Failed to generate labels' })
+    $q.notify({ type: 'negative', message: t('prodPlan.failedGenerateLabels') })
   }
 }
 
@@ -836,10 +838,12 @@ const getPlanIngredients = (plan: any) => {
      if(b.reqs) {
         b.reqs.forEach((req: any) => {
            if (!ingredientsMap[req.re_code]) {
+               // Look up warehouse from ingredient master
+               const ingMaster = ingredientsMaster.value.find((i: any) => i.re_code === req.re_code)
                ingredientsMap[req.re_code] = {
                    re_code: req.re_code,
                    name: req.ingredient_name || req.re_code,
-                   wh: req.wh || '-',
+                   wh: ingMaster?.warehouse || '-',
                    vol_per_batch: req.required_volume || 0,
                    total_vol: 0
                }
@@ -857,14 +861,36 @@ const ingredientColumns = computed<QTableColumn[]>(() => [
   { name: 're_code', label: t('prodPlan.ingredientCode'), field: 're_code', align: 'left', sortable: true },
   { name: 'name', label: t('prodPlan.ingredientName'), field: 'name', align: 'left', sortable: true },
   { name: 'wh', label: 'Warehouse', field: 'wh', align: 'center', sortable: true },
-  { name: 'vol_per_batch', label: t('prodPlan.volPerBatch'), field: 'vol_per_batch', align: 'right', sortable: true, format: val => val?.toFixed(2) },
-  { name: 'total_vol', label: t('prodPlan.totalVol'), field: 'total_vol', align: 'right', sortable: true, format: val => val?.toFixed(2) },
+  { name: 'vol_per_batch', label: t('prodPlan.volPerBatch'), field: 'vol_per_batch', align: 'right', sortable: true, format: val => val?.toFixed(5) },
+  { name: 'total_vol', label: t('prodPlan.totalVol'), field: 'total_vol', align: 'right', sortable: true, format: val => val?.toFixed(5) },
 ])
+
+const getFilteredPlanIngredients = (plan: any) => {
+  const all = getPlanIngredients(plan)
+  if (ingredientWhFilter.value === 'All') return all
+  return all.filter((i: any) => i.wh === ingredientWhFilter.value)
+}
+
+const getIngredientTotals = (plan: any) => {
+  const items = getFilteredPlanIngredients(plan)
+  return {
+    vol_per_batch: items.reduce((sum: number, i: any) => sum + (i.vol_per_batch || 0), 0),
+    total_vol: items.reduce((sum: number, i: any) => sum + (i.total_vol || 0), 0),
+  }
+}
+
+const fetchIngredients = async () => {
+  try {
+    const res = await fetch(`${appConfig.apiBaseUrl}/ingredients/`)
+    if (res.ok) ingredientsMaster.value = await res.json()
+  } catch (e) { console.error('Failed to fetch ingredients:', e) }
+}
 
 onMounted(() => {
   fetchPlants()
   fetchSkus()
   fetchPlans()
+  fetchIngredients()
 })
 </script>
 
@@ -872,7 +898,7 @@ onMounted(() => {
   <!-- If child route is active, show child component. Otherwise show parent content -->
   <RouterView v-slot="{ Component }">
     <component v-if="Component" :is="Component" />
-    <q-page v-else class="q-pa-md bg-white">
+    <q-page v-else class="q-pa-xs bg-white" style="width: 100%; max-width: 100%; min-height: 100vh;">
       <!-- Header Section -->
       <div class="bg-blue-9 text-white q-pa-md rounded-borders q-mb-md shadow-2">
         <div class="row justify-between items-center">
@@ -998,10 +1024,10 @@ onMounted(() => {
         <div class="text-subtitle2 text-weight-bold">{{ t('prodPlan.plansMaster') }}</div>
         <div class="row items-center q-gutter-x-xs">
           <q-btn icon="unfold_more" flat round dense color="primary" size="sm" @click="expandAll">
-            <q-tooltip>Expand All</q-tooltip>
+            <q-tooltip>{{ t('prodPlan.expandAll') }}</q-tooltip>
           </q-btn>
           <q-btn icon="unfold_less" flat round dense color="primary" size="sm" @click="collapseAll">
-            <q-tooltip>Collapse All</q-tooltip>
+            <q-tooltip>{{ t('prodPlan.collapseAll') }}</q-tooltip>
           </q-btn>
           <q-separator vertical inset />
           <q-btn icon="refresh" flat round dense color="primary" @click="fetchPlans" size="sm" />
@@ -1022,7 +1048,7 @@ onMounted(() => {
           class="text-caption sticky-header-table"
           :pagination="{ rowsPerPage: 0 }"
           hide-bottom
-          style="max-height: 320px;"
+          style="max-height: calc(100vh - 350px);"
           v-model:expanded="expandedRows"
         >
           <template v-slot:header="props">
@@ -1083,13 +1109,6 @@ onMounted(() => {
                 </template>
                 <template v-else-if="col.name === 'actions'">
                     <div class="row no-wrap items-center">
-                      <q-btn
-                        flat round dense size="sm" color="blue-7"
-                        @click.stop="printAllBatchLabels(props.row)"
-                      >
-                        <q-tooltip>Print All Batch Labels</q-tooltip>
-                        <q-icon name="layers" />
-                      </q-btn>
                       <q-btn icon="more_vert" flat round dense size="sm" color="grey-7" @click.stop>
                         <q-menu auto-close>
                             <q-list style="min-width: 150px">
@@ -1123,9 +1142,21 @@ onMounted(() => {
                 <div class="row q-col-gutter-lg">
                   <!-- Ingredients List -->
                   <div class="col-12 col-md-5">
-                    <div class="text-subtitle2 q-mb-sm text-blue-9">{{ t('prodPlan.ingredientRequirement') }}</div>
+                    <div class="row items-center q-mb-sm q-gutter-x-sm">
+                      <div class="text-subtitle2 text-blue-9">{{ t('prodPlan.ingredientRequirement') }}</div>
+                      <q-space />
+                      <q-select
+                        v-model="ingredientWhFilter"
+                        :options="['All', 'FH', 'SPP', 'MIX']"
+                        dense
+                        outlined
+                        size="xs"
+                        style="min-width: 80px;"
+                        bg-color="white"
+                      />
+                    </div>
                     <q-table
-                      :rows="getPlanIngredients(props.row)"
+                      :rows="getFilteredPlanIngredients(props.row)"
                       :columns="ingredientColumns"
                       row-key="re_code"
                       flat
@@ -1138,7 +1169,17 @@ onMounted(() => {
                       <template v-slot:header="ingProps">
                         <q-tr :props="ingProps" class="bg-grey-2">
                           <q-th v-for="col in ingProps.cols" :key="col.name" :props="ingProps" class="text-weight-bold">
-                            {{ col.label }}
+                            <template v-if="col.name === 'vol_per_batch'">
+                              {{ col.label }}<br/>
+                              <span class="text-blue-7" style="font-size: 1.3rem;">{{ getIngredientTotals(props.row).vol_per_batch.toFixed(5) }}</span>
+                            </template>
+                            <template v-else-if="col.name === 'total_vol'">
+                              {{ col.label }}<br/>
+                              <span class="text-blue-7" style="font-size: 1.3rem;">{{ getIngredientTotals(props.row).total_vol.toFixed(5) }}</span>
+                            </template>
+                            <template v-else>
+                              {{ col.label }}
+                            </template>
                           </q-th>
                         </q-tr>
                       </template>
@@ -1213,8 +1254,8 @@ onMounted(() => {
                                 <span class="text-weight-medium text-blue-8">{{ batchProps.row.batch_id }}</span>
                               </template>
                               <template v-else-if="col.name === 'actions'">
-                                <q-btn icon="print" flat round dense color="primary" @click="printBatchLabel(props.row, batchProps.row)">
-                                  <q-tooltip>{{ t('prodPlan.printLabel') }}</q-tooltip>
+                                <q-btn icon="print" flat round dense color="primary" @click="printPlan(props.row)">
+                                  <q-tooltip>{{ t('prodPlan.printPlan') }}</q-tooltip>
                                 </q-btn>
                               </template>
                               <template v-else>

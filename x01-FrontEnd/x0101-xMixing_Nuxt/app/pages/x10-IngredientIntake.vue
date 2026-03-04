@@ -84,6 +84,10 @@ interface IngredientIntake {
   packages?: { package_no: number, weight: number }[]
   po_number?: string
   manufacturing_date?: string
+  ext_date?: string
+  reserv_no?: string
+  stock_zone?: string
+  material_type?: string
 }
 
 const $q = useQuasar()
@@ -110,6 +114,10 @@ const numberOfPackages = ref('')
 const manufacturingDate = ref('')
 const poNumber = ref('')
 const intakeLotId = ref('') // Manual or Auto-generated ID
+const extDate = ref('')
+const reservNo = ref('')
+const stockZone = ref('')
+const materialType = ref('')
 const showIngredientDialog = ref(false)
 const showIntakeFromDialog = ref(false)
 const showIntakeToDialog = ref(false)
@@ -485,6 +493,10 @@ const onSave = async () => {
       edit_by: user.value?.username || 'cj',
       manufacturing_date: manufacturingDate.value ? formatDateToApi(manufacturingDate.value) : null,
       po_number: poNumber.value || null,
+      ext_date: extDate.value ? formatDateToApi(extDate.value) : null,
+      reserv_no: reservNo.value || null,
+      stock_zone: stockZone.value || null,
+      material_type: materialType.value || null,
     }
 
     try {
@@ -564,6 +576,10 @@ const onEdit = (row: IngredientIntake) => {
   expireDate.value = row.expire_date ? formatDateForInput(row.expire_date) : ''
   manufacturingDate.value = row.manufacturing_date ? formatDateForInput(row.manufacturing_date) : ''
   poNumber.value = row.po_number || ''
+  extDate.value = row.ext_date ? formatDateForInput(row.ext_date) : ''
+  reservNo.value = row.reserv_no || ''
+  stockZone.value = row.stock_zone || ''
+  materialType.value = row.material_type || ''
 
   // We need to fetch ingredient details to show name and fill ingredientId
   // We can just call lookup
@@ -714,6 +730,10 @@ const onClear = () => {
   numberOfPackages.value = ''
   intakeFrom.value = ''
   intakeTo.value = ''
+  extDate.value = ''
+  reservNo.value = ''
+  stockZone.value = ''
+  materialType.value = ''
   originalRemainVol.value = null
   originalStatus.value = 'Active'
   generateIntakeLotId() // Get fresh ID after clear/save
@@ -817,7 +837,7 @@ const printLabel = async (record: IngredientIntake) => {
   iframe.style.opacity = '0.01'
   document.body.appendChild(iframe)
 
-  const templateResponse = await fetch('/labels/ingredient_intake-label_4x3.svg')
+  const templateResponse = await fetch('/labels/ingredient_intake-label_4x3-r01.svg')
   const templateStr = await templateResponse.text()
 
   const numPackages = record.package_intake || 1
@@ -837,8 +857,8 @@ const printLabel = async (record: IngredientIntake) => {
       }
     }
 
-    // QR contains only: intake_lot_id, package_no/total_packages
-    const qrString = `${record.intake_lot_id},${i}/${numPackages}`
+    // QR data: IntakeLotId|MatSapCode| |ReceiveDate|Q'Ty|Unit|MaterialType|MFG_Date|ExpDate
+    const qrString = `${record.intake_lot_id}|${record.mat_sap_code || ''}| |${formatDate(record.intake_at)}|${currentPkgVol.toFixed(3)}|${record.uom || 'KG'}|${record.material_type || ''}|${formatDate(record.manufacturing_date)}|${formatDate(record.expire_date)}`
 
     // Generate QR codes locally
     const qrLarge = await generateQrDataUrl(qrString, 150)
@@ -847,27 +867,34 @@ const printLabel = async (record: IngredientIntake) => {
       .replace(/\{\{IntakeLotId\}\}/g, record.intake_lot_id || '-')
       .replace(/\{\{ReCode\}\}/g, record.re_code || '-')
       .replace(/\{\{MatSapCode\}\}/g, record.mat_sap_code || '-')
-      .replace(/\{\{SupplierLot\}\}/g, record.lot_id || '-')
-      .replace(/\{\{ExpireDate\}\}/g, formatDate(record.expire_date))
-      .replace(/\{\{MenufacturingDate\}\}/g, formatDate(record.manufacturing_date))
-      .replace(/\{\{PackageString\}\}/g, `${i} / ${numPackages}`)
-      .replace(/\{\{IntakeVol\}\}/g, record.intake_vol?.toFixed(4) || '0.0000')
+      .replace(/\{\{Package\/Packages\}\}/g, `${i} / ${numPackages}`)
+      .replace(/\{\{MfgDate\}\}/g, formatDate(record.manufacturing_date))
+      .replace(/\{\{ExpDate\}\}/g, formatDate(record.expire_date))
+      .replace(/\{\{ExtDate\}\}/g, formatDate(record.ext_date))
       .replace(/\{\{PackageVol\}\}/g, currentPkgVol.toFixed(4) || '0.0000')
-      .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="16.3" y="68.0" width="134" height="134" />`)
-      .replace(/\{\{Operator\}\}/g, record.intake_by || 'Operator')
-      .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
+      .replace(/\{\{UOM\}\}/g, record.uom || 'kg')
+      .replace(/\{\{LodNo\}\}/g, record.lot_id || '-')
+      .replace(/\{\{MaterialType\}\}/g, record.material_type || '-')
+      .replace(/\{\{ReservNo\}\}/g, record.reserv_no || '-')
+      .replace(/\{\{ReceiveDate\}\}/g, formatDate(record.intake_at))
+      .replace(/\{\{StockZone\}\}/g, record.stock_zone || '-')
+      .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="16.3" y="39.3" width="80" height="80" />`)
 
     // Replace fixed width/height in SVG with 100% so it scales to container via viewBox
     formattedSvg = formattedSvg.replace(/(<svg[\s\S]*?)width="[^"]*"/, '$1width="100%"')
                                .replace(/(<svg[\s\S]*?)height="[^"]*"/, '$1height="100%"')
+    // Ensure SVG scales proportionally within the label
+    if (!formattedSvg.includes('preserveAspectRatio')) {
+      formattedSvg = formattedSvg.replace('<svg', '<svg preserveAspectRatio="xMidYMid meet"')
+    }
 
     labelsHtml += `<div class="label-wrapper">${formattedSvg}</div>`
   }
 
   const html = `<html><head><style>
     * { margin:0; padding:0; outline:0; border:0; box-sizing:border-box; }
-    @page { size: auto; margin: 0 !important; }
-    html, body { width: 4in; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { size: 4in 3in; margin: 0 !important; }
+    html, body { width: 4in; height: 3in; margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .label-wrapper { 
       width: 4in; 
       height: 3in; 
@@ -875,12 +902,12 @@ const printLabel = async (record: IngredientIntake) => {
       overflow: hidden; 
       position: relative; 
       page-break-after: always; 
-      padding-left: 2.5mm; 
-      padding-top: 1.5mm; 
+      margin: 0;
+      padding: 0;
       box-sizing: border-box; 
     }
     .label-wrapper:last-child { page-break-after: avoid; }
-    .label-wrapper svg { width: 100%; height: 100%; display: block; }
+    .label-wrapper svg { width: 100%; height: 100%; display: block; object-fit: contain; }
     header, footer { display: none !important; }
   </style></head><body>${labelsHtml}</body></html>`.replace(/>\s+</g, '><').trim()
 
@@ -907,30 +934,36 @@ const printLabel = async (record: IngredientIntake) => {
  */
 const printSinglePackageLabel = async (record: IngredientIntake, pkg: { package_no: number, weight: number }) => {
   const numPackages = record.package_intake || 1
-  const templateResponse = await fetch('/labels/ingredient_intake-label_4x3.svg')
+  const templateResponse = await fetch('/labels/ingredient_intake-label_4x3-r01.svg')
   const templateStr = await templateResponse.text()
   
-  // QR contains only: intake_lot_id, package_no/total_packages
-  const qrString = `${record.intake_lot_id},${pkg.package_no}/${numPackages}`
+  // QR data: IntakeLotId|MatSapCode| |ReceiveDate|Q'Ty|Unit|MaterialType|MFG_Date|ExpDate
+  const qrString = `${record.intake_lot_id}|${record.mat_sap_code || ''}| |${formatDate(record.intake_at)}|${pkg.weight.toFixed(3)}|${record.uom || 'KG'}|${record.material_type || ''}|${formatDate(record.manufacturing_date)}|${formatDate(record.expire_date)}`
   const qrLarge = await generateQrDataUrl(qrString, 150)
 
   let formattedSvg = templateStr
     .replace(/\{\{IntakeLotId\}\}/g, record.intake_lot_id || '-')
     .replace(/\{\{ReCode\}\}/g, record.re_code || '-')
     .replace(/\{\{MatSapCode\}\}/g, record.mat_sap_code || '-')
-    .replace(/\{\{SupplierLot\}\}/g, record.lot_id || '-')
-    .replace(/\{\{ExpireDate\}\}/g, formatDate(record.expire_date))
-    .replace(/\{\{MenufacturingDate\}\}/g, formatDate(record.manufacturing_date))
-    .replace(/\{\{PackageString\}\}/g, `${pkg.package_no} / ${numPackages}`)
-    .replace(/\{\{IntakeVol\}\}/g, record.intake_vol?.toFixed(4) || '0.0000')
+    .replace(/\{\{Package\/Packages\}\}/g, `${pkg.package_no} / ${numPackages}`)
+    .replace(/\{\{MfgDate\}\}/g, formatDate(record.manufacturing_date))
+    .replace(/\{\{ExpDate\}\}/g, formatDate(record.expire_date))
+    .replace(/\{\{ExtDate\}\}/g, formatDate(record.ext_date))
     .replace(/\{\{PackageVol\}\}/g, pkg.weight.toFixed(4) || '0.0000')
-    .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="16.3" y="68.0" width="134" height="134" />`)
-    .replace(/\{\{Operator\}\}/g, record.intake_by || 'Operator')
-    .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
+    .replace(/\{\{UOM\}\}/g, record.uom || 'kg')
+    .replace(/\{\{LodNo\}\}/g, record.lot_id || '-')
+    .replace(/\{\{MaterialType\}\}/g, record.material_type || '-')
+    .replace(/\{\{ReservNo\}\}/g, record.reserv_no || '-')
+    .replace(/\{\{ReceiveDate\}\}/g, formatDate(record.intake_at))
+    .replace(/\{\{StockZone\}\}/g, record.stock_zone || '-')
+    .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="16.3" y="39.3" width="80" height="80" />`)
 
   // Replace fixed width/height in SVG with 100%
   formattedSvg = formattedSvg.replace(/(<svg[\s\S]*?)width="[^"]*"/, '$1width="100%"')
                              .replace(/(<svg[\s\S]*?)height="[^"]*"/, '$1height="100%"')
+  if (!formattedSvg.includes('preserveAspectRatio')) {
+    formattedSvg = formattedSvg.replace('<svg', '<svg preserveAspectRatio="xMidYMid meet"')
+  }
 
   const labelsHtml = `<div class="label-wrapper">${formattedSvg}</div>`
   
@@ -941,8 +974,8 @@ const printSinglePackageLabel = async (record: IngredientIntake, pkg: { package_
 
   const html = `<html><head><style>
     * { margin:0; padding:0; outline:0; border:0; box-sizing:border-box; }
-    @page { size: auto; margin: 0 !important; }
-    html, body { width: 4in; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { size: 4in 3in; margin: 0 !important; }
+    html, body { width: 4in; height: 3in; margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .label-wrapper { 
       width: 4in; 
       height: 3in; 
@@ -950,12 +983,12 @@ const printSinglePackageLabel = async (record: IngredientIntake, pkg: { package_
       overflow: hidden; 
       position: relative; 
       page-break-after: always; 
-      padding-left: 2.5mm; 
-      padding-top: 1.5mm; 
+      margin: 0;
+      padding: 0;
       box-sizing: border-box; 
     }
     .label-wrapper:last-child { page-break-after: avoid; }
-    .label-wrapper svg { width: 100%; height: 100%; display: block; }
+    .label-wrapper svg { width: 100%; height: 100%; display: block; object-fit: contain; }
     header, footer { display: none !important; }
   </style></head><body>${labelsHtml}</body></html>`.replace(/>\s+</g, '><').trim()
 
@@ -1331,6 +1364,34 @@ const onFileSelected = async (event: Event) => {
                   bg-color="grey-2"
                   input-class="text-right"
                 />
+              </div>
+            </div>
+
+            <!-- Row 5: Ext Date, Reserv No, Stock Zone, Material Type -->
+            <div class="row q-col-gutter-sm q-mt-xs">
+              <div class="col-12 col-md-3">
+                <q-input outlined dense hide-bottom-space v-model="extDate" label="EXT. Date" mask="##/##/####" placeholder="DD/MM/YYYY">
+                  <template v-slot:append>
+                    <q-icon name="event" class="cursor-pointer">
+                      <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                        <q-date v-model="extDate" mask="DD/MM/YYYY">
+                          <div class="row items-center justify-end">
+                            <q-btn v-close-popup :label="t('common.close')" color="primary" flat />
+                          </div>
+                        </q-date>
+                      </q-popup-proxy>
+                    </q-icon>
+                  </template>
+                </q-input>
+              </div>
+              <div class="col-12 col-md-3">
+                <q-input outlined dense hide-bottom-space v-model="reservNo" label="Reserv No" />
+              </div>
+              <div class="col-12 col-md-3">
+                <q-input outlined dense hide-bottom-space v-model="stockZone" label="Stock Zone" />
+              </div>
+              <div class="col-12 col-md-3">
+                <q-input outlined dense hide-bottom-space v-model="materialType" label="Material Type" />
               </div>
             </div>
 

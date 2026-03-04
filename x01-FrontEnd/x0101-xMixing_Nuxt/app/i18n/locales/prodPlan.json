@@ -45,7 +45,18 @@
         "prodPlan.summaryReportTitle": "Production Plans Summary Report",
         "prodPlan.overallStats": "Overall Statistics",
         "prodPlan.statusBreakdown": "Status Breakdown",
-        "prodPlan.plantDist": "Plant Distribution"
+        "prodPlan.plantDist": "Plant Distribution",
+        "prodPlan.ingredientRequirement": "Ingredient Requirement",
+        "prodPlan.ingredientCode": "Ingredient Code",
+        "prodPlan.ingredientName": "Ingredient Name",
+        "prodPlan.volPerBatch": "Vol/Batch",
+        "prodPlan.warehouse": "Warehouse",
+        "prodPlan.expandAll": "Expand All",
+        "prodPlan.collapseAll": "Collapse All",
+        "prodPlan.printLabel": "Print Label",
+        "prodPlan.failedGenerateLabel": "Failed to generate label",
+        "prodPlan.noBatchesToPrint": "No batches to print",
+        "prodPlan.failedGenerateLabels": "Failed to generate labels"
     },
     "th": {
         "prodPlan.title": "รายการแผนการผลิต",
@@ -93,6 +104,17 @@
         "prodPlan.summaryReportTitle": "รายงานสรุปแผนการผลิต",
         "prodPlan.overallStats": "สถิติโดยรวม",
         "prodPlan.statusBreakdown": "สรุปตามสถานะ",
-        "prodPlan.plantDist": "การกระจายตามโรงงาน"
+        "prodPlan.plantDist": "การกระจายตามโรงงาน",
+        "prodPlan.ingredientRequirement": "ส่วนผสมที่ต้องการ",
+        "prodPlan.ingredientCode": "รหัสส่วนผสม",
+        "prodPlan.ingredientName": "ชื่อส่วนผสม",
+        "prodPlan.volPerBatch": "ปริมาณ/แบตช์",
+        "prodPlan.warehouse": "คลังสินค้า",
+        "prodPlan.expandAll": "ขยายทั้งหมด",
+        "prodPlan.collapseAll": "ย่อทั้งหมด",
+        "prodPlan.printLabel": "พิมพ์ฉลาก",
+        "prodPlan.failedGenerateLabel": "ไม่สามารถสร้างฉลากได้",
+        "prodPlan.noBatchesToPrint": "ไม่มีแบตช์ให้พิมพ์",
+        "prodPlan.failedGenerateLabels": "ไม่สามารถสร้างฉลากทั้งหมดได้"
     }
 }

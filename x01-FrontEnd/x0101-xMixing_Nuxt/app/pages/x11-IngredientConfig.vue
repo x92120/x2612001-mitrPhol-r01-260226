@@ -186,56 +186,65 @@ const printLabel = async (row: Ingredient) => {
   iframe.style.opacity = '0.01'
   document.body.appendChild(iframe)
 
-  const qrData = {
-    id: row.ingredient_id,
-    mat: row.mat_sap_code,
-    re: row.re_code,
-    name: row.name
-  }
-  // Generate QR code locally — no internet required
-  const qrDataUrl = await generateQrDataUrl(JSON.stringify(qrData), 200)
+  try {
+    // Load SVG template
+    const templateResponse = await fetch('/labels/IngredientDetail_4x3-r01.svg')
+    let svgTemplate = await templateResponse.text()
 
-  const html = `
-    <html>
-      <head>
-        <title>Label ${row.re_code}</title>
-         <style>
-          @page { size: 4in 6in; margin: 0; }
-          body { font-family: Arial, sans-serif; padding: 10px; }
-          .label-container { width: 4in; height: 6in; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: 1px dashed #ccc; }
-          .title { font-size: 24pt; font-weight: bold; margin-bottom: 20px; }
-          .code { font-size: 40pt; font-weight: 900; margin-bottom: 20px; color: #000; }
-          .sub { font-size: 14pt; color: #555; margin-bottom: 10px; }
-          .qr { margin-top: 20px; width: 200px; height: 200px; }
-        </style>
-      </head>
-      <body>
-        <div class="label-container">
-           <div class="title">INGREDIENT</div>
-           <div class="code">${row.re_code || row.ingredient_id}</div>
-           <div class="sub">${row.name}</div>
-           <div class="sub">MAT: ${row.mat_sap_code}</div>
-           <div class="sub">Container: ${row.package_container_type || 'Bag'}</div>
-           <img class="qr" src="${qrDataUrl}" />
-        </div>
-      </body>
-    </html>
-  `
-  
-  iframe.onload = () => {
-    setTimeout(() => {
-      if (iframe.contentWindow) {
-         iframe.contentWindow.focus()
-         iframe.contentWindow.print()
-      }
-    }, 500)
-  }
-  
-  const doc = iframe.contentWindow?.document
-  if (doc) {
-    doc.open()
-    doc.write(html)
-    doc.close()
+    // Generate QR code
+    const qrData = {
+      id: row.ingredient_id,
+      mat: row.mat_sap_code,
+      re: row.re_code,
+      name: row.name
+    }
+    const qrDataUrl = await generateQrDataUrl(JSON.stringify(qrData), 200)
+
+    // Convert QR data URL to inline image for SVG
+    const qrSvgImage = `<image href="${qrDataUrl}" x="0" y="0" width="76" height="76" />`
+
+    // Replace placeholders
+    const now = new Date()
+    const timestamp = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`
+
+    svgTemplate = svgTemplate
+      .replace('{{QRCode}}', qrSvgImage)
+      .replace('{{ReCode}}', row.re_code || row.ingredient_id || '')
+      .replace('{{IngredientName}}', row.name || '')
+      .replace('{{MatSapCode}}', row.mat_sap_code || '')
+      .replace('{{ContainerType}}', row.package_container_type || 'Bag')
+      .replace('{{Group}}', row.Group || '-')
+      .replace('{{Warehouse}}', row.warehouse || '-')
+      .replace('{{KPP}}', (row as any).kpp || '-')
+      .replace('{{EditBy}}', row.update_by || row.creat_by || '-')
+      .replace('{{Timestamp}}', timestamp)
+
+    const html = `<html><head><title>Label ${row.re_code}</title>
+      <style>
+        @page { size: 4in 3in; margin: 0; }
+        body { margin: 0; padding: 0; }
+        .label-wrapper { width: 4in; height: 3in; page-break-after: always; }
+        .label-wrapper svg { width: 100%; height: 100%; display: block; }
+      </style></head><body><div class="label-wrapper">${svgTemplate}</div></body></html>`
+
+    iframe.onload = () => {
+      setTimeout(() => {
+        if (iframe.contentWindow) {
+          iframe.contentWindow.focus()
+          iframe.contentWindow.print()
+        }
+      }, 500)
+    }
+
+    const doc = iframe.contentWindow?.document
+    if (doc) {
+      doc.open()
+      doc.write(html)
+      doc.close()
+    }
+  } catch (error) {
+    console.error('Failed to print ingredient label:', error)
+    $q.notify({ type: 'negative', message: t('ingConfig.failedPrint') || 'Failed to print label' })
   }
 }
 

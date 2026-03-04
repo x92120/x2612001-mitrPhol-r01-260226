@@ -101,7 +101,8 @@ interface Ingredient {
   name: string
   mat_sap_code?: string
   blind_code?: string
-  Group?: string // Added
+  Group?: string
+  warehouse?: string
 }
 
 const $q = useQuasar()
@@ -150,17 +151,49 @@ const groupedSteps = computed<{ phaseNum: string, steps: SkuStep[], firstStep: S
 const ingredientSummary = computed(() => {
   if (!selectedSkuId.value) return []
   const steps = skuStepsMap.value[selectedSkuId.value] || []
-  const map: { [key: string]: { re_code: string, name: string, total: number, uom: string, phases: string[] } } = {}
+  const map: { [key: string]: { re_code: string, name: string, warehouse: string, total: number, uom: string, phases: string[] } } = {}
   steps.forEach(s => {
     if (s.ingredient_name && s.require && s.require > 0) {
       const key = s.re_code || s.ingredient_name || ''
-      if (!map[key]) map[key] = { re_code: s.re_code || '', name: s.ingredient_name || '', total: 0, uom: s.uom || s.ingredient_unit || 'kg', phases: [] }
+      // Look up warehouse from ingredient master data
+      const ing = ingredients.value.find(i => i.re_code === s.re_code)
+      const wh = ing?.warehouse || ''
+      if (!map[key]) map[key] = { re_code: s.re_code || '', name: s.ingredient_name || '', warehouse: wh, total: 0, uom: s.uom || s.ingredient_unit || 'kg', phases: [] }
       map[key].total += s.require
       if (!map[key].phases.includes(s.phase_number)) map[key].phases.push(s.phase_number)
     }
   })
   return Object.values(map).sort((a, b) => b.total - a.total)
 })
+
+// --- Ingredient Table Filter & Sort ---
+const ingredientFilter = ref('')
+const ingredientSortField = ref<'re_code' | 'name' | 'warehouse' | 'total' | 'uom'>('name')
+const ingredientSortAsc = ref(true)
+const filteredIngredientSummary = computed(() => {
+  let list = [...ingredientSummary.value]
+  if (ingredientFilter.value) {
+    const q = ingredientFilter.value.toLowerCase()
+    list = list.filter(i => 
+      (i.re_code || '').toLowerCase().includes(q) || 
+      (i.name || '').toLowerCase().includes(q) ||
+      (i.warehouse || '').toLowerCase().includes(q)
+    )
+  }
+  const field = ingredientSortField.value
+  list.sort((a, b) => {
+    let cmp = 0
+    if (field === 'total') cmp = a.total - b.total
+    else cmp = (a[field] || '').localeCompare(b[field] || '')
+    return ingredientSortAsc.value ? cmp : -cmp
+  })
+  return list
+})
+const toggleIngredientSort = (field: 're_code' | 'name' | 'warehouse' | 'total' | 'uom') => {
+  if (ingredientSortField.value === field) ingredientSortAsc.value = !ingredientSortAsc.value
+  else { ingredientSortField.value = field; ingredientSortAsc.value = true }
+}
+const ingredientTableExpanded = ref(true)
 
 // --- Control State ---
 const showSkuDialog = ref(false)
@@ -721,6 +754,83 @@ const saveStep = async () => {
   finally { isSaving.value = false }
 }
 
+// Re-number phase_numbers in increments of 10 (p0010, p0020, p0030, ...)
+const reStepPhases = async () => {
+  if (!selectedSkuId.value) return
+  const steps = skuStepsMap.value[selectedSkuId.value] || []
+  if (steps.length === 0) return
+  
+  // Get unique phase_numbers in current order
+  const uniquePhases: string[] = []
+  steps.forEach(s => {
+    if (!uniquePhases.includes(s.phase_number)) uniquePhases.push(s.phase_number)
+  })
+  uniquePhases.sort()
+  
+  // Build mapping: old phase_number -> new phase_number
+  const phaseMapping: { [key: string]: string } = {}
+  uniquePhases.forEach((oldPhase, index) => {
+    const num = (index + 1) * 10
+    phaseMapping[oldPhase] = `p${String(num).padStart(4, '0')}`
+  })
+  
+  // Check if already sequential
+  const alreadyOk = uniquePhases.every((p, i) => p === phaseMapping[p])
+  if (alreadyOk) {
+    $q.notify({ type: 'info', message: 'Phases are already in sequential order' })
+    return
+  }
+  
+  $q.dialog({
+    title: 'Re-Step Phases',
+    message: `Renumber ${uniquePhases.length} phases to p0010, p0020, ... p${String(uniquePhases.length * 10).padStart(4, '0')}?`,
+    cancel: true,
+    persistent: true
+  }).onOk(async () => {
+    try {
+      // Only send fields the SkuStepCreate schema accepts
+      const validFields = [
+        'sku_id', 'phase_number', 'phase_id', 'master_step', 'sub_step', 'action',
+        're_code', 'action_code', 'setup_step', 'destination', 'require', 'uom',
+        'low_tol', 'high_tol', 'step_condition', 'agitator_rpm', 'high_shear_rpm',
+        'temperature', 'temp_low', 'temp_high', 'step_time', 'step_timer_control',
+        'qc_temp', 'record_steam_pressure', 'record_ctw', 'operation_brix_record',
+        'operation_ph_record', 'brix_sp', 'ph_sp', 'action_description'
+      ]
+      
+      let updated = 0
+      for (const step of steps) {
+        const newPhase = phaseMapping[step.phase_number]
+        if (newPhase && newPhase !== step.phase_number && step.step_id) {
+          // Build clean payload with only valid fields
+          const payload: any = {}
+          for (const f of validFields) {
+            if ((step as any)[f] !== undefined) payload[f] = (step as any)[f]
+          }
+          payload.phase_number = newPhase
+          
+          const res = await fetch(`${appConfig.apiBaseUrl}/sku-steps/${step.step_id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+          if (!res.ok) {
+            const errText = await res.text()
+            throw new Error(`Step ${step.step_id}: ${res.status} ${errText}`)
+          }
+          updated++
+        }
+      }
+      $q.notify({ type: 'positive', message: `Renumbered ${updated} steps across ${uniquePhases.length} phases` })
+      delete skuStepsMap.value[selectedSkuId.value!]
+      await fetchSkuSteps(selectedSkuId.value!)
+    } catch (e: any) {
+      console.error('Re-step error:', e)
+      $q.notify({ type: 'negative', message: 'Failed to renumber phases: ' + (e.message || e) })
+    }
+  })
+}
+
 const copyStep = (step: SkuStep) => {
   const steps = skuStepsMap.value[step.sku_id] || []
   const maxSub = steps.filter(s => s.phase_number === step.phase_number).reduce((max, s) => Math.max(max, s.sub_step), 0)
@@ -1181,138 +1291,71 @@ const printSkuReport = async (sku: SkuMaster) => {
 </script>
 
 <template>
-  <q-page class="q-pa-md bg-white">
-    <!-- Page Header -->
-    <div class="bg-blue-9 text-white q-pa-md rounded-borders q-mb-md shadow-2">
-      <div class="row justify-between items-center">
-        <div class="row items-center q-gutter-sm">
-          <q-icon name="inventory_2" size="sm" />
-          <div class="text-h6 text-weight-bolder">{{ t('sku.title') }}</div>
-        </div>
-        <div class="text-caption text-blue-2">{{ t('sku.subtitle') }}</div>
-      </div>
-    </div>
-    <!-- Header with Action Bar -->
-    <div class="row q-mb-md items-center">
-      <q-space />
-      
-      <!-- Action Buttons -->
-      <div class="row q-gutter-sm items-center">
-        <q-btn 
-          color="positive" 
-          icon="add" 
-          @click="createNewSku" 
-          round
-          flat
-        >
-          <q-tooltip>{{ t('sku.newSku') }}</q-tooltip>
-        </q-btn>
-        <q-btn 
-          color="primary" 
-          icon="refresh" 
-          @click="refreshAll" 
-          round
-          flat
-        >
-          <q-tooltip>{{ t('common.refresh') }}</q-tooltip>
-        </q-btn>
-        <q-btn 
-          color="primary" 
-          icon="filter_alt_off" 
-          @click="resetFilters" 
-          round
-          flat
-        >
-          <q-tooltip>{{ t('sku.resetFilters') }}</q-tooltip>
-        </q-btn>
-        <q-btn 
-          color="accent" 
-          icon="filter_alt" 
-          @click="showFilters = !showFilters" 
-          round
-          flat
-        >
-          <q-tooltip>{{ showFilters ? t('sku.hideFilters') : t('sku.showFilters') }}</q-tooltip>
-        </q-btn>
-        <q-btn 
-          color="secondary" 
-          icon="file_download" 
-          @click="exportToExcel" 
-          round
-          flat
-        >
-          <q-tooltip>{{ t('sku.exportExcel') }}</q-tooltip>
-        </q-btn>
-        <q-btn 
-          color="accent" 
-          icon="file_upload" 
-          @click="importCSV" 
-          round
-          flat
-        >
-          <q-tooltip>{{ t('sku.importCsv') }}</q-tooltip>
-        </q-btn>
-        <!-- Hidden File Input -->
-        <input
-          type="file"
-          ref="fileInput"
-          accept=".csv"
-          style="display: none"
-          @change="onFileSelected"
-        />
-        <q-btn 
-          color="accent" 
-          icon="settings" 
-          @click="openActionDialog" 
-          round
-          flat
-        >
-          <q-tooltip>{{ t('sku.manageActions') }}</q-tooltip>
-        </q-btn>
-        <q-checkbox 
-          v-model="showAllIncludingInactive" 
-          :label="t('sku.showAllInactive')" 
-          dense
-        />
-        <q-input 
-          v-model="searchFilter" 
-          :placeholder="t('sku.searchSku')" 
-          dense 
-          outlined
-          style="min-width: 300px"
-          clearable
-        >
-          <template v-slot:prepend>
-            <q-icon name="search" />
-          </template>
-        </q-input>
-      </div>
-    </div>
+  <q-page class="q-pa-xs bg-white" style="max-width: 100%; width: 100%; min-height: 100vh;">
 
-    <!-- Master Table Toggle -->
-    <div class="row items-center q-mb-xs">
-      <q-btn
+    <!-- SKU Master Table -->
+    <q-card flat bordered class="q-mb-md">
+      <q-card-section class="q-pa-sm">
+        <div class="row items-center cursor-pointer" @click="skuTableExpanded = !skuTableExpanded">
+          <q-icon :name="skuTableExpanded ? 'expand_more' : 'chevron_right'" size="sm" class="q-mr-xs" />
+          <q-icon name="inventory_2" color="blue-7" size="sm" class="q-mr-xs" />
+          <span class="text-subtitle2 text-blue-8 text-bold">SKU Master</span>
+          <q-badge color="blue-7" class="q-ml-sm">{{ displayedSkus.length }}</q-badge>
+          <q-space />
+      
+          <!-- Action Buttons -->
+          <div v-if="skuTableExpanded" class="row q-gutter-xs items-center" @click.stop>
+            <q-btn color="positive" icon="add" @click="createNewSku" round flat size="sm">
+              <q-tooltip>{{ t('sku.newSku') }}</q-tooltip>
+            </q-btn>
+            <q-btn color="primary" icon="refresh" @click="refreshAll" round flat size="sm">
+              <q-tooltip>{{ t('common.refresh') }}</q-tooltip>
+            </q-btn>
+            <q-btn color="primary" icon="filter_alt_off" @click="resetFilters" round flat size="sm">
+              <q-tooltip>{{ t('sku.resetFilters') }}</q-tooltip>
+            </q-btn>
+            <q-btn color="accent" icon="filter_alt" @click="showFilters = !showFilters" round flat size="sm">
+              <q-tooltip>{{ showFilters ? t('sku.hideFilters') : t('sku.showFilters') }}</q-tooltip>
+            </q-btn>
+            <q-btn color="secondary" icon="file_download" @click="exportToExcel" round flat size="sm">
+              <q-tooltip>{{ t('sku.exportExcel') }}</q-tooltip>
+            </q-btn>
+            <q-btn color="accent" icon="file_upload" @click="importCSV" round flat size="sm">
+              <q-tooltip>{{ t('sku.importCsv') }}</q-tooltip>
+            </q-btn>
+            <!-- Hidden File Input -->
+            <input type="file" ref="fileInput" accept=".csv" style="display: none" @change="onFileSelected" />
+            <q-btn color="accent" icon="settings" @click="openActionDialog" round flat size="sm">
+              <q-tooltip>{{ t('sku.manageActions') }}</q-tooltip>
+            </q-btn>
+            <q-checkbox v-model="showAllIncludingInactive" :label="t('sku.showAllInactive')" dense />
+            <q-input 
+              v-model="searchFilter" 
+              :placeholder="t('sku.searchSku')" 
+              dense 
+              outlined
+              style="min-width: 200px"
+              clearable
+            >
+              <template v-slot:prepend>
+                <q-icon name="search" size="xs" />
+              </template>
+            </q-input>
+          </div>
+        </div>
+      </q-card-section>
+      <q-table
+        v-show="skuTableExpanded"
+        :rows="displayedSkus"
+        :columns="masterColumns"
+        row-key="sku_id"
+        :rows-per-page-options="[5, 10, 25, 50]"
+        :pagination="{ rowsPerPage: 5 }"
         flat
-        dense
-        :icon="skuTableExpanded ? 'expand_less' : 'expand_more'"
-        :label="skuTableExpanded ? t('sku.collapseTable', 'Collapse Table') : t('sku.expandTable', 'Expand Table')"
-        color="primary"
-        size="sm"
-        @click="skuTableExpanded = !skuTableExpanded"
-      />
-    </div>
-    <q-table
-      :rows="displayedSkus"
-      :columns="masterColumns"
-      row-key="sku_id"
-      :rows-per-page-options="skuTableExpanded ? [10, 25, 50, 100] : [0]"
-      :pagination="skuTableExpanded ? { rowsPerPage: 25 } : { rowsPerPage: 0 }"
-      flat
-      bordered
-      :loading="isLoading"
-      class="master-table q-mb-lg"
-      :style="skuTableExpanded ? 'max-height: 50vh; overflow: auto;' : ''"
-      :hide-bottom="!skuTableExpanded"
+        bordered
+        :loading="isLoading"
+        class="master-table"
+        :hide-bottom="false"
     >
       <!-- Custom Row Template for Selection -->
       <template v-slot:header="props">
@@ -1505,31 +1548,70 @@ const printSkuReport = async (sku: SkuMaster) => {
         </div>
       </template>
     </q-table>
+    </q-card>
 
     <!-- Ingredient Requirement Table -->
     <q-card v-if="selectedSkuId && ingredientSummary.length > 0" flat bordered class="q-mt-md q-mb-md">
       <q-card-section class="q-pa-sm">
-        <div class="row items-center q-mb-sm">
+        <div class="row items-center cursor-pointer" @click="ingredientTableExpanded = !ingredientTableExpanded">
+          <q-icon :name="ingredientTableExpanded ? 'expand_more' : 'chevron_right'" size="sm" class="q-mr-xs" />
           <q-icon name="science" color="green-7" size="sm" class="q-mr-xs" />
           <span class="text-subtitle2 text-green-8 text-bold">Required Ingredients</span>
-          <q-badge color="green-7" class="q-ml-sm">{{ ingredientSummary.length }}</q-badge>
+          <q-badge color="green-7" class="q-ml-sm">{{ filteredIngredientSummary.length }}</q-badge>
           <q-space />
-          <span class="text-caption text-grey-6">{{ selectedSkuId }}</span>
+          <div v-if="ingredientTableExpanded" class="row q-gutter-xs items-center" @click.stop>
+            <q-btn color="primary" icon="refresh" round flat size="sm" @click="fetchSkuSteps(selectedSkuId!)">
+              <q-tooltip>Refresh</q-tooltip>
+            </q-btn>
+            <q-btn color="primary" icon="filter_alt_off" round flat size="sm" @click="ingredientFilter = ''; ingredientSortField = 'name'; ingredientSortAsc = true">
+              <q-tooltip>Reset Filter</q-tooltip>
+            </q-btn>
+            <q-input 
+              v-model="ingredientFilter" 
+              dense 
+              outlined 
+              placeholder="Filter..." 
+              clearable 
+              style="max-width: 200px"
+            >
+              <template v-slot:prepend>
+                <q-icon name="search" size="xs" />
+              </template>
+            </q-input>
+          </div>
+          <span class="text-caption text-grey-6 q-ml-sm">{{ selectedSkuId }}</span>
         </div>
-        <q-markup-table dense flat bordered separator="cell" class="text-caption">
+        <q-markup-table v-show="ingredientTableExpanded" dense flat bordered separator="cell" class="text-caption q-mt-sm">
           <thead>
             <tr class="bg-green-1">
-              <th class="text-left">RE Code</th>
-              <th class="text-left">Ingredient</th>
-              <th class="text-right">Qty Required</th>
-              <th class="text-center">UOM</th>
+              <th class="text-left cursor-pointer" @click="toggleIngredientSort('re_code')">
+                RE Code 
+                <q-icon v-if="ingredientSortField === 're_code'" :name="ingredientSortAsc ? 'arrow_upward' : 'arrow_downward'" size="xs" />
+              </th>
+              <th class="text-left cursor-pointer" @click="toggleIngredientSort('name')">
+                Ingredient
+                <q-icon v-if="ingredientSortField === 'name'" :name="ingredientSortAsc ? 'arrow_upward' : 'arrow_downward'" size="xs" />
+              </th>
+              <th class="text-left cursor-pointer" @click="toggleIngredientSort('warehouse')">
+                Warehouse
+                <q-icon v-if="ingredientSortField === 'warehouse'" :name="ingredientSortAsc ? 'arrow_upward' : 'arrow_downward'" size="xs" />
+              </th>
+              <th class="text-right cursor-pointer" @click="toggleIngredientSort('total')">
+                Q'ty
+                <q-icon v-if="ingredientSortField === 'total'" :name="ingredientSortAsc ? 'arrow_upward' : 'arrow_downward'" size="xs" />
+              </th>
+              <th class="text-center cursor-pointer" @click="toggleIngredientSort('uom')">
+                UOM
+                <q-icon v-if="ingredientSortField === 'uom'" :name="ingredientSortAsc ? 'arrow_upward' : 'arrow_downward'" size="xs" />
+              </th>
               <th class="text-center">Phases</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="ing in ingredientSummary" :key="ing.re_code || ing.name">
+            <tr v-for="ing in filteredIngredientSummary" :key="ing.re_code || ing.name">
               <td class="text-bold text-green-9">{{ ing.re_code || '?' }}</td>
               <td>{{ ing.name }}</td>
+              <td>{{ ing.warehouse || '-' }}</td>
               <td class="text-right text-bold">{{ ing.total.toFixed(2) }}</td>
               <td class="text-center">{{ ing.uom }}</td>
               <td class="text-center">{{ ing.phases.join(', ') }}</td>
@@ -1585,6 +1667,26 @@ const printSkuReport = async (sku: SkuMaster) => {
               @click="addStep(selectedSkuId)"
             >
               <q-tooltip>{{ t('sku.addNewPhase') }}</q-tooltip>
+            </q-btn>
+            <q-btn 
+              flat 
+              round 
+              dense 
+              icon="low_priority" 
+              color="orange-8" 
+              @click="reStepPhases"
+            >
+              <q-tooltip>Re-Step (renumber phases by 10)</q-tooltip>
+            </q-btn>
+            <q-btn 
+              flat 
+              round 
+              dense 
+              icon="print" 
+              color="deep-purple" 
+              @click="selectedSkuData && printSkuReport(selectedSkuData)"
+            >
+              <q-tooltip>Print SKU Report (A4)</q-tooltip>
             </q-btn>
 
             <q-separator vertical inset class="q-mx-xs" />

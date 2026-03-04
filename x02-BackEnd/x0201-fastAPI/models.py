@@ -113,6 +113,10 @@ class IngredientIntakeList(Base):
     manufacturing_date = Column(DateTime)
     batch_prepare_vol = Column(Float)
     std_package_size = Column(Float, default=25.0)
+    ext_date = Column(DateTime)
+    reserv_no = Column(String(50))
+    stock_zone = Column(String(50))
+    material_type = Column(String(50))
     # Relationships
     history = relationship("IngredientIntakeHistory", back_populates="intake_record", cascade="all, delete-orphan")
     packages = relationship("IntakePackageReceive", back_populates="intake_record", cascade="all, delete-orphan")

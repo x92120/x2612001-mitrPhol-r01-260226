@@ -317,68 +317,26 @@ onMounted(() => {
               <template v-if="plansWithBatches.length > 0">
                 <q-list dense separator class="text-caption">
                   <template v-for="plan in plansWithBatches" :key="plan.plan_id">
-                    <q-expansion-item
-                      expand-separator
-                      :icon="selectedProductionPlan === plan.plan_id ? 'radio_button_checked' : 'radio_button_unchecked'"
-                      :label="`${plan.sku_id} - ${plan.sku_name || 'No Name'}`"
-                      :caption="`Plan: ${plan.plan_id} (${plan.batches.length} batches)`"
-                      :header-class="selectedProductionPlan === plan.plan_id ? 'bg-blue-1 text-blue-9 text-weight-bold' : 'text-weight-bold bg-blue-grey-1 text-blue-grey-9'"
-                      dense
-                      dense-toggle
-                      @show="onPlanShow(plan)"
+                    <q-item
+                      clickable
+                      v-ripple
+                      :active="selectedProductionPlan === plan.plan_id"
+                      active-class="bg-blue-1 text-blue-9 text-weight-bold"
+                      :class="selectedProductionPlan !== plan.plan_id ? 'text-weight-bold bg-blue-grey-1 text-blue-grey-9' : ''"
+                      @click="onPlanShow(plan)"
                     >
-                      <!-- Level 2: Batch List -->
-                      <q-list dense class="q-pl-md">
-                        <template v-for="batch in plan.batches" :key="batch.batch_id">
-                          <q-expansion-item
-                            dense
-                            dense-toggle
-                            expand-separator
-                            :icon="batch.batch_prepare ? 'check_circle' : 'pending'"
-                            :icon-color="batch.batch_prepare ? 'green' : 'grey-5'"
-                            :label="`Batch: ${batch.batch_id.slice(-6)}`"
-                            :caption="batch.batch_prepare ? 'Done' : batch.status"
-                            :header-class="batch.batch_prepare ? 'bg-green-1 text-grey-6' : (selectedBatch?.batch_id === batch.batch_id ? 'bg-blue-1 text-blue-9' : '')"
-                            @show="onBatchExpand(batch)"
-                          >
-                            <!-- Level 3: Ingredient list for this batch -->
-                            <q-list dense class="q-pl-md">
-                              <q-item 
-                                v-for="req in (batchIngredients[batch.batch_id] || [])" 
-                                :key="req.re_code"
-                                clickable
-                                v-ripple
-                                :active="selectedBatch?.batch_id === batch.batch_id && selectedReCode === req.re_code"
-                                active-class="bg-orange-1 text-weight-bold"
-                                :disable="req.status === 2"
-                                :class="req.status === 2 ? 'bg-green-1 text-grey-6' : ''"
-                                style="min-height: 28px;"
-                                @click="onBatchIngredientClick(batch, req, plan)"
-                              >
-                                <q-item-section avatar style="min-width: 20px;">
-                                  <q-icon 
-                                    :name="req.status === 2 ? 'check_circle' : (req.status === 1 ? 'hourglass_top' : 'circle')" 
-                                    :color="req.status === 2 ? 'green' : (req.status === 1 ? 'orange' : 'grey-4')" 
-                                    size="xs" 
-                                  />
-                                </q-item-section>
-                                <q-item-section>
-                                  <q-item-label style="font-size: 0.7rem;">{{ req.re_code }} ({{ req.ingredient_name }})</q-item-label>
-                                </q-item-section>
-                                <q-item-section side>
-                                  <q-item-label style="font-size: 0.65rem;" class="text-weight-bold">
-                                    {{ req.wh }} | {{ req.required_volume?.toFixed(1) }}
-                                  </q-item-label>
-                                </q-item-section>
-                              </q-item>
-                              <q-item v-if="!batchIngredients[batch.batch_id] || batchIngredients[batch.batch_id]?.length === 0" style="min-height: 24px;">
-                                <q-item-section class="text-grey text-italic" style="font-size: 0.65rem;">Loading...</q-item-section>
-                              </q-item>
-                            </q-list>
-                          </q-expansion-item>
-                        </template>
-                      </q-list>
-                    </q-expansion-item>
+                      <q-item-section avatar style="min-width: 24px;">
+                        <q-icon 
+                          :name="selectedProductionPlan === plan.plan_id ? 'radio_button_checked' : 'radio_button_unchecked'" 
+                          :color="selectedProductionPlan === plan.plan_id ? 'blue-9' : 'grey-5'"
+                          size="xs" 
+                        />
+                      </q-item-section>
+                      <q-item-section>
+                        <q-item-label>{{ plan.sku_id }} - {{ plan.sku_name || 'No Name' }}</q-item-label>
+                        <q-item-label caption>Plan: {{ plan.plan_id }} ({{ plan.batches.length }} batches)</q-item-label>
+                      </q-item-section>
+                    </q-item>
                   </template>
                 </q-list>
               </template>
@@ -473,8 +431,8 @@ onMounted(() => {
                                 </td>
                                 <td class="text-center text-caption" style="font-size: 0.7rem;">{{ ing.package_container_type }}</td>
                                 <td class="text-center text-caption" style="font-size: 0.7rem;">{{ ing.from_warehouse }}</td>
-                                <td class="text-right text-weight-bold text-orange-9" style="font-size: 0.75rem;">{{ ing.batch_require ? ing.batch_require.toFixed(1) : '0' }}</td>
-                                <td class="text-right text-weight-bold text-green-9" style="font-size: 0.75rem;">{{ ing.total_packaged ? ing.total_packaged.toFixed(1) : '0' }}</td>
+                                <td class="text-right text-weight-bold text-orange-9" style="font-size: 0.75rem;">{{ ing.batch_require ? ing.batch_require.toFixed(5) : '0' }}</td>
+                                <td class="text-right text-weight-bold text-green-9" style="font-size: 0.75rem;">{{ ing.total_packaged ? ing.total_packaged.toFixed(5) : '0' }}</td>
                                 <td class="text-center">
                                     <div v-if="ing.status === 2" class="row no-wrap items-center justify-center q-gutter-x-xs">
                                         <q-badge color="green" :label="t('preBatch.complete')" size="sm" />
@@ -516,8 +474,8 @@ onMounted(() => {
                                                             />
                                                         </td>
                                                         <td class="text-left">{{ bd.batch_id }}</td>
-                                                        <td class="text-right">{{ bd.required_volume.toFixed(1) }}</td>
-                                                        <td class="text-right" :class="bd.actual_volume > 0 ? 'text-blue-9 text-weight-bold' : ''">{{ bd.actual_volume.toFixed(1) }}</td>
+                                                        <td class="text-right">{{ bd.required_volume.toFixed(5) }}</td>
+                                                        <td class="text-right" :class="bd.actual_volume > 0 ? 'text-blue-9 text-weight-bold' : ''">{{ bd.actual_volume.toFixed(5) }}</td>
                                                         <td class="text-center">
                                                             <div class="row no-wrap items-center justify-center q-gutter-x-xs">
                                                                 <q-badge v-if="bd.status === 2" color="green" label="Done" size="sm" />
@@ -697,7 +655,7 @@ onMounted(() => {
                         <div class="text-subtitle2 q-mb-xs text-no-wrap">{{ t('preBatch.requestVolume') }}</div>
                         <q-input
                             outlined
-                            :model-value="requireVolume.toFixed(4)"
+                            :model-value="requireVolume.toFixed(5)"
                             dense
                             bg-color="grey-2"
                             readonly
@@ -710,7 +668,7 @@ onMounted(() => {
                         <div class="text-subtitle2 q-mb-xs text-no-wrap">{{ t('preBatch.packagedVolume') }}</div>
                         <q-input
                             outlined
-                            :model-value="batchedVolume.toFixed(4)"
+                            :model-value="batchedVolume.toFixed(5)"
                             dense
                             :bg-color="packagedVolumeBgColor"
                             readonly
@@ -723,7 +681,7 @@ onMounted(() => {
                         <div class="text-subtitle2 q-mb-xs text-no-wrap">{{ t('preBatch.remainVolume') }}</div>
                         <q-input
                             outlined
-                            :model-value="remainToBatch.toFixed(4)"
+                            :model-value="remainToBatch.toFixed(5)"
                             dense
                             bg-color="grey-2"
                             readonly
@@ -736,7 +694,7 @@ onMounted(() => {
                         <div class="text-subtitle2 q-mb-xs text-no-wrap text-blue-9 text-weight-bold">{{ t('preBatch.reqForPackage') }}</div>
                         <q-input
                             outlined
-                            :model-value="targetWeight.toFixed(4)"
+                            :model-value="targetWeight.toFixed(5)"
                             dense
                             bg-color="blue-1"
                             readonly
@@ -906,7 +864,23 @@ onMounted(() => {
                  selection="single"
                  v-model:selected="selectedInventoryItem"
                  @row-click="onInventoryRowClick"
+                 :row-class="(row: any) => {
+                   const first = filteredInventory[0]
+                   if (!first) return ''
+                   const rowDate = row.expire_date ? new Date(row.expire_date).getTime() : Infinity
+                   const firstDate = first.expire_date ? new Date(first.expire_date).getTime() : Infinity
+                   return rowDate <= firstDate ? 'bg-green-1 cursor-pointer' : 'text-grey-5 cursor-not-allowed'
+                 }"
               >
+                <!-- Expire Date Highlight -->
+                <template v-slot:body-cell-expire_date="props">
+                    <q-td :props="props" class="text-center">
+                        <template v-if="filteredInventory.length > 0 && props.row.id === filteredInventory[0].id">
+                            <q-badge color="green" text-color="white">{{ formatDate(props.value) }}</q-badge>
+                        </template>
+                        <template v-else>{{ formatDate(props.value) }}</template>
+                    </q-td>
+                </template>
                 <!-- Status Slot -->
                  <template v-slot:body-cell-status="props">
                     <q-td :props="props" class="text-center">

@@ -9,11 +9,13 @@ import QRCode from 'qrcode'
 import { appConfig } from '../appConfig/config'
 import { useAuth } from '../composables/useAuth'
 import { useMqttLocalDevice } from '../composables/useMqttLocalDevice'
+import { useLabelPrinter } from '../composables/useLabelPrinter'
 
 const $q = useQuasar()
 const { getAuthHeader } = useAuth()
 const { t } = useI18n()
 const { lastScan, connect } = useMqttLocalDevice()
+const { generateLabelSvg, printLabel } = useLabelPrinter()
 
 // ═══════════════════════════════════════════════════════════════════
 // STATE
@@ -39,6 +41,7 @@ const whSortCol = ref<'bag_id' | 're_code' | 'weight' | 'status' | 'batch_id' | 
 const whSortAsc = ref(true)
 const filterMiddleWh = ref<'FH' | 'SPP'>('FH')
 const middleHideBoxed = ref(false)   // false = show All, true = hide Boxed
+const filterReCode = ref('')         // filter ingredients by re_code
 
 // ═══════════════════════════════════════════════════════════════════
 // SOUND SETTINGS
@@ -249,6 +252,42 @@ const fhPackedCount = computed(() => bagsByWarehouse.value.FH.filter(b => isPack
 const sppPackedCount = computed(() => bagsByWarehouse.value.SPP.filter(b => isPacked(b)).length)
 const allFhPacked = computed(() => bagsByWarehouse.value.FH.length > 0 && fhPackedCount.value === bagsByWarehouse.value.FH.length)
 const allSppPacked = computed(() => bagsByWarehouse.value.SPP.length > 0 && sppPackedCount.value === bagsByWarehouse.value.SPP.length)
+
+/** Group bags by ingredient re_code within selected warehouse for requirement list */
+interface IngredientReq {
+  re_code: string
+  name: string
+  totalVol: number
+  packedVol: number
+  totalBags: number
+  packedBags: number
+  bags: any[]
+}
+const ingredientsByDept = computed((): IngredientReq[] => {
+  const whBags = filterMiddleWh.value === 'FH' ? bagsByWarehouse.value.FH : bagsByWarehouse.value.SPP
+  const map = new Map<string, IngredientReq>()
+  for (const bag of whBags) {
+    const code = bag.re_code || '?'
+    if (!map.has(code)) {
+      map.set(code, { re_code: code, name: bag.ingredient_name || code, totalVol: 0, packedVol: 0, totalBags: 0, packedBags: 0, bags: [] })
+    }
+    const ing = map.get(code)!
+    ing.totalVol += bag.net_volume || 0
+    ing.totalBags++
+    ing.bags.push(bag)
+    if (isPacked(bag)) {
+      ing.packedVol += bag.net_volume || 0
+      ing.packedBags++
+    }
+  }
+  let result = [...map.values()].sort((a, b) => a.re_code.localeCompare(b.re_code))
+  // Apply re_code filter
+  if (filterReCode.value.trim()) {
+    const q = filterReCode.value.trim().toLowerCase()
+    result = result.filter(i => i.re_code.toLowerCase().includes(q) || i.name.toLowerCase().includes(q))
+  }
+  return result
+})
 
 /** Sort helper for warehouse records */
 const sortWarehouseRecords = (list: any[]) => {
@@ -749,37 +788,37 @@ const printBoxLabel = async (wh: 'FH' | 'SPP') => {
   // Sort packages within each group
   grouped.forEach(g => g.bags.sort((a, b) => (a.package_no ?? 0) - (b.package_no ?? 0)))
 
-  // Build SVG rows — ingredient header (15px) + sub-rows (13px)
-  const HDR_H = 15   // ingredient row height
-  const PKG_H = 13   // package sub-row height
-  const START_Y = 252
+  // Build SVG rows — ingredient header (12px) + sub-rows (10px) for 4x3 label
+  const HDR_H = 12   // ingredient row height
+  const PKG_H = 10   // package sub-row height
+  const START_Y = 144
 
   let curY = START_Y
   let rowsSvg = ''
 
   for (const grp of grouped) {
-    // Stop if we'd overflow past footer line (y=555)
-    if (curY + HDR_H > 544) break
+    // Stop if we'd overflow past footer line (y=253)
+    if (curY + HDR_H > 253) break
 
-    // ── Ingredient header row (white bg + bottom border line) ──
+    // ── Ingredient header row ──
     rowsSvg += `
-      <rect x="15" y="${curY}" width="370" height="${HDR_H}" fill="#ffffff"/>
-      <text x="22" y="${curY + 10}" style="font-size:8px;font-family:Arial,sans-serif;font-weight:bold;fill:#000000">${grp.re_code}</text>
-      <text x="385" y="${curY + 10}" text-anchor="end" style="font-size:8px;font-family:Arial,sans-serif;fill:#000000">Require ${grp.req_vol.toFixed(4)} kg</text>
-      <line x1="15" y1="${curY + HDR_H}" x2="385" y2="${curY + HDR_H}" stroke="#000000" stroke-width="0.5"/>
+      <rect x="8" y="${curY}" width="368" height="${HDR_H}" fill="#ffffff"/>
+      <text x="14" y="${curY + 8}" style="font-size:7px;font-family:Arial,sans-serif;font-weight:bold;fill:#000000">${grp.re_code}</text>
+      <text x="370" y="${curY + 8}" text-anchor="end" style="font-size:7px;font-family:Arial,sans-serif;fill:#000000">Req ${grp.req_vol.toFixed(3)} kg</text>
+      <line x1="8" y1="${curY + HDR_H}" x2="376" y2="${curY + HDR_H}" stroke="#000000" stroke-width="0.3"/>
     `
     curY += HDR_H
 
     // ── Package sub-rows ──
     for (const bag of grp.bags) {
-      if (curY + PKG_H > 544) break
-      const pkgLabel = `-->Pkg ${bag.package_no ?? 1}/${bag.total_packages ?? 1}`
+      if (curY + PKG_H > 253) break
+      const pkgLabel = `  Pkg ${bag.package_no ?? 1}/${bag.total_packages ?? 1}`
       rowsSvg += `
-        <rect x="15" y="${curY}" width="370" height="${PKG_H}" fill="#ffffff"/>
-        <text x="30" y="${curY + 9}" style="font-size:7.5px;font-family:'Courier New',monospace;fill:#000000">${pkgLabel}</text>
-        <text x="385" y="${curY + 9}" text-anchor="end" style="font-size:7.5px;font-family:Arial,sans-serif;fill:#000000">${(bag.net_volume ?? 0).toFixed(4)} kg</text>
+        <rect x="8" y="${curY}" width="368" height="${PKG_H}" fill="#ffffff"/>
+        <text x="24" y="${curY + 7}" style="font-size:6px;font-family:'Courier New',monospace;fill:#000000">${pkgLabel}</text>
+        <text x="370" y="${curY + 7}" text-anchor="end" style="font-size:6px;font-family:Arial,sans-serif;fill:#000000">${(bag.net_volume ?? 0).toFixed(3)} kg</text>
       `
-      rowsSvg += `<line x1="30" y1="${curY + PKG_H}" x2="385" y2="${curY + PKG_H}" stroke="#000000" stroke-width="0.2"/>`
+      rowsSvg += `<line x1="24" y1="${curY + PKG_H}" x2="376" y2="${curY + PKG_H}" stroke="#000000" stroke-width="0.15"/>`
       curY += PKG_H
     }
   }
@@ -790,10 +829,9 @@ const printBoxLabel = async (wh: 'FH' | 'SPP') => {
   const printDate   = now.toLocaleDateString('th-TH') + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
   try {
-    const resp = await fetch('/labels/label-box-packing-100x150.svg')
+    const resp = await fetch('/labels/label-box-packing_4x3.svg')
     let svgText = await resp.text()
 
-    // replaceAll handles multiple occurrences of the same placeholder
     svgText = svgText
       .replaceAll('{{Warehouse}}',     wh)
       .replaceAll('{{PrintDate}}',     printDate)
@@ -804,13 +842,12 @@ const printBoxLabel = async (wh: 'FH' | 'SPP') => {
       .replace('{{TotalNetWeight}}',   totalWt.toFixed(3))
       .replace('{{PreBatchRows}}',     rowsSvg)
 
-    // QR Code content: two lines separated by newline
+    // QR Code — scale to fit 76×76 box in 4x3 template
     const qrData = `Batch_ID:${selectedBatch.value.batch_id}\nWarehouse:${wh}`
     const qrDataUrl = await QRCode.toDataURL(qrData, {
       width: 150, margin: 1,
       color: { dark: '#000000', light: '#ffffff' }
     })
-    // Scale: QR box is 110×110, QR image is 150×150 → scale = 110/150 ≈ 0.733
     const qrImageSvg = `<image x="0" y="0" width="150" height="150" href="${qrDataUrl}" />`
     svgText = svgText.replace('{{BoxQRCode}}', qrImageSvg)
 
@@ -827,9 +864,9 @@ const printBoxLabel = async (wh: 'FH' | 'SPP') => {
       <!DOCTYPE html><html><head>
       <title>Box Packing Label — ${selectedBatch.value.batch_id} [${wh}]</title>
       <style>
-        @page { size: 100mm 150mm; margin: 0; }
+        @page { size: 4in 3in; margin: 0; }
         body  { margin: 0; padding: 0; background: #fff; }
-        svg   { display: block; width: 100mm; height: 150mm; }
+        svg   { display: block; width: 4in; height: 3in; }
       </style>
       </head><body>
         ${svgText}
@@ -841,6 +878,35 @@ const printBoxLabel = async (wh: 'FH' | 'SPP') => {
     console.error('Print error:', e)
     $q.notify({ type: 'negative', message: 'Failed to load label template', position: 'top' })
   }
+}
+
+/** Print pre-batch label for a single bag record */
+const printBagLabel = async (bag: any) => {
+  if (!selectedBatch.value || !batchInfo.value) return
+  const plan = plans.value.find((p: any) => p.batches?.some((b: any) => b.batch_id === selectedBatch.value.batch_id))
+  const data: Record<string, string | number> = {
+    'SKU / SKU_Name': batchInfo.value?.sku_name || '-',
+    PlanId: batchInfo.value?.plan_id || '-',
+    BatchId: selectedBatch.value.batch_id || '-',
+    'Batch_Number/No of Batch': `Batch ${selectedBatch.value.batch_id?.split('-').pop() || '?'}`,
+    IngredientID: bag.re_code || '-',
+    Ingredient_ReCode: bag.re_code || '-',
+    mat_sap_code: bag.mat_sap_code || '-',
+    PlanStartDate: plan?.start_date ? new Date(plan.start_date).toLocaleDateString('en-GB') : '-',
+    PlanFinishDate: plan?.finish_date ? new Date(plan.finish_date).toLocaleDateString('en-GB') : '-',
+    PrepareDate: new Date().toLocaleDateString('en-GB'),
+    PlantId: plan?.plant || selectedBatch.value.plant || '-',
+    PlantName: '-',
+    Timestamp: new Date().toLocaleString('en-GB'),
+    PackageSize: (bag.net_volume || 0).toFixed(4),
+    BatchRequireSize: (bag.total_volume || bag.total_request_volume || 0).toFixed(4),
+    PackageNo: `${bag.package_no || 1}/${bag.total_packages || 1}`,
+    QRCode: `${batchInfo.value?.plan_id || ''},${bag.batch_record_id},${bag.re_code},${bag.net_volume}`,
+    Lot1: bag.origins?.[0] ? `${bag.origins[0].intake_lot_id} / ${(bag.origins[0].take_volume || 0).toFixed(4)} kg` : (bag.intake_lot_id ? `${bag.intake_lot_id} / ${Number(bag.net_volume).toFixed(4)} kg` : '-'),
+    Lot2: bag.origins?.[1] ? `${bag.origins[1].intake_lot_id} / ${(bag.origins[1].take_volume || 0).toFixed(4)} kg` : '',
+  }
+  const svg = await generateLabelSvg('prebatch-label_4x3', data)
+  if (svg) printLabel(svg)
 }
 
 
@@ -914,11 +980,79 @@ const onSimScanClick = async (bag: any) => {
   showScanDialog.value = false
 }
 
-// Watch for MQTT scans
+/** Handle scan input from FH/SPP scan fields — lookup by batch_record_id */
+const onScanInputEnter = async (wh: 'FH' | 'SPP') => {
+  const scanValue = wh === 'FH' ? scanFH.value.trim() : scanSPP.value.trim()
+  if (!scanValue) return
+
+  if (!selectedBatch.value) {
+    playSound('wrong')
+    $q.notify({ type: 'negative', message: t('packingList.selectBatchFirst'), icon: 'warning', position: 'top' })
+    return
+  }
+
+  // Find the bag by batch_record_id in batchRecords for this warehouse
+  const whBags = wh === 'FH' ? bagsByWarehouse.value.FH : bagsByWarehouse.value.SPP
+  const bag = whBags.find(b => 
+    b.batch_record_id === scanValue || 
+    b.id?.toString() === scanValue ||
+    b.intake_id === scanValue
+  )
+
+  if (!bag) {
+    playSound('wrong')
+    $q.notify({ type: 'negative', icon: 'error', message: t('packingList.bagNotFound'), caption: scanValue, position: 'top', timeout: 3000 })
+    if (wh === 'FH') scanFH.value = ''
+    else scanSPP.value = ''
+    return
+  }
+
+  if (isPacked(bag)) {
+    $q.notify({ type: 'info', message: t('packingList.alreadyPacked'), caption: bag.batch_record_id, position: 'top', timeout: 2000 })
+    if (wh === 'FH') scanFH.value = ''
+    else scanSPP.value = ''
+    return
+  }
+
+  // Process the scan — same logic as onSimScanClick
+  await onSimScanClick(bag)
+  if (wh === 'FH') scanFH.value = ''
+  else scanSPP.value = ''
+}
+
+// Watch for MQTT scans — smart routing: intake ID vs batch ID
 watch(lastScan, (scan) => {
-  if (scan?.barcode) {
-    scanBatchId.value = scan.barcode
-    onScanBatchEnter()
+  if (!scan?.barcode) return
+  const barcode = scan.barcode.trim()
+
+  // If a batch is selected, try to match as intake ID first
+  if (selectedBatch.value) {
+    const allBags = [...bagsByWarehouse.value.FH, ...bagsByWarehouse.value.SPP]
+    const bag = allBags.find(b =>
+      b.batch_record_id === barcode ||
+      b.id?.toString() === barcode ||
+      b.intake_id === barcode
+    )
+    if (bag) {
+      // Route to packing
+      onSimScanClick(bag)
+      return
+    }
+  }
+
+  // Otherwise, treat as batch ID scan
+  scanBatchId.value = barcode
+  onScanBatchEnter()
+})
+
+// Auto-close box prompt when all bags for a warehouse are packed
+watch([allFhPacked, allSppPacked], ([fhDone, sppDone]) => {
+  if (!selectedBatch.value) return
+  if (fhDone && filterMiddleWh.value === 'FH' && bagsByWarehouse.value.FH.length > 0) {
+    $q.notify({ type: 'positive', icon: 'check_circle', message: t('packingList.allFhPacked'), position: 'top', timeout: 2000 })
+  }
+  if (sppDone && filterMiddleWh.value === 'SPP' && bagsByWarehouse.value.SPP.length > 0) {
+    $q.notify({ type: 'positive', icon: 'check_circle', message: t('packingList.allSppPacked'), position: 'top', timeout: 2000 })
   }
 })
 
@@ -942,6 +1076,28 @@ onMounted(async () => {
         <div class="row items-center q-gutter-sm">
           <q-icon name="view_list" size="sm" color="blue-9" />
           <div class="text-h6 text-weight-bolder text-blue-9">{{ t('nav.packingList') }}</div>
+          <q-separator vertical class="q-mx-xs" />
+          <!-- Department Filter -->
+          <q-select
+            v-model="filterMiddleWh"
+            :options="['FH', 'SPP']"
+            dense outlined options-dense
+            style="width: 80px;"
+            class="text-weight-bold"
+            color="blue-9"
+          />
+          <!-- RE-Code Filter -->
+          <q-input
+            v-model="filterReCode"
+            outlined dense clearable
+            placeholder="Filter RE-Code..."
+            style="width: 180px;"
+            bg-color="grey-1"
+          >
+            <template v-slot:prepend>
+              <q-icon name="filter_list" color="grey-6" size="xs" />
+            </template>
+          </q-input>
         </div>
         <div class="row items-center q-gutter-sm">
           <q-btn flat dense round :icon="soundSettings.enabled ? 'volume_up' : 'volume_off'" color="blue-9" @click="showSoundSettings = true">
@@ -950,7 +1106,7 @@ onMounted(async () => {
           <q-btn flat dense round icon="refresh" color="blue-9" @click="fetchPlans(); fetchAllRecords(); fetchReadyToDeliver()" :loading="loading">
             <q-tooltip>Refresh</q-tooltip>
           </q-btn>
-          <div class="text-caption text-grey-5">v2.2</div>
+          <div class="text-caption text-grey-5">v2.3</div>
         </div>
       </div>
     </div>
@@ -965,7 +1121,7 @@ onMounted(async () => {
             <div class="row items-center justify-between no-wrap">
               <div class="row items-center q-gutter-xs">
                 <q-icon name="assignment" size="sm" />
-                <div class="text-subtitle2 text-weight-bold">Production Plans</div>
+                <div class="text-subtitle2 text-weight-bold">{{ t('packingList.productionPlans') }}</div>
               </div>
               <q-badge color="white" text-color="blue-9" class="text-weight-bold">
                 {{ activePlans.length }}
@@ -1089,20 +1245,9 @@ onMounted(async () => {
             <div class="row items-center justify-between no-wrap">
               <div class="row items-center q-gutter-xs">
                 <q-icon name="qr_code_scanner" size="sm" />
-                <div class="text-subtitle2 text-weight-bold">Packing Box</div>
+                <div class="text-subtitle2 text-weight-bold">{{ t('packingList.packingBox') }}</div>
               </div>
               <div class="row items-center q-gutter-sm">
-                <q-select
-                  v-model="filterMiddleWh"
-                  :options="['FH', 'SPP']"
-                  dense borderless dark options-dense
-                  style="width: 70px; font-size: 0.85rem;"
-                  class="text-weight-bold"
-                >
-                  <template v-slot:selected>
-                    <div class="text-white">{{ filterMiddleWh }}</div>
-                  </template>
-                </q-select>
                 <!-- Print Button: active only when all bags for current WH are Boxed -->
                 <q-btn
                   flat round dense icon="print" size="sm"
@@ -1118,7 +1263,7 @@ onMounted(async () => {
           <q-card-section class="q-py-sm">
             <q-input
               v-model="scanBatchId" outlined dense
-              placeholder="Scan Packing Box Label..."
+              :placeholder="t('packingList.scanBoxLabel')"
               bg-color="grey-1"
               @keyup.enter="onScanBatchEnter"
             >
@@ -1134,19 +1279,19 @@ onMounted(async () => {
               <div class="q-mt-sm">
                 <div class="row q-col-gutter-xs text-caption">
                   <div class="col-6">
-                    <div class="text-grey-6">SKU Name</div>
+                    <div class="text-grey-6">{{ t('packingList.skuName') }}</div>
                     <div class="text-weight-bold text-body2">{{ batchInfo.sku_name }}</div>
                   </div>
                   <div class="col-6">
-                    <div class="text-grey-6">Plan ID</div>
+                    <div class="text-grey-6">{{ t('packingList.planId') }}</div>
                     <div class="text-weight-bold text-body2">{{ batchInfo.plan_id }}</div>
                   </div>
                   <div class="col-6 q-mt-xs">
-                    <div class="text-grey-6">Batch Size</div>
+                    <div class="text-grey-6">{{ t('packingList.batchSize') }}</div>
                     <div class="text-weight-bold text-body2">{{ batchInfo.batch_size }} kg</div>
                   </div>
                   <div class="col-6 q-mt-xs">
-                    <div class="text-grey-6">Status</div>
+                    <div class="text-grey-6">{{ t('packingList.status') }}</div>
                     <q-badge
                       :color="batchInfo.status === 'Prepared' ? 'blue' : (batchInfo.status === 'Created' ? 'grey' : 'light-blue')"
                       :label="batchInfo.status"
@@ -1157,7 +1302,7 @@ onMounted(async () => {
             </template>
             <div v-else class="text-center text-grey q-pa-sm">
               <q-icon name="qr_code_2" size="md" class="q-mb-xs" /><br>
-              <span class="text-caption">Scan or select a packing box</span>
+              <span class="text-caption">{{ t('packingList.scanOrSelect') }}</span>
             </div>
 
           </q-card-section>
@@ -1165,319 +1310,149 @@ onMounted(async () => {
 
 
         <q-card class="col column shadow-2">
-          <q-card-section class="bg-blue-10 text-white q-py-xs">
+          <q-card-section :class="filterMiddleWh === 'FH' ? 'bg-blue-8 text-white' : 'bg-light-blue-8 text-white'" class="q-py-xs">
             <div class="row items-center justify-between no-wrap">
               <div class="row items-center q-gutter-xs">
-                <q-icon name="inventory" size="sm" />
-                <div class="text-subtitle2 text-weight-bold">Warehouse Pre-Batch Package</div>
+                <q-icon :name="filterMiddleWh === 'FH' ? 'science' : 'inventory_2'" size="sm" />
+                <div class="text-subtitle2 text-weight-bold">{{ t('packingList.requiredIngredients') }} — {{ filterMiddleWh }}</div>
               </div>
-              <div v-if="selectedBatch" class="row items-center q-gutter-xs">
-                <q-badge color="white" text-color="blue-10" class="text-weight-bold">
-                  {{ totalWeight.toFixed(1) }} kg
+              <div class="row items-center q-gutter-xs">
+                <q-badge color="white" :text-color="filterMiddleWh === 'FH' ? 'blue-9' : 'light-blue-9'" class="text-weight-bold">
+                  {{ ingredientsByDept.reduce((s, i) => s + i.packedVol, 0).toFixed(2) }}/{{ ingredientsByDept.reduce((s, i) => s + i.totalVol, 0).toFixed(2) }} kg
                 </q-badge>
-                <q-badge color="blue-5" text-color="white" class="text-weight-bold">
-                  FH {{ fhWeight.toFixed(1) }} kg
+                <q-badge color="white" :text-color="filterMiddleWh === 'FH' ? 'blue-9' : 'light-blue-9'" class="text-weight-bold">
+                  {{ ingredientsByDept.reduce((s, i) => s + i.packedBags, 0) }}/{{ ingredientsByDept.reduce((s, i) => s + i.totalBags, 0) }}
                 </q-badge>
-                <q-badge color="light-blue-5" text-color="white" class="text-weight-bold">
-                  SPP {{ sppWeight.toFixed(1) }} kg
-                </q-badge>
+                <q-btn
+                  dense flat size="xs" icon="unarchive" label="Boxed"
+                  :color="(filterMiddleWh === 'FH' ? allFhPacked : allSppPacked) ? 'white' : 'blue-3'"
+                  :disable="!(filterMiddleWh === 'FH' ? allFhPacked : allSppPacked)"
+                  @click="onCloseBox(filterMiddleWh)"
+                  class="text-weight-bold"
+                />
               </div>
             </div>
+          </q-card-section>
+
+          <!-- Scan Field -->
+          <q-card-section class="q-py-xs">
+            <q-input
+              v-if="filterMiddleWh === 'FH'"
+              v-model="scanFH"
+              outlined dense
+              :placeholder="t('packingList.scanFhBag')"
+              bg-color="blue-1"
+              @keyup.enter="onScanInputEnter('FH')"
+            >
+              <template v-slot:prepend>
+                <q-icon name="qr_code_scanner" color="blue-8" size="sm" class="cursor-pointer" @click="openScanSimulator('FH')">
+                  <q-tooltip>{{ t('packingList.clickSimScan') }}</q-tooltip>
+                </q-icon>
+              </template>
+              <template v-slot:append>
+                <q-btn flat round dense icon="search" color="blue-8" size="sm" @click="onScanInputEnter('FH')" />
+              </template>
+            </q-input>
+            <q-input
+              v-else
+              v-model="scanSPP"
+              outlined dense
+              :placeholder="t('packingList.scanSppBag')"
+              bg-color="light-blue-1"
+              @keyup.enter="onScanInputEnter('SPP')"
+            >
+              <template v-slot:prepend>
+                <q-icon name="qr_code_scanner" color="light-blue-8" size="sm" class="cursor-pointer" @click="openScanSimulator('SPP')">
+                  <q-tooltip>{{ t('packingList.clickSimScan') }}</q-tooltip>
+                </q-icon>
+              </template>
+              <template v-slot:append>
+                <q-btn flat round dense icon="search" color="light-blue-8" size="sm" @click="onScanInputEnter('SPP')" />
+              </template>
+            </q-input>
           </q-card-section>
 
           <div class="col relative-position">
             <q-scroll-area class="fit q-pa-xs">
               <div v-if="!selectedBatch" class="text-center q-pa-lg text-grey">
                 <q-icon name="inventory_2" size="xl" class="q-mb-sm" /><br>
-                Select a batch to view packing list
+                {{ t('packingList.selectBatchToView') }}
               </div>
 
               <template v-else>
-                <!-- FH Packing Card -->
-                <q-card v-show="filterMiddleWh === 'FH'" flat bordered class="q-mb-sm">
-                  <q-card-section class="bg-blue-7 text-white q-py-xs">
-                    <div class="row items-center justify-between no-wrap">
-                      <div class="row items-center q-gutter-xs">
-                        <q-icon name="science" size="xs" />
-                        <span class="text-weight-bold text-caption">FH Pre-Batch Packing</span>
-                      </div>
-                      <div class="row items-center q-gutter-xs">
-                        <q-badge color="white" text-color="blue-9">{{ fhPackedCount }}/{{ bagsByWarehouse.FH.length }}</q-badge>
-                        <q-btn
-                          dense flat size="xs" icon="unarchive" label="Boxed"
-                          :color="allFhPacked ? 'white' : 'blue-3'"
-                          :disable="!allFhPacked"
-                          @click="onCloseBox('FH')"
+                <!-- Ingredient Requirements List -->
+                <q-list dense separator class="bg-white">
+                  <q-expansion-item
+                    v-for="ing in ingredientsByDept" :key="ing.re_code"
+                    dense expand-separator
+                    :header-class="ing.packedBags === ing.totalBags ? 'bg-blue-1' : (ing.packedBags > 0 ? 'bg-orange-1' : 'bg-grey-1')"
+                  >
+                    <template v-slot:header>
+                      <q-item-section avatar style="min-width:24px">
+                        <q-icon
+                          :name="ing.packedBags === ing.totalBags ? 'check_circle' : (ing.packedBags > 0 ? 'hourglass_top' : 'radio_button_unchecked')"
+                          :color="ing.packedBags === ing.totalBags ? 'blue-7' : (ing.packedBags > 0 ? 'orange-7' : 'grey-4')"
+                          size="sm"
+                        />
+                      </q-item-section>
+                      <q-item-section>
+                        <q-item-label class="text-weight-bold" style="font-size:0.8rem">
+                          {{ ing.re_code }}
+                        </q-item-label>
+                        <q-item-label caption style="font-size:0.65rem">
+                          {{ ing.totalVol.toFixed(3) }} kg
+                        </q-item-label>
+                      </q-item-section>
+                      <q-item-section side>
+                        <q-badge
+                          :color="ing.packedBags === ing.totalBags ? 'blue-7' : (ing.packedBags > 0 ? 'orange-7' : 'grey-4')"
                           class="text-weight-bold"
+                          style="font-size:0.65rem"
                         >
-                          <q-tooltip>{{ allFhPacked ? 'Close box — Ready to transfer' : `${bagsByWarehouse.FH.length - fhPackedCount} bags remaining` }}</q-tooltip>
-                        </q-btn>
-                      </div>
-                    </div>
-                  </q-card-section>
+                          {{ ing.packedBags }}/{{ ing.totalBags }} bags
+                        </q-badge>
+                      </q-item-section>
+                    </template>
 
-                  <!-- FH Scan Field -->
-                  <q-card-section class="q-py-xs">
-                    <q-input v-model="scanFH" outlined dense placeholder="Scan FH pre-batch bag..." bg-color="blue-1">
-                      <template v-slot:prepend>
-                        <q-icon name="qr_code_scanner" color="blue-8" size="sm" class="cursor-pointer" @click="openScanSimulator('FH')">
-                          <q-tooltip>Click to simulate scan</q-tooltip>
-                        </q-icon>
-                      </template>
-                    </q-input>
-                  </q-card-section>
+                    <!-- Expandable: individual bags -->
+                    <q-list dense class="q-pl-md bg-white">
+                      <q-item
+                        v-for="bag in ing.bags" :key="bag.id"
+                        dense clickable style="min-height:30px;cursor:pointer"
+                        :class="getBagRowClass(bag)"
+                        @click="printBagLabel(bag)"
+                      >
+                        <q-item-section avatar style="min-width:20px">
+                          <q-icon :name="getBagStatusIcon(bag)" :color="getBagStatusColor(bag)" size="xs" />
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label style="font-size:0.7rem" class="text-mono">
+                            {{ bag.batch_record_id }}
+                          </q-item-label>
+                        </q-item-section>
+                        <q-item-section side>
+                          <span class="text-weight-bold" style="font-size:0.7rem">{{ bag.net_volume?.toFixed(3) }} kg</span>
+                        </q-item-section>
+                        <q-item-section side style="min-width:52px">
+                          <q-badge :color="getBagStatusColor(bag)" :label="getBagStatusLabel(bag)" style="font-size:0.6rem" />
+                        </q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-expansion-item>
 
-                  <q-list dense separator>
-                    <q-item
-                      v-for="bag in bagsByWarehouse.FH" :key="bag.id" dense
-                      :class="getBagRowClass(bag)"
-                      style="min-height: 36px;"
-                    >
-                      <q-item-section avatar style="min-width: 24px;">
-                        <q-icon :name="getBagStatusIcon(bag)" :color="getBagStatusColor(bag)" size="sm" />
-                      </q-item-section>
-                      <q-item-section>
-                        <q-item-label class="text-weight-bold" style="font-size: 0.75rem;">
-                          {{ bag.re_code }} | {{ bag.net_volume?.toFixed(3) }} kg
-                        </q-item-label>
-                        <q-item-label caption style="font-size: 0.6rem;">
-                          {{ bag.batch_record_id }}
-                        </q-item-label>
-                      </q-item-section>
-                      <q-item-section side>
-                        <q-badge :color="getBagStatusColor(bag)" :label="getBagStatusLabel(bag)" class="text-weight-bold" />
-                      </q-item-section>
-                    </q-item>
-                    <q-item v-if="bagsByWarehouse.FH.length === 0">
-                      <q-item-section class="text-center text-grey text-italic text-caption">No FH pre-batch for this box</q-item-section>
-                    </q-item>
-                  </q-list>
-                </q-card>
-
-                <!-- SPP Packing Card -->
-                <q-card v-show="filterMiddleWh === 'SPP'" flat bordered>
-                  <q-card-section class="bg-light-blue-8 text-white q-py-xs">
-                    <div class="row items-center justify-between no-wrap">
-                      <div class="row items-center q-gutter-xs">
-                        <q-icon name="inventory_2" size="xs" />
-                        <span class="text-weight-bold text-caption">SPP Pre-Batch Packing</span>
-                      </div>
-                      <div class="row items-center q-gutter-xs">
-                        <q-badge color="white" text-color="light-blue-9">{{ sppPackedCount }}/{{ bagsByWarehouse.SPP.length }}</q-badge>
-                        <q-btn
-                          dense flat size="xs" icon="unarchive" label="Boxed"
-                          :color="allSppPacked ? 'white' : 'light-blue-3'"
-                          :disable="!allSppPacked"
-                          @click="onCloseBox('SPP')"
-                          class="text-weight-bold"
-                        >
-                          <q-tooltip>{{ allSppPacked ? 'Close box — Ready to transfer' : `${bagsByWarehouse.SPP.length - sppPackedCount} bags remaining` }}</q-tooltip>
-                        </q-btn>
-                      </div>
-                    </div>
-                  </q-card-section>
-
-                  <!-- SPP Scan Field -->
-                  <q-card-section class="q-py-xs">
-                    <q-input v-model="scanSPP" outlined dense placeholder="Scan SPP pre-batch bag..." bg-color="light-blue-1">
-                      <template v-slot:prepend>
-                        <q-icon name="qr_code_scanner" color="light-blue-8" size="sm" class="cursor-pointer" @click="openScanSimulator('SPP')">
-                          <q-tooltip>Click to simulate scan</q-tooltip>
-                        </q-icon>
-                      </template>
-                    </q-input>
-                  </q-card-section>
-
-                  <q-list dense separator>
-                    <q-item
-                      v-for="bag in bagsByWarehouse.SPP" :key="bag.id" dense
-                      :class="getBagRowClass(bag)"
-                      style="min-height: 36px;"
-                    >
-                      <q-item-section avatar style="min-width: 24px;">
-                        <q-icon :name="getBagStatusIcon(bag)" :color="getBagStatusColor(bag)" size="sm" />
-                      </q-item-section>
-                      <q-item-section>
-                        <q-item-label class="text-weight-bold" style="font-size: 0.75rem;">
-                          {{ bag.re_code }} | {{ bag.net_volume?.toFixed(3) }} kg
-                        </q-item-label>
-                        <q-item-label caption style="font-size: 0.6rem;">
-                          {{ bag.batch_record_id }}
-                        </q-item-label>
-                      </q-item-section>
-                      <q-item-section side>
-                        <q-badge :color="getBagStatusColor(bag)" :label="getBagStatusLabel(bag)" class="text-weight-bold" />
-                      </q-item-section>
-                      <q-item-section>
-                        <q-item-label class="text-weight-bold" style="font-size: 0.75rem;">
-                          {{ bag.re_code }} | {{ bag.net_volume?.toFixed(3) }} kg
-                        </q-item-label>
-                        <q-item-label caption style="font-size: 0.6rem;">
-                          {{ bag.batch_record_id }}
-                        </q-item-label>
-                      </q-item-section>
-                      <q-item-section side>
-                        <q-badge :color="isPacked(bag) ? 'blue' : 'grey-5'" :label="getBagStatusLabel(bag)" class="text-weight-bold" />
-                      </q-item-section>
-                    </q-item>
-                    <q-item v-if="bagsByWarehouse.SPP.length === 0">
-                      <q-item-section class="text-center text-grey text-italic text-caption">No SPP pre-batch for this box</q-item-section>
-                    </q-item>
-                  </q-list>
-                </q-card>
+                  <q-item v-if="ingredientsByDept.length === 0">
+                    <q-item-section class="text-center text-grey text-italic text-caption q-pa-md">
+                      <q-icon name="inbox" size="md" class="q-mb-xs" /><br>
+                      {{ filterMiddleWh === 'FH' ? t('packingList.noFhBags') : t('packingList.noSppBags') }}
+                    </q-item-section>
+                  </q-item>
+                </q-list>
               </template>
             </q-scroll-area>
           </div>
         </q-card>
 
       </div>
-
-      <!-- ═══ MIDDLE PANEL: List all PreBatch Package of this Warehouse ═══ -->
-      <div class="col-3 column q-gutter-y-sm" style="order:1;height:100%;min-height:0;overflow:hidden;">
-        <q-card class="column shadow-2" style="flex:1;min-height:0;overflow:hidden;">
-          <q-card-section class="bg-blue-8 text-white q-py-xs">
-            <div class="row items-center justify-between no-wrap">
-              <div class="row items-center q-gutter-xs">
-                <q-icon name="warehouse" size="sm" />
-                <div class="text-subtitle2 text-weight-bold" style="font-size: 0.8rem">List all PreBatch Package</div>
-              </div>
-              <div class="row items-center q-gutter-xs">
-                <!-- All / Hide Boxed toggle -->
-                <q-btn-group flat dense>
-                  <q-btn
-                    flat dense no-caps size="sm"
-                    label="All"
-                    :color="!middleHideBoxed ? 'white' : 'blue-3'"
-                    :class="!middleHideBoxed ? 'bg-blue-6' : ''"
-                    @click="middleHideBoxed = false"
-                  />
-                  <q-btn
-                    flat dense no-caps size="sm"
-                    icon="visibility_off"
-                    label="Boxed"
-                    :color="middleHideBoxed ? 'white' : 'blue-3'"
-                    :class="middleHideBoxed ? 'bg-blue-6' : ''"
-                    @click="middleHideBoxed = true"
-                  />
-                </q-btn-group>
-                <q-badge color="white" text-color="blue-8" class="text-weight-bold">
-                  <q-spinner-dots v-if="loadingRecords" size="14px" color="blue-8" class="q-mr-xs" />
-                  {{ groupedMiddlePanel.reduce((n, r) => n + r.batches.reduce((m, b) => m + b.pkgs.length, 0), 0) }}
-                </q-badge>
-              </div>
-            </div>
-          </q-card-section>
-
-          <div class="col relative-position">
-            <q-inner-loading :showing="loadingRecords">
-              <q-spinner-gears size="40px" color="blue-grey" />
-            </q-inner-loading>
-            <q-scroll-area class="fit">
-              <div v-if="!loadingRecords && fhRecords.length === 0 && sppRecords.length === 0" class="text-center q-pa-lg text-grey">
-                <q-icon name="inbox" size="lg" class="q-mb-sm" /><br>
-                No pre-batch records found
-              </div>
-
-              <!-- ── 3-Level Tree: re_code → batch_id → package ── -->
-              <q-list dense separator class="bg-white">
-                <q-expansion-item
-                  v-for="reNode in groupedMiddlePanel"
-                  :key="reNode.re_code"
-                  dense expand-separator
-                  :header-class="filterMiddleWh === 'FH' ? 'bg-blue-1 text-blue-10' : 'bg-light-blue-1 text-light-blue-10'"
-                >
-                  <!-- Level 1 header: re_code + total weight -->
-                  <template v-slot:header>
-                    <q-item-section>
-                      <q-item-label class="text-weight-bold" style="font-size:0.8rem">
-                        {{ reNode.re_code }}
-                      </q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                      <q-badge
-                        :color="filterMiddleWh === 'FH' ? 'blue-7' : 'light-blue-7'"
-                        class="text-weight-bold"
-                        style="font-size:0.7rem"
-                      >
-                        {{ reNode.totalWeight.toFixed(3) }} kg
-                      </q-badge>
-                    </q-item-section>
-                  </template>
-
-                  <!-- Level 2: per-batch expansion -->
-                  <q-list dense separator class="q-pl-sm">
-                    <q-expansion-item
-                      v-for="bNode in reNode.batches"
-                      :key="bNode.batch_id"
-                      dense expand-separator
-                      header-class="bg-grey-1 text-grey-9"
-                    >
-                      <template v-slot:header>
-                        <q-item-section avatar style="min-width:20px">
-                          <q-icon name="inventory_2" size="xs" color="grey-6" />
-                        </q-item-section>
-                        <q-item-section>
-                          <q-item-label style="font-size:0.72rem" class="text-weight-medium">
-                            {{ bNode.batch_id.split('-').slice(-1)[0] }}
-                            <span class="text-grey-5" style="font-size:0.65rem"> — {{ bNode.batch_id }}</span>
-                          </q-item-label>
-                        </q-item-section>
-                        <q-item-section side>
-                          <span class="text-weight-bold" style="font-size:0.72rem">
-                            {{ bNode.totalWeight.toFixed(3) }} kg
-                          </span>
-                        </q-item-section>
-                      </template>
-
-                      <!-- Level 3: individual packages -->
-                      <q-list dense class="q-pl-md bg-white">
-                        <q-item
-                          v-for="pkg in bNode.pkgs" :key="pkg.id"
-                          dense style="min-height:28px"
-                        >
-                          <q-item-section avatar style="min-width:18px">
-                            <q-icon
-                              :name="pkg.status === 1 ? 'check_circle' : (pkg.recheck === 1 ? 'hourglass_top' : 'radio_button_unchecked')"
-                              :color="pkg.status === 1 ? 'blue-7' : (pkg.recheck === 1 ? 'orange-7' : 'grey-4')"
-                              size="xs"
-                            />
-                          </q-item-section>
-                          <q-item-section>
-                            <q-item-label style="font-size:0.7rem" class="text-mono">
-                              {{ pkg.label }}
-                            </q-item-label>
-                          </q-item-section>
-                          <q-item-section side>
-                            <span class="text-weight-bold" style="font-size:0.7rem">
-                              {{ pkg.weight.toFixed(3) }} kg
-                            </span>
-                          </q-item-section>
-                          <q-item-section side style="min-width:52px">
-                            <q-badge
-                              :color="pkg.status === 1 ? 'blue-7' : (pkg.recheck === 1 ? 'orange-7' : 'grey-4')"
-                              :label="pkg.status === 1 ? 'Boxed' : (pkg.recheck === 1 ? 'Prepare' : 'Waiting')"
-                              style="font-size:0.6rem"
-                            />
-                          </q-item-section>
-                        </q-item>
-                      </q-list>
-                    </q-expansion-item>
-                  </q-list>
-                </q-expansion-item>
-
-                <q-item v-if="groupedMiddlePanel.length === 0">
-                  <q-item-section class="text-center text-grey q-pa-lg text-caption">
-                    <q-icon name="inbox" size="sm" class="q-mb-xs" /><br>No pre-batch records
-                  </q-item-section>
-                </q-item>
-              </q-list>
-            </q-scroll-area>
-
-          </div>
-        </q-card>
-
-      </div>
-
       <!-- ═══ 4TH PANEL: Ready to Delivery ═══ -->
       <div class="col-3 column" style="order:3;height:100%;min-height:0;overflow:hidden;">
         <q-card class="column shadow-2" style="flex:1;min-height:0;overflow:hidden;">
