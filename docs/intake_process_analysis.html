@@ -1,0 +1,118 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Intake Process Analysis — xMixing</title>
+<style>
+:root{--bg:#0d1117;--fg:#c9d1d9;--accent:#58a6ff;--border:#30363d;--card:#161b22}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--fg);line-height:1.7;padding:40px 20px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2rem;color:#fff;border-bottom:2px solid var(--accent);padding-bottom:12px;margin:30px 0 16px}
+h2{font-size:1.5rem;color:var(--accent);margin:28px 0 12px}
+h3{font-size:1.15rem;color:#8b949e;margin:20px 0 8px}
+p{margin:8px 0}
+strong{color:#fff}
+code{background:#1f2937;padding:2px 6px;border-radius:4px;font-size:.88em;color:#f0883e}
+pre{background:#1f2937;padding:16px;border-radius:8px;overflow-x:auto;margin:12px 0}
+pre code{background:none;padding:0;color:var(--fg)}
+table{width:100%;border-collapse:collapse;margin:12px 0;background:var(--card);border-radius:6px;overflow:hidden}
+th{background:#21262d;color:var(--accent);padding:10px 14px;text-align:left;font-size:.85rem;text-transform:uppercase;letter-spacing:.5px}
+td{padding:8px 14px;border-top:1px solid var(--border);font-size:.9rem}
+tr:hover td{background:rgba(88,166,255,.06)}
+hr{border:none;border-top:1px solid var(--border);margin:24px 0}
+blockquote{border-left:3px solid var(--accent);padding:8px 16px;margin:12px 0;background:rgba(88,166,255,.08);border-radius:0 6px 6px 0}
+.mermaid{background:#fff;padding:20px;border-radius:8px;margin:16px 0;text-align:center}
+@media print{body{background:#fff;color:#000;padding:0}h1{color:#000;border-color:#333}h2{color:#1a73e8}table{background:#fff}th{background:#f0f0f0;color:#333}td{border-color:#ddd}code{background:#f5f5f5;color:#d63384}pre{background:#f5f5f5}pre code{color:#333}}
+</style></head><body><div class="container"><h1>Intake Process — Code & Database Analysis</h1>
+
+<strong>Module:</strong> Ingredient Intake (Warehouse Receiving)
+<strong>Generated:</strong> 2026-03-05
+
+<hr>
+
+<h2>Process Flow</h2>
+
+<pre class="mermaid">flowchart TD
+    A[&quot;📦 Physical Material Arrives&quot;] --&gt; B[&quot;🔍 Scan/Enter Ingredient Code&quot;]
+    B --&gt; C{&quot;Ingredient Found?&quot;}
+    C --&gt;|Yes| D[&quot;Auto-fill: RE-Code, Name, SAP Code, Std Pkg Size&quot;]
+    C --&gt;|No| E[&quot;Manual Entry / Create New Ingredient&quot;]
+    D --&gt; F[&quot;Generate Intake Lot ID&lt;br/&gt;(intake-YYYY-MM-DD-NNN)&quot;]
+    E --&gt; F
+    F --&gt; G[&quot;Fill: Volume, Packages, From/To, PO#, Dates&quot;]
+    G --&gt; H[&quot;💾 Save → POST /ingredient-intake-lists/&quot;]
+    H --&gt; I[&quot;Auto-generate Package Records&lt;br/&gt;(intake_package_receive)&quot;]
+    I --&gt; J[&quot;🏷️ Print Label (QR + Details)&quot;]
+    J --&gt; K[&quot;Material in Warehouse&lt;br/&gt;Status: Active&quot;]
+    K --&gt; L{&quot;Status Change?&quot;}
+    L --&gt;|Hold| M[&quot;Status → Hold&quot;]
+    L --&gt;|Reject| N[&quot;Status → Reject&lt;br/&gt;remain_vol → 0&quot;]
+    L --&gt;|Consume| O[&quot;Pre-Batch takes from remain_vol&quot;]
+    M --&gt; K
+</pre>
+
+<hr>
+
+<h2>Database Tables (3 tables)</h2>
+
+<h3><code>ingredient_intake_lists</code> — Main Record</h3>
+<table><thead><tr><th>Column</th><th>Type</th><th>Key</th><th>Description</th></tr></thead><tbody><tr><td>id</td><td>INT</td><td>PK</td><td>Auto-increment</td></tr><tr><td>intake_lot_id</td><td>VARCHAR(50)</td><td>IDX</td><td><code>intake-YYYY-MM-DD-NNN</code></td></tr><tr><td>lot_id</td><td>VARCHAR(50)</td><td></td><td>Supplier lot number</td></tr><tr><td>intake_from</td><td>VARCHAR(50)</td><td></td><td>Source location</td></tr><tr><td>intake_to</td><td>VARCHAR(50)</td><td></td><td>Destination warehouse</td></tr><tr><td>blind_code</td><td>VARCHAR(50)</td><td>IDX</td><td>Internal blind code</td></tr><tr><td>mat_sap_code</td><td>VARCHAR(50)</td><td>IDX</td><td>SAP material code</td></tr><tr><td>re_code</td><td>VARCHAR(50)</td><td></td><td>Recipe code</td></tr><tr><td>material_description</td><td>VARCHAR(200)</td><td></td><td>Material name</td></tr><tr><td>uom</td><td>VARCHAR(20)</td><td></td><td>Unit of measure</td></tr><tr><td>intake_vol</td><td>FLOAT</td><td></td><td>Total volume received</td></tr><tr><td>remain_vol</td><td>FLOAT</td><td></td><td>Remaining volume (decremented by pre-batch)</td></tr><tr><td>intake_package_vol</td><td>FLOAT</td><td></td><td>Volume per package</td></tr><tr><td>package_intake</td><td>INT</td><td></td><td>Number of packages</td></tr><tr><td>std_package_size</td><td>FLOAT</td><td></td><td>Default 25.0 kg</td></tr><tr><td>expire_date</td><td>DATETIME</td><td></td><td>Expiry date</td></tr><tr><td>manufacturing_date</td><td>DATETIME</td><td></td><td>Mfg date</td></tr><tr><td>ext_date</td><td>DATETIME</td><td></td><td>Extended date</td></tr><tr><td>po_number</td><td>VARCHAR(50)</td><td></td><td>Purchase order</td></tr><tr><td>reserv_no</td><td>VARCHAR(50)</td><td></td><td>Reservation number</td></tr><tr><td>stock_zone</td><td>VARCHAR(50)</td><td></td><td>Warehouse zone</td></tr><tr><td>material_type</td><td>VARCHAR(50)</td><td></td><td>Material classification</td></tr><tr><td>batch_prepare_vol</td><td>FLOAT</td><td></td><td>Volume allocated to batches</td></tr><tr><td>status</td><td>VARCHAR(20)</td><td></td><td>Active / Hold / Reject</td></tr><tr><td>intake_at</td><td>TIMESTAMP</td><td></td><td>When received</td></tr><tr><td>intake_by</td><td>VARCHAR(50)</td><td></td><td>Who received</td></tr></tbody></table>
+
+<h3><code>ingredient_intake_history</code> — Audit Trail</h3>
+<table><thead><tr><th>Column</th><th>Type</th><th>Key</th><th>Description</th></tr></thead><tbody><tr><td>id</td><td>INT</td><td>PK</td><td></td></tr><tr><td>intake_list_id</td><td>INT</td><td>FK → intake_lists</td><td></td></tr><tr><td>action</td><td>VARCHAR(50)</td><td></td><td>Status change, edit, etc.</td></tr><tr><td>old_status / new_status</td><td>VARCHAR(20)</td><td></td><td>Before/after</td></tr><tr><td>remarks</td><td>VARCHAR(255)</td><td></td><td>Notes</td></tr><tr><td>changed_by</td><td>VARCHAR(50)</td><td></td><td>Who changed</td></tr><tr><td>changed_at</td><td>TIMESTAMP</td><td></td><td>When</td></tr></tbody></table>
+
+<h3><code>intake_package_receive</code> — Individual Packages</h3>
+<table><thead><tr><th>Column</th><th>Type</th><th>Key</th><th>Description</th></tr></thead><tbody><tr><td>id</td><td>INT</td><td>PK</td><td></td></tr><tr><td>intake_list_id</td><td>INT</td><td>FK → intake_lists</td><td></td></tr><tr><td>package_no</td><td>INT</td><td></td><td>Package sequence</td></tr><tr><td>weight</td><td>FLOAT</td><td></td><td>Package weight</td></tr><tr><td>created_by</td><td>VARCHAR(50)</td><td></td><td></td></tr></tbody></table>
+
+<hr>
+
+<h2>API Endpoints (Backend)</h2>
+
+<table><thead><tr><th>Method</th><th>Path</th><th>Function</th></tr></thead><tbody><tr><td>GET</td><td><code>/ingredient-intake-lists/</code></td><td>List all (paginated)</td></tr><tr><td>GET</td><td><code>/ingredient-intake-lists/next-id</code></td><td>Auto-generate next ID</td></tr><tr><td>GET</td><td><code>/ingredient-intake-lists/{id}</code></td><td>Get by ID</td></tr><tr><td>POST</td><td><code>/ingredient-intake-lists/</code></td><td>Create + auto-gen packages</td></tr><tr><td>PUT</td><td><code>/ingredient-intake-lists/{id}</code></td><td>Update record</td></tr><tr><td>DELETE</td><td><code>/ingredient-intake-lists/{id}</code></td><td>Delete record</td></tr><tr><td>GET</td><td><code>/ingredients/</code></td><td>List all (filter by SAP/lookup)</td></tr><tr><td>GET</td><td><code>/ingredients/{id}</code></td><td>Get by ID</td></tr><tr><td>POST</td><td><code>/ingredients/</code></td><td>Create</td></tr><tr><td>PUT</td><td><code>/ingredients/{id}</code></td><td>Update</td></tr><tr><td>DELETE</td><td><code>/ingredients/{id}</code></td><td>Delete</td></tr><tr><td>GET/POST/PUT/DELETE</td><td><code>/ingredient-intake-from/</code></td><td>Intake source CRUD</td></tr><tr><td>GET/POST/PUT/DELETE</td><td><code>/package-container-types/</code></td><td>Container types CRUD</td></tr><tr><td>GET/POST/PUT/DELETE</td><td><code>/package-container-sizes/</code></td><td>Container sizes CRUD</td></tr></tbody></table>
+
+<hr>
+
+<h2>Code Map</h2>
+
+<h3>Backend</h3>
+<table><thead><tr><th>File</th><th>Lines</th><th>Purpose</th></tr></thead><tbody><tr><td><code>routers/router_ingredients.py</code></td><td>338</td><td>API endpoint definitions (29 routes)</td></tr><tr><td><code>crud/crud_ingredient.py</code></td><td>316</td><td>Database operations (30 functions)</td></tr><tr><td><code>models.py</code> (lines 90-146)</td><td>56</td><td>ORM models for 3 intake tables</td></tr><tr><td><code>schemas.py</code></td><td>—</td><td>Pydantic validation schemas</td></tr></tbody></table>
+
+<h3>Frontend</h3>
+<table><thead><tr><th>File</th><th>Lines</th><th>Purpose</th></tr></thead><tbody><tr><td><code>x10-IngredientIntake.vue</code></td><td>2042</td><td>Main intake page (form + table + features)</td></tr><tr><td><code>x13-IngredientIntakeReport.vue</code></td><td>—</td><td>Intake reporting page</td></tr></tbody></table>
+
+<h3>Label Templates</h3>
+<table><thead><tr><th>File</th><th>Format</th><th>Purpose</th></tr></thead><tbody><tr><td><code>ingredient_intake-label.svg</code></td><td>Standard</td><td>Default intake label</td></tr><tr><td><code>ingredient_intake-label_4x3.svg</code></td><td>4×3 in</td><td>Compact intake label</td></tr><tr><td><code>ingredient_intake-label_4x3-r01.svg</code></td><td>4×3 in</td><td>Revised version</td></tr><tr><td><code>ingredient_intake_label_100x060-001.svg</code></td><td>100×60mm</td><td>Small format label</td></tr></tbody></table>
+
+<hr>
+
+<h2>Frontend Functions (x10-IngredientIntake.vue)</h2>
+
+<table><thead><tr><th>Category</th><th>Functions</th><th>Description</th></tr></thead><tbody><tr><td><strong>Scanner</strong></td><td><code>onScannerEnter</code>, <code>focusScannerInput</code></td><td>Barcode scanner (keyboard emulator)</td></tr><tr><td><strong>Lookup</strong></td><td><code>lookupIngredient</code>, <code>fetchAllIngredients</code>, <code>filterIngredients</code></td><td>Ingredient search & autocomplete</td></tr><tr><td><strong>ID Gen</strong></td><td><code>generateIntakeLotId</code></td><td><code>intake-YYYY-MM-DD-NNN</code> format</td></tr><tr><td><strong>CRUD</strong></td><td><code>onSave</code>, <code>onEdit</code>, <code>onClear</code>, <code>onRejectIntake</code></td><td>Create/Update/Clear/Reject</td></tr><tr><td><strong>Status</strong></td><td><code>updateRecordStatus</code>, <code>getStatusColor</code></td><td>Status management (Active/Hold/Reject)</td></tr><tr><td><strong>Data</strong></td><td><code>fetchReceipts</code>, <code>fetchIntakeFromOptions</code>, <code>fetchIntakeToOptions</code></td><td>API data fetching</td></tr><tr><td><strong>Print</strong></td><td><code>printLabel</code>, <code>printSinglePackageLabel</code></td><td>QR-based label printing</td></tr><tr><td><strong>Export</strong></td><td><code>exportTable</code>, <code>importTable</code>, <code>onFileSelected</code></td><td>CSV import/export</td></tr><tr><td><strong>Config</strong></td><td><code>addIntakeFrom</code>, <code>deleteIntakeFrom</code>, <code>addWarehouse</code>, <code>deleteWarehouse</code></td><td>Manage lookup options</td></tr><tr><td><strong>UI</strong></td><td><code>openDetailDialog</code>, <code>filteredRows</code>, <code>columns</code>, <code>resetFilters</code></td><td>Table, filtering, detail view</td></tr></tbody></table>
+
+<hr>
+
+<h2>Key Logic: <code>create_ingredient_intake_list</code> (Backend)</h2>
+
+<pre><code class="language-">1. Validate intake data
+<p>2. Create IngredientIntakeList record (remain_vol = intake_vol)</p>
+<p>3. Auto-generate IntakePackageReceive records:</p>
+<p>- If package_intake &gt; 0 and intake_package_vol &gt; 0:</p>
+<p>- Create N-1 packages of intake_package_vol weight</p>
+<p>- Last package = remaining volume (handles rounding)</p>
+<p>4. Create IngredientIntakeHistory entry (action=&quot;Created&quot;)</p>
+<p>5. Return created record with packages relationship loaded</p>
+</code></pre>
+
+<h2>Key Logic: <code>onSave</code> (Frontend)</h2>
+
+<pre><code class="language-">1. Validate required fields (ingredientId, volume, from, to)
+<p>2. If editing → PUT /ingredient-intake-lists/{id}</p>
+<p>3. If new → POST /ingredient-intake-lists/</p>
+<p>4. On success:</p>
+<p>- Refresh table</p>
+<p>- Generate new intake lot ID</p>
+<p>- Clear form</p>
+<p>- Auto-print label (optional)</p>
+<p>5. Auto-refresh table every 5 seconds</p>
+</code></pre>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'dark'})</script></body></html>

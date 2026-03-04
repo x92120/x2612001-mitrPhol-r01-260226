@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>xMixing Database Structure Analysis</title>
+<style>
+  :root { --bg: #0d1117; --fg: #c9d1d9; --accent: #58a6ff; --border: #30363d; --card: #161b22; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+         background: var(--bg); color: var(--fg); line-height: 1.7; padding: 40px 20px; }
+  .container { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 2rem; color: #fff; border-bottom: 2px solid var(--accent); padding-bottom: 12px; margin: 30px 0 16px; }
+  h2 { font-size: 1.5rem; color: var(--accent); margin: 28px 0 12px; }
+  h3 { font-size: 1.15rem; color: #8b949e; margin: 20px 0 8px; }
+  p { margin: 8px 0; }
+  strong { color: #fff; }
+  code { background: #1f2937; padding: 2px 6px; border-radius: 4px; font-size: 0.88em; color: #f0883e; }
+  pre { background: #1f2937; padding: 16px; border-radius: 8px; overflow-x: auto; margin: 12px 0; }
+  pre code { background: none; padding: 0; color: var(--fg); }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; background: var(--card); border-radius: 6px; overflow: hidden; }
+  th { background: #21262d; color: var(--accent); padding: 10px 14px; text-align: left; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
+  td { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 0.9rem; }
+  tr:hover td { background: rgba(88,166,255,0.06); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+  blockquote { border-left: 3px solid var(--accent); padding: 8px 16px; margin: 12px 0; background: rgba(88,166,255,0.08); border-radius: 0 6px 6px 0; }
+  .mermaid { background: #fff; padding: 20px; border-radius: 8px; margin: 16px 0; text-align: center; }
+  @media print {
+    body { background: #fff; color: #000; padding: 0; }
+    .container { max-width: 100%; }
+    h1 { color: #000; border-color: #333; }
+    h2 { color: #1a73e8; }
+    table { background: #fff; }
+    th { background: #f0f0f0; color: #333; }
+    td { border-color: #ddd; }
+    code { background: #f5f5f5; color: #d63384; }
+    pre { background: #f5f5f5; }
+    pre code { color: #333; }
+    blockquote { background: #f8f9fa; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>xMixing Database Structure Analysis</h1>
+
+<strong>Database:</strong> <code>xMixingControl</code> · <strong>Engine:</strong> MySQL/MariaDB · <strong>Host:</strong> <code>152.42.166.150:3306</code>
+<strong>ORM:</strong> SQLAlchemy · <strong>Source:</strong> [models.py](file:///home/x-root/xApp/x01-local/x02-BackEnd/x0201-fastAPI/models.py)
+
+<hr>
+
+<h2>Entity-Relationship Diagram</h2>
+
+<pre class="mermaid">erDiagram
+    users ||--o{ production_plans : &quot;created_by&quot;
+    
+    ingredients ||--o{ ingredient_intake_lists : &quot;re_code/blind_code&quot;
+    ingredient_intake_lists ||--o{ ingredient_intake_history : &quot;has&quot;
+    ingredient_intake_lists ||--o{ intake_package_receive : &quot;has&quot;
+    ingredient_intake_lists ||--o{ prebatch_rec_from : &quot;intake_lot_id&quot;
+
+    sku_groups ||--o{ sku_masters : &quot;groups&quot;
+    sku_masters ||--o{ sku_steps : &quot;has&quot;
+    sku_actions ||--o{ sku_steps : &quot;action_code&quot;
+    sku_phases ||--o{ sku_steps : &quot;phase_id&quot;
+
+    production_plans ||--o{ production_batches : &quot;has&quot;
+    production_plans ||--o{ production_plan_history : &quot;has&quot;
+    
+    production_batches ||--o{ prebatch_reqs : &quot;has&quot;
+    prebatch_reqs ||--o{ prebatch_recs : &quot;has&quot;
+    prebatch_recs ||--o{ prebatch_rec_from : &quot;sourced_from&quot;
+</pre>
+
+<hr>
+
+<h2>Tables by Domain</h2>
+
+<h3>1. 👤 User Management</h3>
+
+<table>
+<thead>
+<tr><th>Table</th><th>PK</th><th>Key Columns</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>users</code></td><td><code>id</code></td><td>username, email, role (Enum), status, permissions (JSON)</td><td>User accounts with RBAC</td></tr>
+</tbody>
+</table>
+
+<blockquote><strong>Roles:</strong> Admin, Manager, Operator, QC Inspector, Viewer</blockquote>
+
+<hr>
+
+<h3>2. 🧪 Ingredient Master</h3>
+
+<table>
+<thead>
+<tr><th>Table</th><th>PK</th><th>Key Columns</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ingredients</code></td><td><code>id</code></td><td>blind_code, mat_sap_code, re_code, name, category, uom, std_package_size</td><td>Ingredient definitions</td></tr>
+<tr><td><code>ingredient_intake_from</code></td><td><code>id</code></td><td>name</td><td>Lookup: where ingredients come from</td></tr>
+<tr><td><code>package_container_types</code></td><td><code>id</code></td><td>name</td><td>Lookup: container types (bag, drum, etc.)</td></tr>
+<tr><td><code>package_container_sizes</code></td><td><code>id</code></td><td>size (Float)</td><td>Lookup: standard container sizes</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h3>3. 📦 Ingredient Intake (Warehouse Receiving)</h3>
+
+<table>
+<thead>
+<tr><th>Table</th><th>PK</th><th>Key Columns</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ingredient_intake_lists</code></td><td><code>id</code></td><td>intake_lot_id, lot_id, mat_sap_code, re_code, intake_vol, remain_vol, status, po_number, stock_zone</td><td>Tracks each lot received into warehouse</td></tr>
+<tr><td><code>ingredient_intake_history</code></td><td><code>id</code></td><td>intake_list_id → intake_lists, action, old/new_status, changed_by</td><td>Audit trail for intake status changes</td></tr>
+<tr><td><code>intake_package_receive</code></td><td><code>id</code></td><td>intake_list_id → intake_lists, package_no, weight</td><td>Individual packages within a lot</td></tr>
+</tbody>
+</table>
+
+<strong>Key Fields on <code>ingredient_intake_lists</code>:</strong>
+<p>- <code>intake_lot_id</code> — unique lot identifier for scanning</p>
+<p>- <code>remain_vol</code> — decremented as material is consumed by pre-batch</p>
+<p>- <code>std_package_size</code> — default 25.0 kg</p>
+<p>- <code>stock_zone</code> — warehouse location</p>
+<p>- <code>expire_date</code>, <code>manufacturing_date</code>, <code>ext_date</code> — date tracking</p>
+
+<hr>
+
+<h3>4. 🏭 SKU / Recipe Management</h3>
+
+<table>
+<thead>
+<tr><th>Table</th><th>PK</th><th>Key Columns</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>sku_groups</code></td><td><code>id</code></td><td>group_code, group_name</td><td>Product family grouping</td></tr>
+<tr><td><code>sku_masters</code></td><td><code>id</code></td><td>sku_id, sku_name, std_batch_size, sku_group → sku_groups</td><td>Product definitions</td></tr>
+<tr><td><code>sku_steps</code></td><td><code>id</code></td><td>sku_id → sku_masters, phase_number, phase_id, sub_step, action, re_code, require, tolerances, process params</td><td>Recipe steps with detailed mixing instructions</td></tr>
+<tr><td><code>sku_actions</code></td><td><code>action_code</code></td><td>action_description, component_filter</td><td>Action type lookup</td></tr>
+<tr><td><code>sku_phases</code></td><td><code>phase_id</code></td><td>phase_code, phase_description</td><td>Phase type lookup</td></tr>
+<tr><td><code>sku_destinations</code></td><td><code>id</code></td><td>destination_code, description</td><td>Where to send material</td></tr>
+</tbody>
+</table>
+
+<strong><code>sku_steps</code> Detail</strong> — the most complex table:
+<p>- <strong>Mixing params:</strong> agitator_rpm, high_shear_rpm, temperature, temp range, step_time</p>
+<p>- <strong>Tolerances:</strong> low_tol, high_tol on required volume</p>
+<p>- <strong>QC flags:</strong> qc_temp, record_steam_pressure, record_ctw, operation_brix_record, operation_ph_record</p>
+<p>- <strong>Set points:</strong> brix_sp, ph_sp</p>
+
+<hr>
+
+<h3>5. 📋 Production Planning</h3>
+
+<table>
+<thead>
+<tr><th>Table</th><th>PK</th><th>Key Columns</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>production_plans</code></td><td><code>id</code></td><td>plan_id, sku_id, sku_name, plant, total_volume, batch_size, num_batches, start/finish_date, status</td><td>Production plan header</td></tr>
+<tr><td><code>production_plan_history</code></td><td><code>id</code></td><td>plan_db_id → plans, action, old/new_status</td><td>Audit trail</td></tr>
+<tr><td><code>production_batches</code></td><td><code>id</code></td><td>plan_id → plans, batch_id, sku_id, plant, batch_size, status + 6 workflow flags</td><td>Individual batch within a plan</td></tr>
+</tbody>
+</table>
+
+<strong>Workflow Flags on <code>production_batches</code>:</strong>
+<table>
+<thead>
+<tr><th>Flag</th><th>Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td><code>flavour_house</code></td><td>FH pre-batch ready</td></tr>
+<tr><td><code>spp</code></td><td>SPP pre-batch ready</td></tr>
+<tr><td><code>batch_prepare</code></td><td>Batch preparation done</td></tr>
+<tr><td><code>ready_to_product</code></td><td>Ready for production line</td></tr>
+<tr><td><code>production</code></td><td>Currently in production</td></tr>
+<tr><td><code>done</code></td><td>Completed</td></tr>
+</tbody>
+</table>
+
+<strong>Packing & Delivery Tracking (on <code>production_batches</code>):</strong>
+<table>
+<thead>
+<tr><th>Column</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>fh_boxed_at</code></td><td>When FH packing box was sealed</td></tr>
+<tr><td><code>spp_boxed_at</code></td><td>When SPP packing box was sealed</td></tr>
+<tr><td><code>fh_delivered_at</code> / <code>fh_delivered_by</code></td><td>FH box delivered to SPP</td></tr>
+<tr><td><code>spp_delivered_at</code> / <code>spp_delivered_by</code></td><td>SPP box delivered to production hall</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h3>6. 🎯 Pre-Batch (Material Preparation)</h3>
+
+<table>
+<thead>
+<tr><th>Table</th><th>PK</th><th>Key Columns</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>prebatch_reqs</code></td><td><code>id</code></td><td>batch_db_id → batches, plan_id, batch_id, re_code, ingredient_name, required_volume, wh, status</td><td>What each batch needs</td></tr>
+<tr><td><code>prebatch_recs</code></td><td><code>id</code></td><td>req_id → reqs, batch_record_id, plan_id, re_code, package_no, net_volume, intake_lot_id, packing_status, recheck_status</td><td>Each prepared bag/package</td></tr>
+<tr><td><code>prebatch_rec_from</code></td><td><code>id</code></td><td>prebatch_rec_id → recs, intake_lot_id, mat_sap_code, take_volume</td><td>Traceability: which intake lot sourced each bag</td></tr>
+</tbody>
+</table>
+
+<strong><code>prebatch_reqs</code> Status:</strong> 0 = Pending, 1 = In-Progress, 2 = Completed
+<strong><code>prebatch_recs</code> Packing:</strong> 0 = Unpacked, 1 = Packed
+<strong><code>prebatch_recs</code> Recheck:</strong> 0 = Pending, 1 = OK, 2 = Error
+
+<hr>
+
+<h3>7. 🏢 Reference Tables</h3>
+
+<table>
+<thead>
+<tr><th>Table</th><th>PK</th><th>Key Columns</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>plants</code></td><td><code>id</code></td><td>plant_id, plant_name, location, status</td><td>Production plant/line definitions</td></tr>
+<tr><td><code>warehouses</code></td><td><code>id</code></td><td>warehouse_id, name, description, status</td><td>Warehouse definitions</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2>Database Views (Read-Only)</h2>
+
+<table>
+<thead>
+<tr><th>View</th><th>Purpose</th><th>Key Fields</th></tr>
+</thead>
+<tbody>
+<tr><td><code>v_sku_master_detail</code></td><td>SKU master with step counts</td><td>All SKU fields + total_phases, total_sub_steps, group info</td></tr>
+<tr><td><code>v_sku_step_detail</code></td><td>Steps with lookups & computed fields</td><td>All step fields + ingredient details, action/destination descriptions, step_label</td></tr>
+<tr><td><code>v_sku_complete</code></td><td>Denormalized SKU data for export</td><td>Flat join of SKU + all step detail for reporting</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2>Data Flow Summary</h2>
+
+<pre class="mermaid">flowchart LR
+    A[&quot;📦 Ingredient Intake&quot;] --&gt; B[&quot;🧪 Ingredients Master&quot;]
+    B --&gt; C[&quot;📋 SKU Recipe (Steps)&quot;]
+    C --&gt; D[&quot;🏭 Production Plan&quot;]
+    D --&gt; E[&quot;📊 Production Batches&quot;]
+    E --&gt; F[&quot;🎯 PreBatch Reqs&quot;]
+    F --&gt; G[&quot;📦 PreBatch Recs (bags)&quot;]
+    G --&gt; H[&quot;🔍 Batch Recheck&quot;]
+    G --&gt; I[&quot;📦 Packing &amp; Boxing&quot;]
+    I --&gt; J[&quot;🚚 Delivery&quot;]
+
+    A -.-&gt;|&quot;sourced from&quot;| G
+</pre>
+
+<h2>Table Count Summary</h2>
+
+<table>
+<thead>
+<tr><th>Domain</th><th>Tables</th><th>Views</th></tr>
+</thead>
+<tbody>
+<tr><td>User Management</td><td>1</td><td>—</td></tr>
+<tr><td>Ingredient Master</td><td>4</td><td>—</td></tr>
+<tr><td>Ingredient Intake</td><td>3</td><td>—</td></tr>
+<tr><td>SKU / Recipe</td><td>5</td><td>3</td></tr>
+<tr><td>Production</td><td>3</td><td>—</td></tr>
+<tr><td>Pre-Batch</td><td>3</td><td>—</td></tr>
+<tr><td>Reference</td><td>2</td><td>—</td></tr>
+<tr><td><strong>Total</strong></td><td><strong>21</strong></td><td><strong>3</strong></td></tr>
+</tbody>
+</table>
+
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'dark' });</script>
+</body>
+</html>
