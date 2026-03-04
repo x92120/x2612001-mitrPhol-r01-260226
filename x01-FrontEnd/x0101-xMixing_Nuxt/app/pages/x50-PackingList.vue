@@ -674,6 +674,121 @@ const onCloseBox = (wh: 'FH' | 'SPP') => {
   })
 }
 
+// ── Packing Box Detail Report Print ───────────────────────────────
+const printPackingBoxReport = async (batchId: string, wh: 'FH' | 'SPP') => {
+  // Find the batch and its bags
+  const plan = plans.value.find((p: any) => p.batches?.some((b: any) => b.batch_id === batchId))
+  const batch = plan?.batches?.find((b: any) => b.batch_id === batchId)
+  const whBags = wh === 'FH' ? bagsByWarehouse.value.FH : bagsByWarehouse.value.SPP
+
+  // If current selectedBatch isn't this one, use allRecords filtered
+  let bags = whBags.filter((b: any) => b.re_code)
+  if (selectedBatch.value?.batch_id !== batchId) {
+    // Try to use allRecords
+    bags = allRecords.value.filter((r: any) => {
+      const matchBatch = r.plan_id === plan?.plan_id && r.batch_record_id?.startsWith(batchId)
+      const matchWh = wh === 'FH'
+        ? ['FH','CL','FL'].some(p => (r.re_code || '').toUpperCase().startsWith(p))
+        : !['FH','CL','FL'].some(p => (r.re_code || '').toUpperCase().startsWith(p))
+      return matchBatch && matchWh
+    })
+  }
+
+  const now = new Date()
+  const dateStr = now.toLocaleDateString('th-TH', { year: 'numeric', month: '2-digit', day: '2-digit' })
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const reportNo = `PB-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(Math.floor(Math.random()*9000)+1000)}`
+
+  const totalWeight = bags.reduce((s: number, b: any) => s + (b.net_volume || 0), 0)
+  const ingredients = new Set(bags.map((b: any) => b.re_code)).size
+
+  // Get box closed time from transferredBoxes
+  const boxEntry = transferredBoxes.value.find(tb => tb.batch_id === batchId && tb.wh === wh)
+  const boxClosedTime = boxEntry?.time || '-'
+
+  // Build table rows SVG
+  const ROW_H = 20
+  const START = 192
+  let rowsSvg = ''
+  bags.sort((a: any, b: any) => {
+    const codeA = a.re_code || ''; const codeB = b.re_code || ''
+    if (codeA !== codeB) return codeA.localeCompare(codeB)
+    return (a.package_no || 0) - (b.package_no || 0)
+  })
+
+  bags.forEach((bag: any, i: number) => {
+    const y = START + i * ROW_H
+    if (y + ROW_H > 980) return // Don't overflow into signatures
+    const bg = i % 2 === 0 ? '#f8f8f8' : '#ffffff'
+    const packed = bag.packing_status === 1
+    const statusColor = packed ? '#1b5e20' : '#b71c1c'
+    const statusText = packed ? '✓ Packed' : '○ Pending'
+
+    rowsSvg += `
+      <rect x="20" y="${y}" width="754" height="${ROW_H}" fill="${bg}"/>
+      <text x="38"  y="${y+14}" style="font-size:8px;font-family:Arial,sans-serif;fill:#000000">${i+1}</text>
+      <text x="56"  y="${y+14}" style="font-size:8px;font-family:Arial,sans-serif;font-weight:bold;fill:#000000">${bag.re_code || '-'}</text>
+      <text x="150" y="${y+14}" style="font-size:7px;font-family:Arial,sans-serif;fill:#333333">${bag.ingredient_name || bag.re_code || '-'}</text>
+      <text x="380" y="${y+14}" style="font-size:7px;font-family:'Courier New',monospace;fill:#000000">${bag.batch_record_id || '-'}</text>
+      <text x="560" y="${y+14}" style="font-size:8px;font-family:Arial,sans-serif;fill:#000000">${bag.package_no || 1}/${bag.total_packages || 1}</text>
+      <text x="600" y="${y+14}" style="font-size:8px;font-family:Arial,sans-serif;font-weight:bold;fill:#000000">${(bag.net_volume || 0).toFixed(4)}</text>
+      <text x="710" y="${y+14}" style="font-size:7px;font-family:Arial,sans-serif;font-weight:bold;fill:${statusColor}">${statusText}</text>
+      <line x1="20" y1="${y+ROW_H}" x2="774" y2="${y+ROW_H}" stroke="#e0e0e0" stroke-width="0.3"/>
+    `
+  })
+
+  try {
+    const resp = await fetch('/labels/report-packingbox-a4.svg')
+    let svgText = await resp.text()
+
+    svgText = svgText
+      .replace('{{ReportNo}}',      reportNo)
+      .replace('{{PrintDate}}',     `${dateStr} ${timeStr}`)
+      .replace('{{BatchId}}',       batchId)
+      .replace('{{SkuName}}',       batch?.sku_name || batchInfo.value?.sku_name || '-')
+      .replace('{{Warehouse}}',     wh)
+      .replace('{{Plant}}',         plan?.plant || '-')
+      .replace('{{BoxClosedTime}}', boxClosedTime)
+      .replace('{{TotalBags}}',     String(bags.length))
+      .replace('{{TotalWeight}}',   totalWeight.toFixed(3))
+      .replace('{{TotalIngredients}}', String(ingredients))
+      .replace('{{PackingBoxRows}}', rowsSvg)
+
+    // QR Code
+    const qrData = `BoxReport:${batchId}|WH:${wh}|Date:${dateStr}`
+    const qrDataUrl = await QRCode.toDataURL(qrData, { width: 150, margin: 1 })
+    const qrImageSvg = `<image x="0" y="0" width="150" height="150" href="${qrDataUrl}" />`
+    svgText = svgText.replace('{{BoxQRCode}}', qrImageSvg)
+
+    const pw = Math.round(window.screen.width * 0.8)
+    const ph = Math.round(window.screen.height * 0.8)
+    const left = Math.round((window.screen.width - pw) / 2)
+    const top = Math.round((window.screen.height - ph) / 2)
+    const printWin = window.open('', '_blank', `width=${pw},height=${ph},left=${left},top=${top}`)
+    if (!printWin) {
+      $q.notify({ type: 'warning', message: 'Popup blocked — allow popups and retry', position: 'top' })
+      return
+    }
+    printWin.document.write(`
+      <!DOCTYPE html><html><head>
+      <title>Packing Box Report — ${batchId} [${wh}]</title>
+      <style>
+        @page { size: A4 portrait; margin: 0; }
+        body  { margin: 0; padding: 0; background: #fff; }
+        svg   { display: block; width: 210mm; height: 297mm; }
+      </style>
+      </head><body>
+        ${svgText}
+        <script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); }<\/script>
+      </body></html>
+    `)
+    printWin.document.close()
+  } catch (e) {
+    console.error('Print error:', e)
+    $q.notify({ type: 'negative', message: 'Failed to load report template', position: 'top' })
+  }
+}
+
 // ── Transfer Report Print ─────────────────────────────────────────
 const printTransferReport = async () => {
   const boxes = transferredBoxes.value.filter(b => selectedForTransfer.value.includes(b.id))
@@ -1519,6 +1634,13 @@ onMounted(async () => {
                       <q-item-label class="text-weight-bold text-caption">
                         {{ row.batch_id?.split('-').slice(0, -1).join('-') }} — <span class="text-indigo-8">{{ row.batch_id?.split('-').slice(-1)[0] }}</span>
                       </q-item-label>
+                    </q-item-section>
+
+                    <q-item-section side style="padding-right:0;min-width:28px">
+                      <q-btn flat round dense icon="print" size="xs" color="indigo-4"
+                        @click.stop="printPackingBoxReport(row.batch_id, filterMiddleWh)">
+                        <q-tooltip>Print Box Report (A4)</q-tooltip>
+                      </q-btn>
                     </q-item-section>
 
                     <!-- Per-WH delivery: only shows the section matching the Packing Box dropdown -->
