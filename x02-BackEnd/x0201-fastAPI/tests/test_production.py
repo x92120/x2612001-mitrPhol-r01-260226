@@ -36,7 +36,7 @@ def test_create_prebatch_record(client):
     plan_id = plans[0]["plan_id"]
     
     response = client.post(
-        "/prebatch-records/",
+        "/prebatch-recs/",
         json={
             "batch_record_id": f"{plan_id}-B1-RE-TEST-001-1",
             "plan_id": plan_id,

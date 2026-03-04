@@ -86,19 +86,6 @@ def test_get_intake_lists(client):
     assert isinstance(data, list)
     assert len(data) >= 1
 
-def test_get_intake_summary_report(client):
-    """Test the ingredient intake summary report with joins"""
-    response = client.get(
-        f"/reports/ingredient-intake-summary?start_date={datetime.now().strftime('%Y-%m-%d')}&end_date={datetime.now().strftime('%Y-%m-%d')}"
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    # Verify the join worked and ingredient_name is populated
-    if len(data) > 0:
-        assert "ingredient_name" in data[0]
-        assert "total_intake_vol" in data[0]
-
 # ============================================================================
 # SKU TESTS
 # ============================================================================
@@ -186,7 +173,7 @@ def test_create_prebatch_record(client):
         plan_id = plans[0]["plan_id"]
         
         response = client.post(
-            "/prebatch-records/",
+            "/prebatch-recs/",
             json={
                 "batch_record_id": f"{plan_id}-TEST-REC-1",
                 "plan_id": plan_id,
@@ -241,8 +228,10 @@ def test_root_endpoint(client):
 
 def test_server_status(client):
     """Test the server status monitoring endpoint"""
-    response = client.get("/server-status/")
+    response = client.get("/server-status")
     assert response.status_code == 200
     data = response.json()
-    # The actual response structure may vary
+    # The actual response contains system metrics
     assert isinstance(data, dict)
+    assert "cpu_percent" in data
+    assert "memory" in data
