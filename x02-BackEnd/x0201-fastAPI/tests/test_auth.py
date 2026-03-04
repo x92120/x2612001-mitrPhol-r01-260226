@@ -12,7 +12,7 @@ def test_create_user(client):
             "department": "Production"
         }
     )
-    assert response.status_code == 200
+    assert response.status_code == 201
     data = response.json()
     assert data["username"] == "testuser123"
     assert "password" not in data  # Password should not be returned
@@ -36,11 +36,11 @@ def test_login(client):
         }
     )
     
-    # Then try to login
+    # Then try to login (uses JSON body with username_or_email field)
     response = client.post(
         "/auth/login",
-        data={
-            "username": "logintest",
+        json={
+            "username_or_email": "logintest",
             "password": "testpass123"
         }
     )

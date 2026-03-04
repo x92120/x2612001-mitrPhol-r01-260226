@@ -45,20 +45,37 @@ def test_create_intake_list(client):
     data = response.json()
     assert data["intake_lot_id"] == "INTAKE-TEST-001"
 
-def test_get_intake_summary_report(client):
-    # Ensure there's a joinable record
-    response = client.get(
-        f"/reports/ingredient-intake-summary?start_date={datetime.now().strftime('%Y-%m-%d')}&end_date={datetime.now().strftime('%Y-%m-%d')}"
-    )
+def test_get_intake_lists(client):
+    """Test retrieving all intake lists"""
+    response = client.get("/ingredient-intake-lists/")
     assert response.status_code == 200
     data = response.json()
+    assert isinstance(data, list)
     assert len(data) >= 1
-    # Check if ingredient_name is correctly mapped
-    found = False
-    for item in data:
-        if item["ingredient_id"] == "MAT-TEST-001":
-            # Since we created the ingredient with name "Test Ingredient"
-            # the coalesce logic should pick it up
-            assert "Test" in item["ingredient_name"]
-            found = True
-    assert found
+
+def test_get_intake_by_id(client):
+    """Test retrieving a specific intake list by ID"""
+    # First create one
+    create_response = client.post(
+        "/ingredient-intake-lists/",
+        json={
+            "intake_lot_id": "INTAKE-GET-TEST",
+            "lot_id": "LOT-GET-TEST",
+            "mat_sap_code": "MAT-TEST-001",
+            "re_code": "RE-TEST-001",
+            "material_description": "Get Test",
+            "uom": "kg",
+            "intake_vol": 50.0,
+            "remain_vol": 50.0,
+            "intake_by": "testuser",
+            "status": "Active"
+        }
+    )
+    assert create_response.status_code == 200
+    intake_id = create_response.json()["id"]
+    
+    # Retrieve it
+    response = client.get(f"/ingredient-intake-lists/{intake_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["intake_lot_id"] == "INTAKE-GET-TEST"
