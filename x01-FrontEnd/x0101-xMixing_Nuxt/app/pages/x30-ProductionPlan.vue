@@ -210,12 +210,6 @@ const columns = computed<QTableColumn[]>(() => [
   },
   { name: 'start_date', label: t('prodPlan.startDate'), field: 'start_date', align: 'center', sortable: true, format: (val: any) => formatDate(val) },
   { name: 'finish_date', label: t('prodPlan.finishDate'), field: 'finish_date', align: 'center', sortable: true, format: (val: any) => formatDate(val) },
-  { name: 'flavour_house', label: t('prodPlan.flavourHouse'), field: 'flavour_house', align: 'center' },
-  { name: 'spp', label: t('prodPlan.spp'), field: 'spp', align: 'center' },
-  { name: 'batch_prepare', label: t('prodPlan.batchPrepare'), field: 'batch_prepare', align: 'center' },
-  { name: 'ready_to_product', label: t('prodPlan.readyToProd'), field: 'ready_to_product', align: 'center' },
-  { name: 'production', label: t('prodPlan.production'), field: 'production', align: 'center' },
-  { name: 'done', label: t('prodPlan.done'), field: 'done', align: 'center' },
   { name: 'status', label: t('common.status'), field: 'status', align: 'center', sortable: true },
   { name: 'actions', label: t('common.actions'), field: 'actions', align: 'center' },
 ])
