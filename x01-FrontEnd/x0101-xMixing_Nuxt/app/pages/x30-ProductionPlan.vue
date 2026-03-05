@@ -503,7 +503,7 @@ const printAllBatchLabels = async (plan: any) => {
         .replace(/\{\{Timestamp\}\}/g, new Date().toLocaleString('en-GB'))
         .replace(/\{\{QRCode\}\}/g, `<image href="${qrLarge}" x="18.9" y="132.8" width="134" height="134" />`)
 
-      // Replace fixed width/height in SVG with 100%
+      // Replace fixed width/height in SVG with 100%. --
       const finalSvg = svgContent.replace(/(<svg[\s\S]*?)width="[^"]*"/, '$1width="100%"')
                                  .replace(/(<svg[\s\S]*?)height="[^"]*"/, '$1height="100%"')
 
