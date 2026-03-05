@@ -92,12 +92,32 @@ const ingredientsMaster = ref<any[]>([])
 const ingredientWhFilter = ref('All')
 const showAll = ref(false)
 
+// Column filters
+const columnFilters = ref<Record<string, string>>({})
+
 // Filtered plans based on showAll checkbox
 const filteredPlans = computed(() => {
-  if (showAll.value) {
-    return plans.value
+  let result = plans.value
+  if (!showAll.value) {
+    result = result.filter(plan => plan.status !== 'Cancelled')
   }
-  return plans.value.filter(plan => plan.status !== 'Cancelled')
+  // Apply column filters
+  for (const [colName, filterVal] of Object.entries(columnFilters.value)) {
+    if (!filterVal) continue
+    const needle = filterVal.toLowerCase()
+    result = result.filter((row: any) => {
+      let cellVal = ''
+      if (colName === 'start_date' || colName === 'finish_date') {
+        cellVal = formatDate(row[colName])
+      } else if (colName === 'plant') {
+        cellVal = plantNames.value[row.plant] || row.plant || ''
+      } else {
+        cellVal = String(row[colName] ?? '')
+      }
+      return cellVal.toLowerCase().includes(needle)
+    })
+  }
+  return result
 })
 
 const planSummary = computed(() => {
@@ -183,9 +203,8 @@ const onSkuNameSelect = (val: any) => {
 
 // Columns
 const columns = computed<QTableColumn[]>(() => [
-  { name: 'id', label: t('prodPlan.id'), field: 'id', align: 'left', sortable: true },
-  { name: 'plan_id', label: t('prodPlan.planId'), field: 'plan_id', align: 'left', sortable: true },
   { name: 'sku_id', label: t('prodPlan.skuId'), field: 'sku_id', align: 'left', sortable: true },
+  { name: 'plan_id', label: t('prodPlan.planId'), field: 'plan_id', align: 'left', sortable: true },
   { name: 'plant', label: t('prodPlan.plant'), field: 'plant', align: 'left', sortable: true },
   {
     name: 'total_volume',
@@ -1074,11 +1093,29 @@ onMounted(() => {
                 {{ col.label }}
               </q-th>
             </q-tr>
+            <!-- Filter Row -->
+            <q-tr class="bg-grey-1">
+              <q-td auto-width />
+              <q-td v-for="col in props.cols" :key="'filter-' + col.name" style="padding: 2px 4px;">
+                <q-input
+                  v-if="col.name !== 'actions'"
+                  v-model="columnFilters[col.name]"
+                  dense
+                  outlined
+                  clearable
+                  :placeholder="'🔍'"
+                  size="xs"
+                  style="min-width: 50px; font-size: 0.75rem;"
+                  bg-color="white"
+                  @click.stop
+                />
+              </q-td>
+            </q-tr>
             <!-- Summary Row -->
             <q-tr class="bg-blue-1">
               <q-td auto-width />
               <q-td v-for="col in props.cols" :key="'sum-' + col.name" class="text-weight-bold text-blue-9" style="font-size: 0.85rem;">
-                <template v-if="col.name === 'id'">{{ t('prodPlan.total', 'Total') }} ({{ planSummary.count }})</template>
+                <template v-if="col.name === 'sku_id'">{{ t('prodPlan.total', 'Total') }} ({{ planSummary.count }})</template>
                 <template v-else-if="col.name === 'total_volume'"><div class="text-right">{{ planSummary.total_volume.toLocaleString() }}</div></template>
                 <template v-else-if="col.name === 'total_plan_volume'"><div class="text-right">{{ planSummary.total_plan_volume.toLocaleString() }}</div></template>
                 <template v-else-if="col.name === 'num_batches'"><div class="text-center">{{ planSummary.num_batches }}</div></template>
