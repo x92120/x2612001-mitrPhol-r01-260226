@@ -100,6 +100,16 @@ const filteredPlans = computed(() => {
   return plans.value.filter(plan => plan.status !== 'Cancelled')
 })
 
+const planSummary = computed(() => {
+  const rows = filteredPlans.value
+  return {
+    count: rows.length,
+    total_volume: rows.reduce((sum: number, p: any) => sum + (p.total_volume || 0), 0),
+    total_plan_volume: rows.reduce((sum: number, p: any) => sum + (p.total_plan_volume || 0), 0),
+    num_batches: rows.reduce((sum: number, p: any) => sum + (p.num_batches || 0), 0),
+  }
+})
+
 // Fetch plants from API
 const fetchPlants = async () => {
   try {
@@ -189,6 +199,13 @@ const columns = computed<QTableColumn[]>(() => [
     label: t('prodPlan.totalPlanVol'),
     field: 'total_plan_volume',
     align: 'right',
+    sortable: true,
+  },
+  {
+    name: 'num_batches',
+    label: t('prodPlan.numBatches'),
+    field: 'num_batches',
+    align: 'center',
     sortable: true,
   },
   { name: 'start_date', label: t('prodPlan.startDate'), field: 'start_date', align: 'center', sortable: true, format: (val: any) => formatDate(val) },
@@ -1062,6 +1079,16 @@ onMounted(() => {
               >
                 {{ col.label }}
               </q-th>
+            </q-tr>
+            <!-- Summary Row -->
+            <q-tr class="bg-blue-1">
+              <q-td auto-width />
+              <q-td v-for="col in props.cols" :key="'sum-' + col.name" class="text-weight-bold text-blue-9" style="font-size: 0.85rem;">
+                <template v-if="col.name === 'id'">{{ t('prodPlan.total', 'Total') }} ({{ planSummary.count }})</template>
+                <template v-else-if="col.name === 'total_volume'"><div class="text-right">{{ planSummary.total_volume.toLocaleString() }}</div></template>
+                <template v-else-if="col.name === 'total_plan_volume'"><div class="text-right">{{ planSummary.total_plan_volume.toLocaleString() }}</div></template>
+                <template v-else-if="col.name === 'num_batches'"><div class="text-center">{{ planSummary.num_batches }}</div></template>
+              </q-td>
             </q-tr>
           </template>
 
