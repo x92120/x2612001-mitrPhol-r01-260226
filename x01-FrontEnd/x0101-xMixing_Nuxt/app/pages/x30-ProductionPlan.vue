@@ -227,7 +227,7 @@ const fetchSkus = async () => {
 
 const fetchPlans = async () => {
   try {
-    plans.value = await $fetch<any[]>(`${appConfig.apiBaseUrl}/production-plans/?skip=0&limit=100`)
+    plans.value = await $fetch<any[]>(`${appConfig.apiBaseUrl}/production-plans/?skip=0&limit=1000`)
   } catch (error) {
     console.error('Error fetching plans:', error)
   }

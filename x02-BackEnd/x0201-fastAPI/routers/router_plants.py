@@ -16,7 +16,7 @@ router = APIRouter(prefix="/plants", tags=["Plants"])
 
 
 @router.get("/", response_model=List[schemas.Plant])
-def get_plants(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_plants(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
     """Get all plants with pagination."""
     skip = max(0, skip)
     limit = min(max(1, limit), 1000)

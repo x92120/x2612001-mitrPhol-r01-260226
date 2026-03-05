@@ -5,10 +5,10 @@ After=network.target docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-User=x92120
-WorkingDirectory=/home/x92120/xApp/x01-mitrPhol/x01-localApp
-ExecStart=/bin/bash /home/x92120/xApp/x01-mitrPhol/x01-localApp/start-app.sh
-ExecStop=/bin/bash /home/x92120/xApp/x01-mitrPhol/x01-localApp/stop-app.sh
+User=x-root
+WorkingDirectory=/home/x-root/xApp/x2612001-mitrPhol-r01
+ExecStart=/bin/bash /home/x-root/xApp/x2612001-mitrPhol-r01/start-app.sh
+ExecStop=/bin/bash /home/x-root/xApp/x2612001-mitrPhol-r01/stop-app.sh
 
 [Install]
 WantedBy=multi-user.target

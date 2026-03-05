@@ -29,7 +29,7 @@ router = APIRouter(tags=["SKUs"])
 # =============================================================================
 
 @router.get("/skus/", response_model=List[schemas.Sku])
-def get_skus(skip: int = 0, limit: int = 100, sku_id: str = None, db: Session = Depends(get_db)):
+def get_skus(skip: int = 0, limit: int = 1000, sku_id: str = None, db: Session = Depends(get_db)):
     """Get all SKUs with pagination and optional filter."""
     skip = max(0, skip)
     limit = min(max(1, limit), 1000)
@@ -108,7 +108,7 @@ def delete_sku(sku_db_id: int, db: Session = Depends(get_db)):
 # =============================================================================
 
 @router.get("/sku-steps/", response_model=List[schemas.SkuStep])
-def get_sku_steps(sku_id: str = None, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_sku_steps(sku_id: str = None, skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
     """Get all SKU steps, optionally filtered by sku_id."""
     query = db.query(models.SkuStep)
     if sku_id:
@@ -178,7 +178,7 @@ def delete_sku_step(step_id: int, db: Session = Depends(get_db)):
 # =============================================================================
 
 @router.get("/sku-actions/", response_model=List[schemas.SkuAction])
-def get_sku_actions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_sku_actions(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
     return crud.get_sku_actions(db, skip=skip, limit=limit)
 
 
@@ -207,7 +207,7 @@ def delete_sku_action(action_code: str, db: Session = Depends(get_db)):
 
 
 @router.get("/sku-destinations/", response_model=List[schemas.SkuDestination])
-def get_sku_destinations(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_sku_destinations(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
     return crud.get_sku_destinations(db, skip=skip, limit=limit)
 
 
@@ -236,7 +236,7 @@ def delete_sku_destination(dest_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/sku-phases/", response_model=List[schemas.SkuPhase])
-def get_sku_phases(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_sku_phases(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
     return crud.get_sku_phases(db, skip=skip, limit=limit)
 
 
@@ -267,7 +267,7 @@ def delete_sku_phase(phase_id: str, db: Session = Depends(get_db)):
 # --- SKU Groups ---
 
 @router.get("/sku-groups/", response_model=List[schemas.SkuGroup])
-def get_sku_groups(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_sku_groups(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
     return crud.get_sku_groups(db, skip=skip, limit=limit)
 
 @router.post("/sku-groups/", response_model=schemas.SkuGroup)

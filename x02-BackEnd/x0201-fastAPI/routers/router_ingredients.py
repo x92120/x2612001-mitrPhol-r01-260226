@@ -191,7 +191,7 @@ def delete_container_size(size_id: int, db: Session = Depends(get_db)):
 # =============================================================================
 
 @router.get("/ingredient-intake-lists/", response_model=List[schemas.IngredientIntakeList])
-def get_ingredient_intake_lists(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_ingredient_intake_lists(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
     """Get all ingredient intake list records with pagination."""
     limit = min(max(1, limit), 1000)
     return crud.get_ingredient_intake_lists(db, skip=skip, limit=limit)

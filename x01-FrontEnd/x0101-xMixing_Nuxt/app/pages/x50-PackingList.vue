@@ -416,7 +416,7 @@ const scanDialogBags = computed(() => {
 const fetchPlans = async () => {
   loading.value = true
   try {
-    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/production-plans/?skip=0&limit=100`, {
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/production-plans/?skip=0&limit=1000`, {
       headers: getAuthHeader() as Record<string, string>
     })
     plans.value = data || []

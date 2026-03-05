@@ -7,7 +7,7 @@ import models
 import schemas
 
 # Production Plan CRUD
-def get_production_plans(db: Session, skip: int = 0, limit: int = 100) -> List[models.ProductionPlan]:
+def get_production_plans(db: Session, skip: int = 0, limit: int = 1000) -> List[models.ProductionPlan]:
     return db.query(models.ProductionPlan).options(
         joinedload(models.ProductionPlan.batches).joinedload(models.ProductionBatch.reqs)
     ).order_by(models.ProductionPlan.created_at.desc()).offset(skip).limit(limit).all()
@@ -173,7 +173,7 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
         db.rollback()
         raise RuntimeError(f"Database error: {str(e)}")
 
-def get_production_batches(db: Session, skip: int = 0, limit: int = 100) -> List[models.ProductionBatch]:
+def get_production_batches(db: Session, skip: int = 0, limit: int = 1000) -> List[models.ProductionBatch]:
    return db.query(models.ProductionBatch).order_by(models.ProductionBatch.created_at.desc()).offset(skip).limit(limit).all()
 
 def update_production_batch_status(db: Session, batch_id: int, status: str) -> Optional[models.ProductionBatch]:

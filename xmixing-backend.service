@@ -1,0 +1,14 @@
+[Unit]
+Description=xMixing Backend API
+After=network.target
+
+[Service]
+User=x-root
+WorkingDirectory=/home/x-root/xApp/x2612001-mitrPhol-r01/x02-BackEnd/x0201-fastAPI
+Environment="PORT=8001"
+ExecStart=/home/x-root/xApp/x2612001-mitrPhol-r01/x02-BackEnd/.venv/bin/python3 main.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

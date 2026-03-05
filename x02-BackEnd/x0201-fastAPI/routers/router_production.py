@@ -31,7 +31,7 @@ router = APIRouter(tags=["Production"])
 # =============================================================================
 
 @router.get("/production-plans/", response_model=List[schemas.ProductionPlan])
-def get_production_plans(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_production_plans(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
     """Get all production plans with their batches."""
     return crud.get_production_plans(db, skip=skip, limit=limit)
 
@@ -75,7 +75,7 @@ def cancel_production_plan(plan_id: int, cancel_data: schemas.ProductionPlanCanc
 # =============================================================================
 
 @router.get("/production-batches/", response_model=List[schemas.ProductionBatch])
-def get_production_batches(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_production_batches(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
     """Get all production batches."""
     return crud.get_production_batches(db, skip=skip, limit=limit)
 
@@ -188,7 +188,7 @@ def get_prebatch_records_summary(batch_id: str, db: Session = Depends(get_db)):
     return list(summary.values())
 
 @router.get("/prebatch-recs/", response_model=List[schemas.PreBatchRec])
-def get_prebatch_recs(skip: int = 0, limit: int = 100, wh: Optional[str] = None, db: Session = Depends(get_db)):
+def get_prebatch_recs(skip: int = 0, limit: int = 1000, wh: Optional[str] = None, db: Session = Depends(get_db)):
     """Get all prebatch records."""
     return crud.get_prebatch_recs(db, skip=skip, limit=limit, wh=wh)
 
