@@ -31,19 +31,19 @@ SAMPLING_INTERVAL = 0.5  # seconds between each scale read
 #   If SCALE_PORT_MAP is empty, auto-discovery mode is used (legacy).
 SCALE_PORT_MAP = {
     "scale-01": {
-        "port": os.environ.get("SCALE_01_PORT", "/dev/ttyUSB0"),
+        "port": os.environ.get("SCALE_01_PORT", "/dev/ttyUSB1"),
         "label": "Scale 1 (10 Kg ± 0.01)",
-        "protocol": "protocol_A",    # Prefix 'A' format
+        "protocol": "protocol_A",
     },
     "scale-02": {
-        "port": os.environ.get("SCALE_02_PORT", "/dev/ttyUSB1"),
+        "port": os.environ.get("SCALE_02_PORT", "/dev/ttyUSB2"),
         "label": "Scale 2 (30 Kg ± 0.02)",
-        "protocol": "protocol_GS",   # ST,GS format
+        "protocol": "protocol_GS",
     },
     "scale-03": {
-        "port": os.environ.get("SCALE_03_PORT", "/dev/ttyUSB2"),
+        "port": os.environ.get("SCALE_03_PORT", "/dev/ttyUSB3"),
         "label": "Scale 3 (150 Kg ± 0.5)",
-        "protocol": "protocol_A",    # Prefix 'A' or 'C' format
+        "protocol": "protocol_A",
     },
 }
 
@@ -113,13 +113,21 @@ def parse_protocol_GS(payload: str) -> dict | None:
     Protocol GS: "ST,GS   533.6,g" or "US,GS   12.345,kg"
     """
     try:
-        match = re.search(r'(ST|US),GS\s*(-?[\d.]+)\s*,(g|kg)', payload)
+        # Regex to capture status, type, sign, weight value, and unit
+        # Handle cases like "ST,NT-  102.6,g" or "ST,GS, 123.4,kg"
+        # Permissive about commas and spaces after GS/NT
+        match = re.search(r'(ST|US|OL),(GS|NT)[\s,]*(-?)\s*([\d.]+)\s*,(g|kg)', payload)
         if match:
             status_part = match.group(1)
-            val_str = match.group(2)
-            unit_part = match.group(3)
+            sign_part = match.group(3) or ""
+            val_str = match.group(4)
+            unit_part = match.group(5)
+            
+            # Combine sign and value, then convert to float
+            weight_val = float(sign_part + val_str)
+            
             return {
-                "weight": float(val_str),
+                "weight": weight_val,
                 "unit": unit_part.lower(),
                 "stable": (status_part == 'ST'),
             }
@@ -172,12 +180,17 @@ def scale_reader_thread(scale_id: str, config: dict, mqtt_client):
 
                 while True:
                     try:
-                        # Send ENQ to trigger scale response
-                        ser.write(b'\x05')
+                        # Some scales need ENQ, others stream. Send ENQ just in case,
+                        # but don't fail if we don't get exactly what we want.
+                        if protocol != "protocol_GS":
+                            ser.write(b'\x05')
 
-                        # Read until ETX (0x03)
+                        # Read strategy: try ETX first, if timeout try read_line
                         line = ser.read_until(b'\x03')
-
+                        if not line or len(line) < 5:
+                            # Fallback: maybe it uses CRLF?
+                            line = ser.readline()
+                        
                         if line:
                             # Clean bytes: remove STX (0x02) and ETX (0x03)
                             clean_bytes = line
