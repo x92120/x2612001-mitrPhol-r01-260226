@@ -525,7 +525,9 @@ onMounted(() => {
                                             <tbody>
                                                 <template v-for="bd in (ingredientBatchDetail[ing.re_code] || [])" :key="bd.batch_id">
                                                     <tr 
+                                                        class="cursor-pointer"
                                                         :class="bd.status === 2 ? 'bg-green-1 text-grey-6' : ''"
+                                                        @click="onBatchIngredientClick({ batch_id: bd.batch_id }, { re_code: ing.re_code, id: bd.req_id, required_volume: bd.required_volume, status: bd.status }, selectedPlanDetails)"
                                                     >
                                                         <td style="padding: 0; width: 20px;">
                                                             <q-btn flat round dense size="xs"
