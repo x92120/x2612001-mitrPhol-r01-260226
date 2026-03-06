@@ -192,6 +192,7 @@ const production = usePreBatchProduction({
   fetchPreBatchRecords,
   updatePrebatchItemStatus,
   updateRequireVolume,
+  ingredientBatchDetail,
 })
 const {
   selectedBatchIndex, isLoading, productionPlans, planFilter, productionPlanOptions,

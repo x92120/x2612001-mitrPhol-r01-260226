@@ -207,6 +207,44 @@ export function usePreBatchIngredients(deps: IngredientDeps) {
         if (ing.isDisabled) return
         deps.selectedReCode.value = ing.re_code
         deps.selectedRequirementId.value = ing.req_id
+
+        // Auto-expand ingredient to show batch breakdown
+        if (!expandedIngredients.value.includes(ing.re_code)) {
+            expandedIngredients.value.push(ing.re_code)
+        }
+
+        // Fetch batch detail for this ingredient
+        await fetchIngredientBatchDetail(ing.re_code)
+
+        // Auto-select first pending batch (status !== 2 = not done)
+        const batches = ingredientBatchDetail.value[ing.re_code] || []
+        const firstPending = batches.find((bd: any) => bd.status !== 2)
+        if (firstPending) {
+            // Set weighing data directly (no view change)
+            deps.isBatchSelected.value = true
+            deps.requireVolume.value = firstPending.required_volume || 0
+            deps.selectedRequirementId.value = firstPending.req_id || ing.req_id
+
+            if (ing.std_package_size && ing.std_package_size > 0) {
+                deps.packageSize.value = ing.std_package_size
+            }
+
+            $q.notify({
+                type: 'info',
+                message: `Auto-selected batch: ${firstPending.batch_id}`,
+                position: 'top',
+                timeout: 1500
+            })
+        } else if (batches.length > 0) {
+            $q.notify({
+                type: 'positive',
+                message: `All batches completed for ${ing.re_code}!`,
+                position: 'top',
+                timeout: 2000
+            })
+        }
+
+        // Update status if first time
         if (ing.status === 0 && deps.selectedBatch.value) {
             await updatePrebatchItemStatus(deps.selectedBatch.value.batch_id, ing.re_code, 1)
         }

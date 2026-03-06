@@ -23,6 +23,7 @@ export interface ProductionDeps {
     fetchPreBatchRecords: () => Promise<void>
     updatePrebatchItemStatus: (batchId: string, reCode: string, status: number) => Promise<void>
     updateRequireVolume: () => void
+    ingredientBatchDetail?: any
 }
 
 export function usePreBatchProduction(deps: ProductionDeps) {
@@ -225,6 +226,32 @@ export function usePreBatchProduction(deps: ProductionDeps) {
     }
 
     const advanceToNextBatch = async (currentBatchId: string, reCode: string) => {
+        // Try using ingredientBatchDetail first (ingredient-driven workflow)
+        const batchDetails = deps.ingredientBatchDetail?.value?.[reCode] || []
+        if (batchDetails.length > 0) {
+            const currentIdx = batchDetails.findIndex((bd: any) => bd.batch_id === currentBatchId)
+            for (let i = currentIdx + 1; i < batchDetails.length; i++) {
+                const nextBd = batchDetails[i]
+                if (nextBd.status !== 2) {
+                    // Set weighing data directly
+                    deps.selectedReCode.value = reCode
+                    deps.selectedRequirementId.value = nextBd.req_id
+                    deps.isBatchSelected.value = true
+                    deps.requireVolume.value = nextBd.required_volume || 0
+                    const ingInfo = deps.ingredients.value.find((i: any) => i.re_code === reCode)
+                    if (ingInfo?.std_package_size && ingInfo.std_package_size > 0) {
+                        deps.packageSize.value = ingInfo.std_package_size
+                    }
+                    await deps.fetchPreBatchRecords()
+                    $q.notify({ type: 'info', message: `Next batch: ${nextBd.batch_id}`, position: 'top', timeout: 2000 })
+                    return
+                }
+            }
+            $q.notify({ type: 'positive', message: `All batches completed for ${reCode}!`, position: 'top', timeout: 3000 })
+            return
+        }
+
+        // Fallback: use plan.batches
         const plan = productionPlans.value.find(p => p.plan_id === selectedProductionPlan.value)
         if (!plan || !plan.batches) return
         const currentIdx = plan.batches.findIndex((b: any) => b.batch_id === currentBatchId)
@@ -238,7 +265,7 @@ export function usePreBatchProduction(deps: ProductionDeps) {
             const nextReq = batchIngredients.value[nextBatch.batch_id]?.find((r: any) => r.re_code === reCode && r.status !== 2)
             if (nextReq) {
                 await onBatchIngredientClick(nextBatch, nextReq, plan)
-                $q.notify({ type: 'info', message: `Advanced to ${nextBatch.batch_id} for ${reCode}`, position: 'top', timeout: 2000 })
+                $q.notify({ type: 'info', message: `Next batch: ${nextBatch.batch_id}`, position: 'top', timeout: 2000 })
                 return
             }
         }
