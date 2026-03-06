@@ -64,14 +64,21 @@ export function usePreBatchScales(deps: ScaleDeps) {
 
     const connectedScales = ref<Record<number, boolean>>({})
     const watchdogs: Record<string, any> = {}
+    // Error counter per scale — only show error after ERROR_THRESHOLD consecutive errors
+    const ERROR_THRESHOLD = 10
+    const errorCounters: Record<string, number> = {}
 
     const resetWatchdog = (scaleId: string) => {
         if (watchdogs[scaleId]) clearTimeout(watchdogs[scaleId])
         watchdogs[scaleId] = setTimeout(() => {
             const scale = scales.value.find(s => s.targetScaleId === scaleId)
             if (scale) {
-                scale.isError = true
-                scale.displayValue = 'error!!!'
+                // Watchdog timeout = connection lost, increment error counter
+                errorCounters[scaleId] = (errorCounters[scaleId] || 0) + 1
+                if (errorCounters[scaleId] >= ERROR_THRESHOLD) {
+                    scale.isError = true
+                    scale.displayValue = 'error!!!'
+                }
             }
         }, 5000)
     }
@@ -162,14 +169,21 @@ export function usePreBatchScales(deps: ScaleDeps) {
                 }
 
                 scale.value = weightKg
-                // "Auto" precision: use the value as is from the scale payload
-                // If the bridge sends "error!!!", show it
-                if (data.error_msg === 'error!!!') {
-                    scale.displayValue = 'error!!!'
-                    scale.isError = true
+
+                // Error threshold: count consecutive errors, only show error after 10+
+                const hasError = data.error_msg === 'error!!!' || !!data.error_msg
+                if (hasError) {
+                    errorCounters[scaleId] = (errorCounters[scaleId] || 0) + 1
+                    if (errorCounters[scaleId] >= ERROR_THRESHOLD) {
+                        scale.displayValue = 'error!!!'
+                        scale.isError = true
+                    }
+                    // Below threshold: keep last good value, don't change isError
                 } else {
+                    // Successful read — reset error counter and clear error state
+                    errorCounters[scaleId] = 0
                     scale.displayValue = String(rawWeight)
-                    scale.isError = !!data.error_msg
+                    scale.isError = false
                 }
 
                 scale.unit = rawUnit
