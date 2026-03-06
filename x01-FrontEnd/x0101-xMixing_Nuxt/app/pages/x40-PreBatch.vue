@@ -632,10 +632,11 @@ onMounted(() => {
                     <div 
                       class="status-indicator shadow-2"
                       :class="scale.connected ? 'bg-green-14' : 'bg-red-14'"
-                      @click="toggleScaleConnection(scale.id)"
-                    ></div>
+                    >
+                      <q-tooltip>{{ scale.connected ? 'Connected' : 'Disconnected' }}</q-tooltip>
+                    </div>
                   </div>
-                  <!-- Digital Display -->
+                  <!-- Digital Display (read-only monitor) -->
                     <div
                       class="relative-position text-right q-pa-xs text-h4 text-weight-bold rounded-borders flex items-center justify-end"
                       :class="getDisplayClass(scale)"
@@ -647,19 +648,10 @@ onMounted(() => {
                           :class="scale.isStable ? 'bg-green-14' : 'bg-orange-14 anim-vibrate'"
                         ></div>
                       </div>
-                      <q-input
-                        :model-value="scale.displayValue"
-                        @update:model-value="onScaleInput(scale.id, String($event))"
-                        type="number"
-                        dense
-                        borderless
-                        input-class="text-right scale-value"
-                        style="width: 100%;"
-                      >
-                        <template v-slot:append>
-                          <div class="text-caption text-weight-bolder q-ml-xs" style="font-size: 0.8rem; margin-top: 15px;">{{ scale.unit || 'kg' }}</div>
-                        </template>
-                      </q-input>
+                      <div class="scale-value text-right" style="width: 100%; padding-right: 4px;">
+                        {{ scale.displayValue }}
+                      </div>
+                      <div class="text-caption text-weight-bolder q-ml-xs" style="font-size: 0.8rem; margin-top: 15px;">{{ scale.unit || 'kg' }}</div>
                     </div>
                 </q-card>
               </div>

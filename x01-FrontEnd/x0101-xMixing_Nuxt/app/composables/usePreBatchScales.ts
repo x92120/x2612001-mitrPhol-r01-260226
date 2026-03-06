@@ -213,6 +213,11 @@ export function usePreBatchScales(deps: ScaleDeps) {
     }
 
     onMounted(() => {
+        // Auto-connect all scales — monitor-only, no manual toggling needed
+        for (const scale of scales.value) {
+            scale.connected = true
+            connectedScales.value[scale.id] = true
+        }
         if (mqttClient.value) {
             setupMqttListener(mqttClient.value)
         }
