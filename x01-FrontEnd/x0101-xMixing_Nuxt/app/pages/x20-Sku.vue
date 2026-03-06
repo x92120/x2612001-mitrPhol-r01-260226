@@ -831,6 +831,74 @@ const reStepPhases = async () => {
   })
 }
 
+// Edit phase number (rename a phase)
+const editPhaseNumber = (skuId: string, oldPhaseNumber: string) => {
+  $q.dialog({
+    title: 'Edit Phase Number',
+    message: `Rename phase "${oldPhaseNumber}" to:`,
+    prompt: {
+      model: oldPhaseNumber,
+      type: 'text',
+      outlined: true,
+      dense: true,
+    },
+    cancel: true,
+    persistent: true
+  }).onOk(async (newPhaseNumber: string) => {
+    newPhaseNumber = newPhaseNumber.trim().toLowerCase()
+    if (!newPhaseNumber || newPhaseNumber === oldPhaseNumber) return
+
+    // Check for duplicates
+    const allSteps = skuStepsMap.value[skuId] || []
+    const existsAlready = allSteps.some(s => s.phase_number === newPhaseNumber && s.phase_number !== oldPhaseNumber)
+    if (existsAlready) {
+      $q.notify({ type: 'warning', message: `Phase "${newPhaseNumber}" already exists. Choose a different name.` })
+      return
+    }
+
+    const stepsToUpdate = allSteps.filter(s => s.phase_number === oldPhaseNumber)
+    if (stepsToUpdate.length === 0) return
+
+    try {
+      const validFields = [
+        'sku_id', 'phase_number', 'phase_id', 'master_step', 'sub_step', 'action',
+        're_code', 'action_code', 'setup_step', 'destination', 'require', 'uom',
+        'low_tol', 'high_tol', 'step_condition', 'agitator_rpm', 'high_shear_rpm',
+        'temperature', 'temp_low', 'temp_high', 'step_time', 'step_timer_control',
+        'qc_temp', 'record_steam_pressure', 'record_ctw', 'operation_brix_record',
+        'operation_ph_record', 'brix_sp', 'ph_sp', 'action_description'
+      ]
+
+      let updated = 0
+      for (const step of stepsToUpdate) {
+        if (!step.step_id) continue
+        const payload: any = {}
+        for (const f of validFields) {
+          if ((step as any)[f] !== undefined) payload[f] = (step as any)[f]
+        }
+        payload.phase_number = newPhaseNumber
+
+        const res = await fetch(`${appConfig.apiBaseUrl}/sku-steps/${step.step_id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        if (!res.ok) {
+          const errText = await res.text()
+          throw new Error(`Step ${step.step_id}: ${res.status} ${errText}`)
+        }
+        updated++
+      }
+      $q.notify({ type: 'positive', message: `Renamed phase "${oldPhaseNumber}" → "${newPhaseNumber}" (${updated} steps updated)` })
+      delete skuStepsMap.value[skuId]
+      await fetchSkuSteps(skuId)
+    } catch (e: any) {
+      console.error('Edit phase error:', e)
+      $q.notify({ type: 'negative', message: 'Failed to rename phase: ' + (e.message || e) })
+    }
+  })
+}
+
 const copyStep = (step: SkuStep) => {
   const steps = skuStepsMap.value[step.sku_id] || []
   const maxSub = steps.filter(s => s.phase_number === step.phase_number).reduce((max, s) => Math.max(max, s.sub_step), 0)
@@ -1740,6 +1808,17 @@ const printSkuReport = async (sku: SkuMaster) => {
               
               <!-- Action Buttons -->
               <div class="row q-gutter-xs">
+                <q-btn 
+                  flat
+                  round
+                  dense
+                  icon="edit" 
+                  size="sm" 
+                  color="orange-8" 
+                  @click.stop="editPhaseNumber(selectedSkuId!, group.phaseNum)"
+                >
+                  <q-tooltip>Edit Phase Number</q-tooltip>
+                </q-btn>
                 <q-btn 
                   flat
                   round

@@ -699,6 +699,7 @@ onMounted(() => {
   fetchAllIngredients() // Fetch list of ingredients for the autocomplete dropdown
   fetchIntakeFromOptions()
   fetchIntakeToOptions()
+  fetchAdjustments()
 
   // Auto-focus scanner input on mount
   focusScannerInput()
@@ -1130,6 +1131,309 @@ const onFileSelected = async (event: Event) => {
 
 }
 // Closing brace added to fix unmatched opening in onFileSelected
+
+// ═══════════════════════════════════════════════════════════════════
+// STOCK ADJUSTMENT
+// ═══════════════════════════════════════════════════════════════════
+const showAdjustDialog = ref(false)
+
+// Report date range
+const adjReportFrom = ref('')
+const adjReportTo = ref('')
+
+// Open stock adjustment dialog from intake list row
+function openStockAdjustDialog(row: any) {
+  adjSelectedReCode.value = row.re_code
+  adjSelectedLotId.value = row.intake_lot_id
+  adjNewRemainVol.value = null
+  adjReason.value = ''
+  adjRemark.value = ''
+  adjBy.value = user.value?.username || 'operator'
+  fetchAdjustments()
+  showAdjustDialog.value = true
+}
+
+// Print stock adjustment report filtered by date range
+function printAdjustmentReport() {
+  let reportRows = adjustments.value
+  if (adjReportFrom.value) {
+    reportRows = reportRows.filter((r: any) => {
+      const d = new Date(r.adjusted_at)
+      return d >= new Date(adjReportFrom.value + 'T00:00:00')
+    })
+  }
+  if (adjReportTo.value) {
+    reportRows = reportRows.filter((r: any) => {
+      const d = new Date(r.adjusted_at)
+      return d <= new Date(adjReportTo.value + 'T23:59:59')
+    })
+  }
+
+  const fromLabel = adjReportFrom.value || 'Beginning'
+  const toLabel = adjReportTo.value || 'Now'
+
+  const htmlContent = `
+    <html><head><title>Stock Adjustment Report</title>
+    <style>
+      body { font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; color: #333; }
+      h1 { color: #00695c; font-size: 22px; margin-bottom: 4px; }
+      .subtitle { color: #666; font-size: 14px; margin-bottom: 16px; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      th { background: #00695c; color: white; padding: 8px 6px; text-align: left; }
+      td { padding: 6px; border-bottom: 1px solid #ddd; }
+      tr:nth-child(even) { background: #f5f5f5; }
+      .increase { color: #2e7d32; font-weight: bold; }
+      .decrease { color: #c62828; font-weight: bold; }
+      .footer { margin-top: 16px; font-size: 11px; color: #999; text-align: right; }
+      @media print { body { margin: 10px; } }
+    </style></head><body>
+    <h1>📋 Stock Adjustment Report</h1>
+    <div class="subtitle">Period: ${fromLabel} — ${toLabel} &nbsp;|&nbsp; Total Records: ${reportRows.length}</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Date/Time</th><th>Lot ID</th><th>SAP Code</th><th>RE Code</th>
+          <th>Material</th><th>Type</th><th>Qty</th><th>Before</th><th>After</th>
+          <th>Reason</th><th>Remark</th><th>By</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${reportRows.map((r: any) => `
+          <tr>
+            <td>${formatDateTime(r.adjusted_at)}</td>
+            <td>${r.intake_lot_id || ''}</td>
+            <td>${r.mat_sap_code || ''}</td>
+            <td>${r.re_code || ''}</td>
+            <td>${r.material_description || ''}</td>
+            <td class="${r.adjust_type === 'increase' ? 'increase' : 'decrease'}">
+              ${r.adjust_type === 'increase' ? '↑ Increase' : '↓ Decrease'}
+            </td>
+            <td class="${r.adjust_type === 'increase' ? 'increase' : 'decrease'}">
+              ${r.adjust_type === 'increase' ? '+' : '−'}${r.adjust_qty?.toFixed(3) || '0.000'}
+            </td>
+            <td>${r.prev_remain_vol?.toFixed(3) || ''}</td>
+            <td>${r.new_remain_vol?.toFixed(3) || ''}</td>
+            <td>${r.adjust_reason || ''}</td>
+            <td>${r.remark || ''}</td>
+            <td>${r.adjusted_by || ''}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    <div class="footer">Printed: ${new Date().toLocaleString('en-GB', { timeZone: 'Asia/Bangkok' })}</div>
+    </body></html>
+  `
+
+  const printWin = window.open('', '_blank')
+  if (printWin) {
+    printWin.document.write(htmlContent)
+    printWin.document.close()
+    printWin.focus()
+    setTimeout(() => printWin.print(), 500)
+  }
+}
+
+// Step 1: RE-Code selection (from active intake records only)
+const activeReCodes = computed(() => {
+  const codes = new Map<string, { re_code: string, material_description: string, mat_sap_code: string }>()
+  rows.value
+    .filter((r: any) => r.status === 'Active' && r.re_code)
+    .forEach((r: any) => {
+      if (!codes.has(r.re_code)) {
+        codes.set(r.re_code, {
+          re_code: r.re_code,
+          material_description: r.material_description || '',
+          mat_sap_code: r.mat_sap_code || '',
+        })
+      }
+    })
+  return Array.from(codes.values()).sort((a, b) => a.re_code.localeCompare(b.re_code))
+})
+
+const adjSelectedReCode = ref('')
+
+// Step 2: Lot IDs filtered by selected RE-Code
+const adjLotsForReCode = computed(() => {
+  if (!adjSelectedReCode.value) return []
+  return rows.value
+    .filter((r: any) => r.status === 'Active' && r.re_code === adjSelectedReCode.value)
+    .sort((a: any, b: any) => b.id - a.id)
+})
+
+const adjSelectedLotId = ref('')
+const adjSelectedLot = computed(() => {
+  if (!adjSelectedLotId.value) return null
+  return rows.value.find((r: any) => r.intake_lot_id === adjSelectedLotId.value) || null
+})
+
+// Adjustment form — user enters target "New Adjust Value" directly
+const adjNewRemainVol = ref<number | null>(null)
+const adjReason = ref('')
+const adjRemark = ref('')
+const adjBy = ref(user.value?.username || 'operator')
+const adjSubmitting = ref(false)
+
+const adjReasonOptions = [
+  'Physical Count',
+  'Spillage / Damage',
+  'Expired Write-off',
+  'Quality Rejection',
+  'Receiving Correction',
+  'Transfer In',
+  'Transfer Out',
+  'Other',
+]
+
+// Computed summary values
+const adjTotalIntake = computed(() => adjSelectedLot.value?.intake_vol ?? 0)
+const adjRemaining = computed(() => adjSelectedLot.value?.remain_vol ?? 0)
+
+// Auto-compute type and qty from new value vs current remaining
+const adjComputedType = computed(() => {
+  if (adjNewRemainVol.value === null || !adjSelectedLot.value) return null
+  return adjNewRemainVol.value >= adjRemaining.value ? 'increase' : 'decrease'
+})
+
+const adjComputedQty = computed(() => {
+  if (adjNewRemainVol.value === null || !adjSelectedLot.value) return 0
+  return Math.abs(adjNewRemainVol.value - adjRemaining.value)
+})
+
+// Stock Overview: all active lots for the selected RE-Code
+const stockOverviewLots = computed(() => {
+  if (!adjSelectedReCode.value) return []
+  return rows.value
+    .filter((r: any) => r.status === 'Active' && r.re_code === adjSelectedReCode.value)
+    .sort((a: any, b: any) => b.id - a.id)
+})
+
+const stockOverviewSummary = computed(() => {
+  const lots = stockOverviewLots.value
+  return {
+    totalLots: lots.length,
+    totalIntake: lots.reduce((sum: number, r: any) => sum + (r.intake_vol || 0), 0),
+    totalRemaining: lots.reduce((sum: number, r: any) => sum + (r.remain_vol || 0), 0),
+  }
+})
+
+// Adjustment history
+const adjustments = ref<any[]>([])
+const adjColumnFilters = ref<Record<string, string>>({})
+
+const adjColumns = computed<QTableColumn[]>(() => [
+  { name: 'adjusted_at', label: 'Date/Time', field: 'adjusted_at', align: 'center' as const, sortable: true, format: (val: any) => formatDateTime(val) },
+  { name: 'intake_lot_id', label: 'Lot ID', field: 'intake_lot_id', align: 'left' as const, sortable: true },
+  { name: 'mat_sap_code', label: 'SAP Code', field: 'mat_sap_code', align: 'left' as const, sortable: true },
+  { name: 're_code', label: 'RE Code', field: 're_code', align: 'left' as const, sortable: true },
+  { name: 'material_description', label: 'Material', field: 'material_description', align: 'left' as const, sortable: true },
+  { name: 'adjust_type', label: 'Type', field: 'adjust_type', align: 'center' as const, sortable: true },
+  { name: 'adjust_qty', label: 'Qty', field: 'adjust_qty', align: 'right' as const, sortable: true },
+  { name: 'prev_remain_vol', label: 'Before', field: 'prev_remain_vol', align: 'right' as const, sortable: true },
+  { name: 'new_remain_vol', label: 'After', field: 'new_remain_vol', align: 'right' as const, sortable: true },
+  { name: 'adjust_reason', label: 'Reason', field: 'adjust_reason', align: 'left' as const, sortable: true },
+  { name: 'remark', label: 'Remark', field: 'remark', align: 'left' as const, sortable: true },
+  { name: 'adjusted_by', label: 'By', field: 'adjusted_by', align: 'center' as const, sortable: true },
+])
+
+const filteredAdjustments = computed(() => {
+  let result = adjustments.value
+  for (const [colName, filterVal] of Object.entries(adjColumnFilters.value)) {
+    if (!filterVal) continue
+    const needle = filterVal.toLowerCase()
+    result = result.filter((row: any) => {
+      let cellVal = ''
+      if (colName === 'adjusted_at') {
+        cellVal = formatDateTime(row[colName])
+      } else {
+        cellVal = String(row[colName] ?? '')
+      }
+      return cellVal.toLowerCase().includes(needle)
+    })
+  }
+  return result
+})
+
+const fetchAdjustments = async () => {
+  try {
+    adjustments.value = await $fetch<any[]>(`${appConfig.apiBaseUrl}/stock-adjustments/?limit=500`)
+  } catch (e) {
+    console.error('Failed to fetch adjustments:', e)
+  }
+}
+
+const resetAdjForm = () => {
+  adjSelectedReCode.value = ''
+  adjSelectedLotId.value = ''
+  adjNewRemainVol.value = null
+  adjReason.value = ''
+  adjRemark.value = ''
+}
+
+const submitAdjustment = async () => {
+  if (!adjSelectedLot.value || adjNewRemainVol.value === null || !adjReason.value) {
+    $q.notify({ type: 'warning', message: 'Please fill all required fields' })
+    return
+  }
+
+  if (adjNewRemainVol.value < 0) {
+    $q.notify({ type: 'negative', message: 'New value cannot be negative' })
+    return
+  }
+
+  const computedQty = adjComputedQty.value
+  const computedType = adjComputedType.value
+
+  if (computedQty === 0) {
+    $q.notify({ type: 'info', message: 'No change — new value equals current remaining' })
+    return
+  }
+
+  // Warn if large decrease (>20%)
+  if (computedType === 'decrease') {
+    const pct = (computedQty / (adjSelectedLot.value.remain_vol || 1)) * 100
+    if (pct > 20) {
+      const confirmed = await new Promise<boolean>((resolve) => {
+        $q.dialog({
+          title: '⚠️ Large Adjustment',
+          message: `This will decrease by ${pct.toFixed(1)}% of remaining stock (${adjSelectedLot.value!.remain_vol.toFixed(3)} → ${adjNewRemainVol.value!.toFixed(3)} kg). Continue?`,
+          cancel: true,
+          persistent: true,
+        }).onOk(() => resolve(true)).onCancel(() => resolve(false))
+      })
+      if (!confirmed) return
+    }
+  }
+
+  adjSubmitting.value = true
+  try {
+    await $fetch(`${appConfig.apiBaseUrl}/stock-adjustments/`, {
+      method: 'POST',
+      body: {
+        intake_lot_id: adjSelectedLotId.value,
+        adjust_type: computedType,
+        adjust_qty: computedQty,
+        adjust_reason: adjReason.value,
+        remark: adjRemark.value || null,
+        adjusted_by: adjBy.value,
+      },
+    })
+    $q.notify({ type: 'positive', message: 'Stock adjusted successfully', icon: 'check_circle' })
+    resetAdjForm()
+    fetchAdjustments()
+    fetchReceipts()  // Refresh intake table to show updated remain_vol
+  } catch (e: any) {
+    $q.notify({ type: 'negative', message: e.data?.detail || 'Adjustment failed' })
+  } finally {
+    adjSubmitting.value = false
+  }
+}
+
+// Watch RE-Code change → reset lot
+watch(adjSelectedReCode, () => {
+  adjSelectedLotId.value = ''
+  adjNewRemainVol.value = null
+})
+
 </script>
 
 <template>
@@ -1142,14 +1446,14 @@ const onFileSelected = async (event: Event) => {
           <div class="text-h6 text-weight-bolder">{{ t('ingredient.title') }}</div>
         </div>
         <div class="row items-center q-gutter-sm">
-          <q-btn icon="looks_one" round flat text-color="white" @click="testPrint1Page" title="Test 1 Page" />
-          <q-btn icon="looks_two" round flat text-color="white" @click="testPrint2Pages" title="Test 2 Pages" />
           <q-btn icon="save" round flat text-color="white" @click="onSave" :loading="isSaving" title="Save Intake" />
           <q-btn icon="clear_all" round flat text-color="white" @click="onClear" title="Clear Form" />
         </div>
       </div>
     </div>
-    <!-- Ingredient Intake Form -->
+
+    <!-- ═══ INGREDIENT INTAKE ═══ -->
+    <div>
     <div class="row q-mb-lg">
       <div class="col-12">
         <q-card class="shadow-1">
@@ -1557,6 +1861,18 @@ const onFileSelected = async (event: Event) => {
                       @click="printLabel(props.row)"
                     >
                       <q-tooltip>{{ t('ingredient.printLabel') }}</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      icon="tune"
+                      color="teal-8"
+                      unelevated
+                      round
+                      dense
+                      size="sm"
+                      class="q-mr-xs"
+                      @click="openStockAdjustDialog(props.row)"
+                    >
+                      <q-tooltip>Stock Adjustment</q-tooltip>
                     </q-btn>
                     <q-btn
                       icon="info"
@@ -2026,6 +2342,327 @@ const onFileSelected = async (event: Event) => {
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    </div><!-- end intake tab -->
+
+    <!-- ═══ STOCK ADJUSTMENT DIALOG ═══ -->
+    <q-dialog v-model="showAdjustDialog" maximized transition-show="slide-up" transition-hide="slide-down">
+      <q-card class="column" style="max-width: 100vw;">
+        <!-- Dialog Header -->
+        <q-card-section class="q-pa-sm bg-teal-8 text-white row items-center justify-between">
+          <div class="row items-center q-gutter-sm">
+            <q-icon name="tune" size="sm" />
+            <div class="text-h6 text-weight-bold">Stock Adjustment</div>
+            <q-badge v-if="adjSelectedLot" color="white" text-color="teal-9" class="text-weight-bold">
+              {{ adjSelectedReCode }} | {{ adjSelectedLotId }}
+            </q-badge>
+          </div>
+          <div class="row items-center q-gutter-sm">
+            <!-- Report Date Range -->
+            <q-input
+              v-model="adjReportFrom" type="date" dense outlined
+              label="From" dark
+              style="width: 150px;"
+              input-class="text-white" label-color="white"
+            />
+            <q-input
+              v-model="adjReportTo" type="date" dense outlined
+              label="To" dark
+              style="width: 150px;"
+              input-class="text-white" label-color="white"
+            />
+            <q-btn icon="print" flat round dense text-color="white" @click="printAdjustmentReport">
+              <q-tooltip>Print Adjustment Report</q-tooltip>
+            </q-btn>
+            <q-separator vertical dark class="q-mx-xs" />
+            <q-btn icon="close" flat round dense text-color="white" v-close-popup />
+          </div>
+        </q-card-section>
+
+        <q-card-section class="col q-pa-md" style="overflow-y: auto;">
+
+      <!-- Adjustment Form -->
+      <q-card flat bordered class="shadow-1 q-mb-md">
+        <q-card-section class="q-pa-sm bg-teal-8 text-white row items-center">
+          <q-icon name="tune" class="q-mr-xs" />
+          <div class="text-subtitle2 text-weight-bold">New Stock Adjustment</div>
+        </q-card-section>
+
+        <q-card-section class="q-pa-md bg-grey-1">
+          <!-- Row 1: RE-Code + Lot ID Selection -->
+          <div class="row q-col-gutter-md q-mb-md">
+            <div class="col-12 col-md-4">
+              <div class="text-caption text-weight-bold q-mb-xs">① Select RE-Code (Active Only)</div>
+              <q-select
+                v-model="adjSelectedReCode"
+                :options="activeReCodes"
+                option-value="re_code"
+                :option-label="(opt: any) => `${opt.re_code} — ${opt.material_description}`"
+                emit-value map-options
+                outlined dense clearable
+                bg-color="white"
+                placeholder="Choose material..."
+              >
+                <template v-slot:no-option>
+                  <q-item><q-item-section>No active materials</q-item-section></q-item>
+                </template>
+              </q-select>
+            </div>
+
+            <div class="col-12 col-md-4">
+              <div class="text-caption text-weight-bold q-mb-xs">② Select Intake Lot ID</div>
+              <q-select
+                v-model="adjSelectedLotId"
+                :options="adjLotsForReCode"
+                option-value="intake_lot_id"
+                :option-label="(opt: any) => `${opt.intake_lot_id}  (${opt.remain_vol?.toFixed(3)} kg)`"
+                emit-value map-options
+                outlined dense clearable
+                bg-color="white"
+                placeholder="Choose lot..."
+                :disable="!adjSelectedReCode"
+              >
+                <template v-slot:no-option>
+                  <q-item><q-item-section>No lots for this material</q-item-section></q-item>
+                </template>
+              </q-select>
+            </div>
+
+            <div class="col-12 col-md-4">
+              <div class="text-caption text-weight-bold q-mb-xs">Material Info</div>
+              <q-input
+                :model-value="adjSelectedLot ? `${adjSelectedLot.mat_sap_code} — ${adjSelectedLot.material_description || adjSelectedLot.re_code}` : ''"
+                outlined dense readonly
+                bg-color="grey-2"
+                placeholder="(auto-filled)"
+              />
+            </div>
+          </div>
+
+          <!-- Stock Overview Table for selected RE-Code -->
+          <div v-if="adjSelectedReCode && stockOverviewLots.length > 0" class="q-mb-md">
+            <q-card flat bordered class="shadow-0 overflow-hidden" style="border-radius: 6px;">
+              <q-card-section class="q-pa-xs bg-indigo-8 text-white row items-center justify-between">
+                <div class="text-caption text-weight-bold">
+                  <q-icon name="inventory" class="q-mr-xs" size="xs" />
+                  Stock Overview — {{ adjSelectedReCode }} ({{ stockOverviewSummary.totalLots }} lots)
+                </div>
+                <div class="text-caption">
+                  Total Remaining: <strong>{{ stockOverviewSummary.totalRemaining.toFixed(3) }} kg</strong>
+                </div>
+              </q-card-section>
+
+              <q-table
+                :rows="stockOverviewLots"
+                :columns="[
+                  { name: 'intake_lot_id', label: 'Lot ID', field: 'intake_lot_id', align: 'left' as const, sortable: true },
+                  { name: 'intake_from', label: 'From', field: 'intake_from', align: 'left' as const },
+                  { name: 'lot_id', label: 'Lot Date', field: 'lot_id', align: 'center' as const },
+                  { name: 'mfg_date', label: 'Mfg Date', field: 'mfg_date', align: 'center' as const },
+                  { name: 'expire_date', label: 'Expire', field: 'expire_date', align: 'center' as const },
+                  { name: 'intake_vol', label: 'Intake (kg)', field: 'intake_vol', align: 'right' as const, sortable: true, format: (v: any) => v?.toFixed(3) },
+                  { name: 'remain_vol', label: 'Remaining (kg)', field: 'remain_vol', align: 'right' as const, sortable: true, format: (v: any) => v?.toFixed(3) },
+                  { name: 'pct', label: '% Left', field: (row: any) => row.intake_vol ? ((row.remain_vol / row.intake_vol) * 100) : 0, align: 'center' as const, format: (v: any) => v?.toFixed(1) + '%' },
+                ]"
+                row-key="intake_lot_id"
+                flat dense hide-bottom
+                class="text-caption"
+                :pagination="{ rowsPerPage: 0 }"
+                style="max-height: 200px;"
+                virtual-scroll
+              >
+                <template v-slot:body="props">
+                  <q-tr
+                    :props="props"
+                    :class="adjSelectedLotId === props.row.intake_lot_id ? 'bg-teal-1 text-weight-bold' : ''"
+                    style="cursor: pointer;"
+                    @click="adjSelectedLotId = props.row.intake_lot_id"
+                  >
+                    <q-td v-for="col in props.cols" :key="col.name" :props="props">
+                      <template v-if="col.name === 'remain_vol'">
+                        <span :class="props.row.remain_vol <= 0 ? 'text-red-8' : 'text-green-8'" class="text-weight-bold">
+                          {{ col.value }}
+                        </span>
+                      </template>
+                      <template v-else-if="col.name === 'pct'">
+                        <q-badge
+                          :color="(props.row.remain_vol / props.row.intake_vol) > 0.5 ? 'green' : (props.row.remain_vol / props.row.intake_vol) > 0.2 ? 'orange' : 'red'"
+                          text-color="white" class="text-weight-bold"
+                        >
+                          {{ col.value }}
+                        </q-badge>
+                      </template>
+                      <template v-else>{{ col.value }}</template>
+                    </q-td>
+                  </q-tr>
+                </template>
+
+                <!-- Summary Footer -->
+                <template v-slot:bottom-row>
+                  <q-tr class="bg-indigo-1 text-weight-bold">
+                    <q-td colspan="5" class="text-right text-indigo-9">
+                      TOTAL ({{ stockOverviewSummary.totalLots }} lots)
+                    </q-td>
+                    <q-td class="text-right text-indigo-9">{{ stockOverviewSummary.totalIntake.toFixed(3) }}</q-td>
+                    <q-td class="text-right text-indigo-9">{{ stockOverviewSummary.totalRemaining.toFixed(3) }}</q-td>
+                    <q-td class="text-center text-indigo-9">
+                      {{ stockOverviewSummary.totalIntake ? ((stockOverviewSummary.totalRemaining / stockOverviewSummary.totalIntake) * 100).toFixed(1) : 0 }}%
+                    </q-td>
+                  </q-tr>
+                </template>
+              </q-table>
+            </q-card>
+          </div>
+
+          <!-- Row 2: Stock Summary Cards -->
+          <div v-if="adjSelectedLot" class="row q-col-gutter-md q-mb-md">
+            <div class="col-12 col-md-3">
+              <q-card flat bordered class="bg-blue-1 text-center q-pa-sm">
+                <div class="text-caption text-grey-7">Total Intake</div>
+                <div class="text-h6 text-weight-bold text-blue-9">{{ adjTotalIntake.toFixed(3) }} <span class="text-caption">kg</span></div>
+              </q-card>
+            </div>
+            <div class="col-12 col-md-3">
+              <q-card flat bordered class="bg-orange-1 text-center q-pa-sm">
+                <div class="text-caption text-grey-7">Current Remaining</div>
+                <div class="text-h6 text-weight-bold text-orange-9">{{ adjRemaining.toFixed(3) }} <span class="text-caption">kg</span></div>
+              </q-card>
+            </div>
+            <div class="col-12 col-md-3">
+              <q-card flat bordered :class="adjComputedType === 'increase' ? 'bg-green-1' : adjComputedType === 'decrease' ? 'bg-red-1' : 'bg-grey-1'" class="text-center q-pa-sm">
+                <div class="text-caption text-grey-7">Difference</div>
+                <div class="text-h6 text-weight-bold" :class="adjComputedType === 'increase' ? 'text-green-8' : adjComputedType === 'decrease' ? 'text-red-8' : 'text-grey-6'">
+                  <template v-if="adjComputedType">
+                    {{ adjComputedType === 'increase' ? '+' : '−' }}{{ adjComputedQty.toFixed(3) }} <span class="text-caption">kg</span>
+                  </template>
+                  <template v-else>—</template>
+                </div>
+              </q-card>
+            </div>
+            <div class="col-12 col-md-3">
+              <q-card flat bordered class="bg-teal-1 text-center q-pa-sm">
+                <div class="text-caption text-grey-7">New Value</div>
+                <div class="text-h6 text-weight-bold" :class="(adjNewRemainVol ?? adjRemaining) < 0 ? 'text-red-8' : 'text-teal-9'">
+                  {{ (adjNewRemainVol ?? adjRemaining).toFixed(3) }} <span class="text-caption">kg</span>
+                </div>
+              </q-card>
+            </div>
+          </div>
+
+          <!-- Row 3: New Value, Reason, Remark, By, Submit -->
+          <div class="row q-col-gutter-md items-end">
+            <div class="col-12 col-md-2">
+              <div class="text-caption text-weight-bold q-mb-xs">③ New Adjust Value (kg)</div>
+              <q-input
+                v-model.number="adjNewRemainVol"
+                outlined dense type="number" step="0.001"
+                bg-color="white" placeholder="0.000"
+                :disable="!adjSelectedLot"
+              />
+            </div>
+
+            <div class="col-12 col-md-2">
+              <div class="text-caption text-weight-bold q-mb-xs">Reason</div>
+              <q-select v-model="adjReason" :options="adjReasonOptions" outlined dense bg-color="white" placeholder="Select..." />
+            </div>
+
+            <div class="col-12 col-md-3">
+              <div class="text-caption text-weight-bold q-mb-xs">Remark</div>
+              <q-input v-model="adjRemark" outlined dense bg-color="white" placeholder="Optional notes..." />
+            </div>
+
+            <div class="col-12 col-md-1">
+              <div class="text-caption text-weight-bold q-mb-xs">By</div>
+              <q-input v-model="adjBy" outlined dense bg-color="white" />
+            </div>
+
+            <div class="col-12 col-md-4">
+              <q-btn
+                label="Submit Adjustment"
+                color="teal-8" icon="check"
+                unelevated no-caps class="full-width"
+                :loading="adjSubmitting"
+                :disable="!adjSelectedLot || adjNewRemainVol === null || !adjReason"
+                @click="submitAdjustment"
+              />
+            </div>
+          </div>
+        </q-card-section>
+      </q-card>
+
+      <!-- Adjustment History Table -->
+      <q-card flat bordered class="shadow-1 overflow-hidden" style="border-radius: 8px;">
+        <q-card-section class="q-pa-sm bg-teal-7 text-white row items-center justify-between">
+          <div class="text-subtitle2 text-weight-bold">
+            <q-icon name="history" class="q-mr-xs" />
+            Adjustment History ({{ filteredAdjustments.length }})
+          </div>
+          <q-btn flat dense round icon="refresh" color="white" @click="fetchAdjustments" />
+        </q-card-section>
+
+        <q-table
+          :rows="filteredAdjustments"
+          :columns="adjColumns"
+          row-key="id"
+          flat dense
+          class="text-caption"
+          :pagination="{ rowsPerPage: 50 }"
+          style="max-height: calc(100vh - 500px);"
+        >
+          <template v-slot:header="props">
+            <q-tr :props="props" class="bg-teal-1">
+              <q-th v-for="col in props.cols" :key="col.name" :props="props" class="text-weight-bold">
+                {{ col.label }}
+              </q-th>
+            </q-tr>
+            <!-- Filter Row -->
+            <q-tr class="bg-grey-1">
+              <q-td v-for="col in props.cols" :key="'adj-filter-' + col.name" style="padding: 2px 4px;">
+                <q-input
+                  v-model="adjColumnFilters[col.name]"
+                  dense outlined clearable
+                  placeholder="🔍"
+                  size="xs"
+                  style="min-width: 50px; font-size: 0.75rem;"
+                  bg-color="white"
+                  @click.stop
+                />
+              </q-td>
+            </q-tr>
+          </template>
+
+          <template v-slot:body="props">
+            <q-tr :props="props">
+              <q-td v-for="col in props.cols" :key="col.name" :props="props">
+                <template v-if="col.name === 'adjust_type'">
+                  <q-badge
+                    :color="props.row.adjust_type === 'increase' ? 'green' : 'red'"
+                    text-color="white"
+                    class="text-weight-bold"
+                  >
+                    {{ props.row.adjust_type === 'increase' ? '↑ +' : '↓ −' }}
+                  </q-badge>
+                </template>
+                <template v-else-if="col.name === 'adjust_qty'">
+                  <span :class="props.row.adjust_type === 'increase' ? 'text-green-8 text-weight-bold' : 'text-red-8 text-weight-bold'">
+                    {{ props.row.adjust_type === 'increase' ? '+' : '−' }}{{ props.row.adjust_qty?.toFixed(3) }}
+                  </span>
+                </template>
+                <template v-else-if="col.name === 'prev_remain_vol' || col.name === 'new_remain_vol'">
+                  {{ col.value?.toFixed(3) }}
+                </template>
+                <template v-else>
+                  {{ col.value }}
+                </template>
+              </q-td>
+            </q-tr>
+          </template>
+        </q-table>
+      </q-card>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
   </q-page>
 </template>
 

@@ -462,6 +462,46 @@ class DeliveryRequest(BaseModel):
     wh: str  # 'FH' (FH→SPP) or 'SPP' (SPP→Production Hall)
     delivered_by: Optional[str] = None
 
+# Stock Adjustment Schemas
+class StockAdjustmentCreate(BaseModel):
+    intake_lot_id: str = Field(..., min_length=1, max_length=50)
+    adjust_type: str = Field(..., pattern=r'^(increase|decrease)$')
+    adjust_qty: float = Field(..., gt=0)
+    adjust_reason: str = Field(..., min_length=1, max_length=50)
+    remark: Optional[str] = Field(None, max_length=255)
+    adjusted_by: str = Field(..., min_length=1, max_length=50)
+
+class StockAdjustment(BaseModel):
+    id: int
+    intake_lot_id: str
+    mat_sap_code: Optional[str] = None
+    re_code: Optional[str] = None
+    material_description: Optional[str] = None
+    adjust_type: str
+    adjust_reason: str
+    adjust_qty: float
+    prev_remain_vol: float
+    new_remain_vol: float
+    remark: Optional[str] = None
+    adjusted_by: str
+    adjusted_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class LotLookup(BaseModel):
+    id: int
+    intake_lot_id: str
+    mat_sap_code: str
+    re_code: Optional[str] = None
+    material_description: Optional[str] = None
+    remain_vol: float
+    intake_vol: float
+    status: str
+
+    class Config:
+        from_attributes = True
+
 # SkuAction Schemas
 class SkuActionBase(BaseModel):
     action_code: str = Field(..., max_length=50)

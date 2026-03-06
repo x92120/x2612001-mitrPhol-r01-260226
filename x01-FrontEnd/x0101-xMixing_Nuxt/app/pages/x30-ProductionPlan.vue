@@ -8,18 +8,27 @@ const $q = useQuasar()
 const { t } = useI18n()
 const { generateQrDataUrl } = useQrCode()
 
+// Ensure timestamp strings without timezone are treated as UTC
+const toUtcDate = (date: any) => {
+  if (!date) return null
+  if (typeof date === 'string' && !date.endsWith('Z') && !date.includes('+') && !date.includes('-', 10)) {
+    return new Date(date + 'Z')
+  }
+  return new Date(date)
+}
+
 const formatDate = (date: any) => {
   if (!date) return '-'
-  const d = new Date(date)
-  if (isNaN(d.getTime())) return date
-  return d.toLocaleDateString('en-GB')
+  const d = toUtcDate(date)
+  if (!d || isNaN(d.getTime())) return date
+  return d.toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok' })
 }
 
 const formatDateTime = (date: any) => {
   if (!date) return '-'
-  const d = new Date(date)
-  if (isNaN(d.getTime())) return date
-  return d.toLocaleString('en-GB')
+  const d = toUtcDate(date)
+  if (!d || isNaN(d.getTime())) return date
+  return d.toLocaleString('en-GB', { timeZone: 'Asia/Bangkok' })
 }
 
 const formatDateForInput = (date: any) => {
@@ -109,6 +118,8 @@ const filteredPlans = computed(() => {
       let cellVal = ''
       if (colName === 'start_date' || colName === 'finish_date') {
         cellVal = formatDate(row[colName])
+      } else if (colName === 'created_at') {
+        cellVal = formatDateTime(row[colName])
       } else if (colName === 'plant') {
         cellVal = plantNames.value[row.plant] || row.plant || ''
       } else {
@@ -230,6 +241,7 @@ const columns = computed<QTableColumn[]>(() => [
   { name: 'start_date', label: t('prodPlan.startDate'), field: 'start_date', align: 'center', sortable: true, format: (val: any) => formatDate(val) },
   { name: 'finish_date', label: t('prodPlan.finishDate'), field: 'finish_date', align: 'center', sortable: true, format: (val: any) => formatDate(val) },
   { name: 'status', label: t('common.status'), field: 'status', align: 'center', sortable: true },
+  { name: 'created_at', label: t('prodPlan.createdAt', 'Created At'), field: 'created_at', align: 'center', sortable: true, format: (val: any) => formatDateTime(val) },
   { name: 'actions', label: t('common.actions'), field: 'actions', align: 'center' },
 ])
 
@@ -1334,7 +1346,7 @@ onMounted(() => {
           </template>
         </q-table>
       </q-card>
-    </q-page>
+
 
     <!-- Cancel Plan Dialog -->
     <q-dialog v-model="showCancelDialog" persistent>
@@ -1386,6 +1398,8 @@ onMounted(() => {
       </q-card>
     </q-dialog>
 
+
+    </q-page>
   </RouterView>
 </template>
 

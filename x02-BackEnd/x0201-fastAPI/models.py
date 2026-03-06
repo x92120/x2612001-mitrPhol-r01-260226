@@ -389,6 +389,24 @@ class Warehouse(Base):
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"), onupdate=func.now())
 
+# ── Stock Adjustment ─────────────────────────────────────────────────────────
+
+class StockAdjustment(Base):
+    __tablename__ = "stock_adjustments"
+    id = Column(Integer, primary_key=True, index=True)
+    intake_lot_id = Column(String(50), nullable=False, index=True)
+    mat_sap_code = Column(String(50), index=True)
+    re_code = Column(String(50), index=True)
+    material_description = Column(String(200))
+    adjust_type = Column(String(20), nullable=False)   # 'increase' or 'decrease'
+    adjust_reason = Column(String(50), nullable=False)
+    adjust_qty = Column(Float, nullable=False)
+    prev_remain_vol = Column(Float, nullable=False)
+    new_remain_vol = Column(Float, nullable=False)
+    remark = Column(String(255))
+    adjusted_by = Column(String(50), nullable=False)
+    adjusted_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
 
 # ── Database Views (Read-Only) ───────────────────────────────────────────────
 

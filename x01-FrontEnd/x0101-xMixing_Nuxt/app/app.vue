@@ -60,7 +60,7 @@ const handleLogout = async () => {
       <q-toolbar>
         <q-toolbar-title>
           <div class="row items-center q-gutter-sm">
-            <img src="/labels/xMixingLogo.svg" alt="xMixing" style="height: 32px; display: block;" />
+            <img src="/x_logo-192.png" alt="xMixing" style="height: 32px; display: block;" />
           </div>
         </q-toolbar-title>
 
