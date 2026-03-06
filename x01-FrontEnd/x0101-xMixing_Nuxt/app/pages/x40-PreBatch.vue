@@ -525,9 +525,7 @@ onMounted(() => {
                                             <tbody>
                                                 <template v-for="bd in (ingredientBatchDetail[ing.re_code] || [])" :key="bd.batch_id">
                                                     <tr 
-                                                        class="cursor-pointer"
-                                                        :class="selectedBatch?.batch_id === bd.batch_id && selectedReCode === ing.re_code ? 'bg-orange-1 text-weight-bold' : (bd.status === 2 ? 'bg-green-1 text-grey-6' : '')"
-                                                        @click="onBatchIngredientClick({ batch_id: bd.batch_id }, { re_code: ing.re_code, id: bd.req_id, required_volume: bd.required_volume, status: bd.status }, selectedPlanDetails)"
+                                                        :class="bd.status === 2 ? 'bg-green-1 text-grey-6' : ''"
                                                     >
                                                         <td style="padding: 0; width: 20px;">
                                                             <q-btn flat round dense size="xs"
@@ -540,14 +538,9 @@ onMounted(() => {
                                                         <td class="text-right">{{ bd.required_volume.toFixed(5) }}</td>
                                                         <td class="text-right" :class="bd.actual_volume > 0 ? 'text-blue-9 text-weight-bold' : ''">{{ bd.actual_volume.toFixed(5) }}</td>
                                                         <td class="text-center">
-                                                            <div class="row no-wrap items-center justify-center q-gutter-x-xs">
-                                                                <q-badge v-if="bd.status === 2" color="green" label="Done" size="sm" />
-                                                                <q-badge v-else-if="bd.status === 1" color="orange" label="Batch" size="sm" />
-                                                                <q-badge v-else color="grey-5" label="Wait" size="sm" />
-                                                                <q-btn v-if="bd.actual_volume > 0" flat round dense icon="print" size="xs" color="blue-7" @click.stop="printAllBatchLabels(bd.batch_id, ing.re_code, bd.required_volume)">
-                                                                    <q-tooltip>Print all labels</q-tooltip>
-                                                                </q-btn>
-                                                            </div>
+                                                            <q-badge v-if="bd.status === 2" color="green" label="Done" size="sm" />
+                                                            <q-badge v-else-if="bd.status === 1" color="orange" label="Batch" size="sm" />
+                                                            <q-badge v-else color="grey-5" label="Wait" size="sm" />
                                                         </td>
                                                     </tr>
                                                     <!-- Expanded package plan -->
@@ -572,9 +565,6 @@ onMounted(() => {
                                                                         </td>
                                                                         <td class="text-center">
                                                                             <q-icon v-if="pkg.status === 'done'" name="check_circle" color="green" size="xs" />
-                                                                            <q-btn v-if="pkg.log" flat round dense icon="print" size="xs" color="blue-5" @click.stop="onReprintLabel(pkg.log)">
-                                                                                <q-tooltip>Print</q-tooltip>
-                                                                            </q-btn>
                                                                         </td>
                                                                     </tr>
                                                                 </tbody>
