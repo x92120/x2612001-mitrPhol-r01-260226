@@ -748,11 +748,19 @@ const saveStep = async () => {
   try {
     const isNew = !stepForm.value.step_id
     const url = isNew ? `${appConfig.apiBaseUrl}/sku-steps/` : `${appConfig.apiBaseUrl}/sku-steps/${stepForm.value.step_id}`
-    await fetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(stepForm.value) })
+    const res = await fetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(stepForm.value) })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }))
+      $q.notify({ type: 'negative', message: err.detail || t('sku.saveFailed') })
+      return
+    }
     $q.notify({ type: 'positive', message: `${t('sku.steps')} ${isNew ? t('sku.stepCreated') : t('sku.stepUpdated')}` })
     delete skuStepsMap.value[stepForm.value.sku_id]; await fetchSkuSteps(stepForm.value.sku_id)
     closeStepDialog()
-  } catch (e: any) { $q.notify({ type: 'negative', message: t('sku.saveFailed') }) }
+  } catch (e: any) {
+    console.error('saveStep error:', e)
+    $q.notify({ type: 'negative', message: t('sku.saveFailed') })
+  }
   finally { isSaving.value = false }
 }
 
