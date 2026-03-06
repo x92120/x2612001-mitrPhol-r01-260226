@@ -414,49 +414,35 @@ onMounted(() => {
 
         <!-- CARD 2: Ingredients for Selected Plan -->
         <q-card class="col-auto bg-white shadow-2 column" style="max-height: 400px;">
-            <template v-if="selectedProductionPlan">
-              <q-card-section class="bg-orange-8 text-white q-py-xs shadow-1">
-                  <div class="row items-center justify-between no-wrap q-gutter-x-sm">
-                      <div class="text-subtitle2 text-weight-bold row items-center no-wrap">
-                          {{ t('preBatch.requireIngredient') }}
-                          <q-select
-                              v-model="selectedWarehouse"
-                              :options="warehouses"
-                              dense
-                              filled
-                              square
-                              emit-value
-                              map-options
-                              option-value="warehouse_id"
-                              option-label="name"
-                              bg-color="orange-1"
-                              label-color="orange-9"
-                              class="q-ml-md"
-                              style="min-width: 120px;"
-                              popup-content-class="bg-orange-1"
-                          >
-                              <template v-slot:prepend>
-                                  <q-icon name="filter_list" size="xs" color="orange-9" />
-                              </template>
-                          </q-select>
-                      </div>
-                      <q-badge color="white" text-color="orange-9" class="text-weight-bold">
-                          {{ selectableIngredients.length }} {{ t('preBatch.items') }}
-                      </q-badge>
-                  </div>
-                  <div class="text-caption text-orange-1 text-weight-bold ellipsis" style="font-size: 0.9rem;">
-                      {{ selectedPlanDetails?.sku_id || 'Unknown SKU' }}
-                  </div>
-                  <div class="text-caption text-orange-2" style="font-size: 0.7rem;">
-                      {{ t('prodPlan.planId') }}: {{ selectedProductionPlan }} <span v-if="isBatchSelected">({{ t('prodPlan.batchId') }}: {{ selectedBatch?.batch_id.slice(-3) }})</span>
-                  </div>
-              </q-card-section>
-            </template>
-            <template v-else>
-               <q-card-section class="bg-grey-3 text-grey-8 q-py-xs text-center">
-                   <div class="text-caption">{{ t('preBatch.selectPlanAbove') }}</div>
-               </q-card-section>
-            </template>
+            <q-card-section class="bg-blue-grey-2 q-py-xs">
+                <div class="row items-center justify-between no-wrap">
+                    <div class="text-subtitle2 text-weight-bold text-blue-grey-8 row items-center no-wrap">
+                        {{ t('preBatch.requireIngredient') }}
+                        <q-select
+                            v-model="selectedWarehouse"
+                            :options="warehouses"
+                            dense
+                            filled
+                            square
+                            emit-value
+                            map-options
+                            option-value="warehouse_id"
+                            option-label="name"
+                            bg-color="white"
+                            label-color="blue-grey-8"
+                            class="q-ml-md"
+                            style="min-width: 120px;"
+                        >
+                            <template v-slot:prepend>
+                                <q-icon name="filter_list" size="xs" color="blue-grey-6" />
+                            </template>
+                        </q-select>
+                    </div>
+                    <q-badge color="blue-grey-6" text-color="white" class="text-weight-bold">
+                        {{ selectableIngredients.length }} {{ t('preBatch.items') }}
+                    </q-badge>
+                </div>
+            </q-card-section>
             <div class="col relative-position" style="overflow-y: auto;">
                 <q-markup-table dense flat square separator="cell" sticky-header>
                     <thead class="bg-orange-1 text-orange-10">
