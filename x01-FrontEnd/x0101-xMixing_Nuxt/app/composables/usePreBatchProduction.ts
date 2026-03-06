@@ -206,18 +206,17 @@ export function usePreBatchProduction(deps: ProductionDeps) {
         }
     }
 
-    const onBatchIngredientClick = async (batch: any, req: any, plan: any) => {
-        if (selectedProductionPlan.value !== plan.plan_id) {
-            await onPlanShow(plan)
-        }
-        const batchIndex = filteredBatches.value.findIndex(b => b.batch_id === batch.batch_id)
-        if (batchIndex >= 0) {
-            await onBatchSelect(plan, { batch_id: batch.batch_id }, batchIndex)
-        }
+    const onBatchIngredientClick = async (batch: any, req: any, _plan: any) => {
+        // Only send data to the weighing section (right pane)
+        // Do NOT change the left monitor view (no onPlanShow / onBatchSelect)
         deps.selectedReCode.value = req.re_code
         deps.selectedRequirementId.value = req.id
         deps.isBatchSelected.value = true
         deps.requireVolume.value = req.required_volume || 0
+
+        // Store batch_id for record fetching
+        selectedBatchIndex.value = filteredBatches.value.findIndex(b => b.batch_id === batch.batch_id)
+
         const ingInfo = deps.ingredients.value.find((i: any) => i.re_code === req.re_code)
         if (ingInfo?.std_package_size && ingInfo.std_package_size > 0) {
             deps.packageSize.value = ingInfo.std_package_size
