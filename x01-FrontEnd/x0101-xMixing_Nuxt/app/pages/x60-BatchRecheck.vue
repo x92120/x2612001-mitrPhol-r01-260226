@@ -503,6 +503,55 @@ const isBagScannedInBox = (batchRecordId: string) => {
     return bag && bag.status === 1
 }
 
+// ── Quality Check Report ──────────────
+const showQCReportDialog = ref(false)
+const qcReportFromDate = ref('')
+const qcReportToDate = ref(new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }))
+const qcReportLoading = ref(false)
+
+const formatDateToApiQC = (val: string) => {
+  if (!val) return null
+  const parts = val.split('/')
+  if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`
+  return null
+}
+
+const printQCReport = async () => {
+  qcReportLoading.value = true
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) { qcReportLoading.value = false; return }
+  printWindow.document.write('<html><body><h2 style="font-family:sans-serif;color:#1565c0;">⏳ Loading...</h2></body></html>')
+  try {
+    let url = `${appConfig.apiBaseUrl}/reports/quality-check`
+    const p: string[] = []
+    const f = formatDateToApiQC(qcReportFromDate.value)
+    const t2 = formatDateToApiQC(qcReportToDate.value)
+    if (f) p.push(`from_date=${f}`)
+    if (t2) p.push(`to_date=${t2}`)
+    if (p.length) url += '?' + p.join('&')
+    const data = await $fetch<any>(url)
+    const now = new Date().toLocaleString('en-GB')
+
+    const itemRows = (data.items || []).map((r: any, i: number) => `
+      <tr class="${r.recheck_status === 1 ? 'bg-ok' : (r.recheck_status === 2 ? 'bg-err' : '')}"><td class="tc">${i+1}</td><td>${r.batch_record_id}</td><td>${r.plan_id || '-'}</td><td>${r.mat_sap_code || '-'}</td><td>${r.re_code || '-'}</td><td class="tc">${r.package_no || '-'}</td><td class="tc">${r.recheck_status === 1 ? '✅ Pass' : '❌ Fail'}</td><td>${r.recheck_by || '-'}</td><td class="tc">${r.recheck_at ? new Date(r.recheck_at).toLocaleString('en-GB') : '-'}</td></tr>
+    `).join('')
+
+    const s = data.summary || {}
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quality Check Report</title>
+    <style>@page{size:A4 landscape;margin:8mm 10mm}*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Courier Prime',monospace;font-size:13px;color:#222;line-height:1.4}.header{background:#1565c0;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:4px;margin-bottom:8px}.header h1{font-size:22px;margin:0}.info-bar{background:#e3f2fd;padding:8px 14px;border-radius:3px;margin-bottom:10px;font-size:13px;color:#1565c0;font-weight:bold}table.dt{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}table.dt th{background:#546e7a;color:#fff;padding:4px 8px;text-align:left;font-size:10px;text-transform:uppercase}table.dt td{padding:4px 8px;border-bottom:1px solid #e0e0e0;overflow:hidden;text-overflow:ellipsis}.bg-ok{background:#e8f5e9}.bg-err{background:#ffebee}.grand{background:#1565c0;color:#fff;padding:12px 18px;border-radius:4px;font-size:14px;margin-top:10px;display:flex;justify-content:space-between}.footer{border-top:2px solid #1565c0;font-size:10px;color:#888;padding:6px 0;margin-top:10px;display:flex;justify-content:space-between}.tr{text-align:right}.tc{text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>
+    <div class="header"><div><h1>✅ Quality Check Report</h1><div style="font-size:12px;margin-top:3px;opacity:.85">xMixing Control System</div></div><div style="font-size:12px;text-align:right;opacity:.9">Generated: ${now}</div></div>
+    <div class="info-bar">📅 Period: ${qcReportFromDate.value || 'All'} — ${qcReportToDate.value || 'All'} | Checked: ${s.total_checked || 0} | ✅ Passed: ${s.passed || 0} | ❌ Failed: ${s.failed || 0}</div>
+    <table class="dt"><thead><tr><th style="width:3%">#</th><th>Batch Record ID</th><th>Plan ID</th><th>Mat SAP Code</th><th>RE Code</th><th class="tc">Pkg</th><th class="tc">Result</th><th>Checked By</th><th class="tc">Date</th></tr></thead>
+    <tbody>${itemRows || '<tr><td colspan="9" class="tc">No records</td></tr>'}</tbody></table>
+    <div class="grand"><span>Total Checked: ${s.total_checked || 0}</span><span>✅ ${s.passed || 0} Passed | ❌ ${s.failed || 0} Failed (${s.total_checked ? ((s.passed / s.total_checked) * 100).toFixed(1) : 0}% pass rate)</span></div>
+    <div class="footer"><span>xMixing 2025 | xMix.co.th</span><span>Quality Check Report</span></div>
+    </body></html>`
+    printWindow.document.open(); printWindow.document.write(html); printWindow.document.close()
+    showQCReportDialog.value = false
+  } catch (e) { console.error(e); printWindow.close(); $q.notify({ type: 'negative', message: 'Failed' }) }
+  finally { qcReportLoading.value = false }
+}
+
 onMounted(() => {
     fetchPlansAndBatches()
 })
@@ -520,6 +569,9 @@ onMounted(() => {
         </div>
         <div class="row items-center q-gutter-sm">
           <div class="text-caption text-blue-2">{{ t('recheck.subtitle') }}</div>
+          <q-btn flat round dense icon="assessment" color="white" @click="showQCReportDialog = true">
+            <q-tooltip>Quality Check Report</q-tooltip>
+          </q-btn>
           <q-btn flat round dense icon="volume_up" color="white" @click="showSoundSettings = true">
             <q-tooltip>{{ t('sound.title') }}</q-tooltip>
           </q-btn>
@@ -950,6 +1002,27 @@ onMounted(() => {
       </div>
     </Teleport>
 
+    <!-- QC Report Dialog -->
+    <q-dialog v-model="showQCReportDialog">
+      <q-card style="min-width: 400px;">
+        <q-card-section class="bg-primary text-white">
+          <div class="text-h6"><q-icon name="assessment" class="q-mr-sm" />Quality Check Report</div>
+          <div class="text-caption">Select date range for the report</div>
+        </q-card-section>
+        <q-card-section class="q-gutter-md">
+          <q-input v-model="qcReportFromDate" label="From Date" filled mask="##/##/####" fill-mask>
+            <template #append><q-icon name="event" class="cursor-pointer"><q-popup-proxy cover><q-date v-model="qcReportFromDate" mask="DD/MM/YYYY" /></q-popup-proxy></q-icon></template>
+          </q-input>
+          <q-input v-model="qcReportToDate" label="To Date" filled mask="##/##/####" fill-mask>
+            <template #append><q-icon name="event" class="cursor-pointer"><q-popup-proxy cover><q-date v-model="qcReportToDate" mask="DD/MM/YYYY" /></q-popup-proxy></q-icon></template>
+          </q-input>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn color="primary" icon="print" label="Generate Report" :loading="qcReportLoading" @click="printQCReport" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 

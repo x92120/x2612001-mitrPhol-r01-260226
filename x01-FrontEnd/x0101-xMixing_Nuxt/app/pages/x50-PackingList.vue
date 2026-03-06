@@ -838,6 +838,41 @@ watch([allFhPacked, allSppPacked], ([fhDone, sppDone]) => {
 // LIFECYCLE
 // ═══════════════════════════════════════════════════════════════════
 
+// ── Packing List Report ──────────────
+const showPackingReportDialog = ref(false)
+const packingReportLoading = ref(false)
+const packingReportPlanId = ref('')
+
+const printPackingListReport = async () => {
+  packingReportLoading.value = true
+  const planId = packingReportPlanId.value || selectedPlan.value?.plan_id
+  if (!planId) { $q.notify({ type: 'warning', message: 'Select plan first' }); packingReportLoading.value = false; return }
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) { packingReportLoading.value = false; return }
+  printWindow.document.write('<html><body><h2 style="font-family:sans-serif;color:#1565c0;">⏳ Loading...</h2></body></html>')
+  try {
+    const data = await $fetch<any>(`${appConfig.apiBaseUrl}/reports/packing-list/${planId}`)
+    const now = new Date().toLocaleString('en-GB')
+    const bagRows = (data.bags || []).map((b: any, i: number) => `
+      <tr class="${b.packing_status === 1 ? 'bg-ok' : ''}"><td class="tc">${i+1}</td><td>${b.batch_record_id}</td><td>${b.re_code || '-'}</td><td>${b.mat_sap_code || '-'}</td><td class="tc">${b.package_no || '-'}/${b.total_packages || '-'}</td><td class="tr">${(b.net_volume || 0).toFixed(4)}</td><td class="tc">${b.packing_status === 1 ? '✅ Packed' : '⏳ Unpacked'}</td><td class="tc">${b.recheck_status === 1 ? '✅' : (b.recheck_status === 2 ? '❌' : '⏳')}</td><td class="tc">${b.packed_at ? new Date(b.packed_at).toLocaleString('en-GB') : '-'}</td></tr>
+    `).join('')
+    const s = data.summary || {}
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Packing List</title>
+    <style>@page{size:A4 landscape;margin:8mm 10mm}*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Courier Prime',monospace;font-size:13px;color:#222;line-height:1.4}.header{background:#1565c0;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:4px;margin-bottom:8px}.header h1{font-size:22px;margin:0}.info-bar{background:#e3f2fd;padding:8px 14px;border-radius:3px;margin-bottom:10px;font-size:13px;color:#1565c0;font-weight:bold}table.dt{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}table.dt th{background:#546e7a;color:#fff;padding:4px 8px;text-align:left;font-size:10px;text-transform:uppercase}table.dt td{padding:4px 8px;border-bottom:1px solid #e0e0e0;overflow:hidden;text-overflow:ellipsis}.bg-ok{background:#e8f5e9}.grand{background:#1565c0;color:#fff;padding:12px 18px;border-radius:4px;font-size:14px;margin-top:10px;display:flex;justify-content:space-between}.footer{border-top:2px solid #1565c0;font-size:10px;color:#888;padding:6px 0;margin-top:10px;display:flex;justify-content:space-between}.tr{text-align:right}.tc{text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>
+    <div class="header"><div><h1>📦 Packing List Report</h1><div style="font-size:12px;margin-top:3px;opacity:.85">xMixing Control System</div></div><div style="font-size:12px;text-align:right;opacity:.9">Generated: ${now}</div></div>
+    <div class="info-bar">📋 Plan: ${data.plan_id} | SKU: ${data.sku_id} — ${data.sku_name || ''} | Volume: ${(data.total_volume || 0).toFixed(4)} kg</div>
+    <div class="info-bar" style="background:#e8f5e9;color:#2e7d32;">Bags: ${s.total_bags || 0} | Packed: ${s.packed || 0} | Unpacked: ${s.unpacked || 0} | Checked: ${s.checked || 0}</div>
+    <table class="dt"><thead><tr><th style="width:3%">#</th><th>Batch Record ID</th><th>RE Code</th><th>Mat SAP Code</th><th class="tc">Pkg</th><th class="tr">Net Vol (kg)</th><th class="tc">Packing</th><th class="tc">QC</th><th class="tc">Packed At</th></tr></thead>
+    <tbody>${bagRows || '<tr><td colspan="9" class="tc">No bags</td></tr>'}</tbody></table>
+    <div class="grand"><span>Total: ${s.total_bags || 0} bags</span><span>Packed: ${s.packed || 0} | Unpacked: ${s.unpacked || 0}</span></div>
+    <div class="footer"><span>xMixing 2025 | xMix.co.th</span><span>Packing List — ${data.plan_id}</span></div>
+    </body></html>`
+    printWindow.document.open(); printWindow.document.write(html); printWindow.document.close()
+    showPackingReportDialog.value = false
+  } catch (e) { console.error(e); printWindow.close(); $q.notify({ type: 'negative', message: 'Failed' }) }
+  finally { packingReportLoading.value = false }
+}
+
 onMounted(async () => {
   loadSoundSettings()
   connect()
@@ -880,6 +915,9 @@ onMounted(async () => {
         <div class="row items-center q-gutter-sm">
           <q-btn flat dense round :icon="soundSettings.enabled ? 'volume_up' : 'volume_off'" color="blue-9" @click="showSoundSettings = true">
             <q-tooltip>Sound Settings</q-tooltip>
+          </q-btn>
+          <q-btn flat dense round icon="assessment" color="blue-9" @click="showPackingReportDialog = true">
+            <q-tooltip>Packing List Report</q-tooltip>
           </q-btn>
           <q-btn flat dense round icon="refresh" color="blue-9" @click="fetchPlans(); fetchAllRecords(); fetchReadyToDeliver()" :loading="loading">
             <q-tooltip>Refresh</q-tooltip>
@@ -1654,6 +1692,21 @@ onMounted(async () => {
       </span>
     </div>
 
+    <!-- Packing Report Dialog -->
+    <q-dialog v-model="showPackingReportDialog">
+      <q-card style="min-width: 380px;">
+        <q-card-section class="bg-primary text-white">
+          <div class="text-h6"><q-icon name="assessment" class="q-mr-sm" />Packing List Report</div>
+        </q-card-section>
+        <q-card-section>
+          <q-select v-model="packingReportPlanId" :options="activePlans.map((p: any) => ({ label: p.plan_id + ' — ' + (p.sku_name || p.sku_id), value: p.plan_id }))" emit-value map-options label="Select Plan" filled />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn color="primary" icon="print" label="Generate Report" :loading="packingReportLoading" @click="printPackingListReport" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 

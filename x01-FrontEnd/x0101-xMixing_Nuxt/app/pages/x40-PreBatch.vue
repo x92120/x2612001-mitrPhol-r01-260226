@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useQuasar } from 'quasar'
 
 import { useAuth } from '../composables/useAuth'
+import { appConfig } from '~/appConfig/config'
 import { useLabelPrinter } from '~/composables/useLabelPrinter'
 import { usePreBatchProduction } from '~/composables/usePreBatchProduction'
 import { usePreBatchIngredients } from '~/composables/usePreBatchIngredients'
@@ -248,6 +249,63 @@ const {
   productionPlans,
 })
 
+// ── Pre-Batch Summary Report ──────────────
+const showPreBatchReportDialog = ref(false)
+const prebatchReportFromDate = ref('')
+const prebatchReportToDate = ref(new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }))
+const prebatchReportLoading = ref(false)
+
+const formatDateToApi2 = (val: string) => {
+  if (!val) return null
+  const parts = val.split('/')
+  if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`
+  return null
+}
+
+const printPreBatchReport = async () => {
+  prebatchReportLoading.value = true
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) { prebatchReportLoading.value = false; return }
+  printWindow.document.write('<html><body><h2 style="font-family:sans-serif;color:#1565c0;">⏳ Loading...</h2></body></html>')
+  try {
+    let url = `${appConfig.apiBaseUrl}/reports/prebatch-summary`
+    const p: string[] = []
+    const f = formatDateToApi2(prebatchReportFromDate.value)
+    const t2 = formatDateToApi2(prebatchReportToDate.value)
+    if (f) p.push(`from_date=${f}`)
+    if (t2) p.push(`to_date=${t2}`)
+    if (p.length) url += '?' + p.join('&')
+    const data = await $fetch<any>(url)
+    const now = new Date().toLocaleString('en-GB')
+
+    const recordRows = (data.records || []).map((r: any, i: number) => `
+      <tr><td class="tc">${i+1}</td><td>${r.batch_record_id}</td><td>${r.plan_id || '-'}</td><td>${r.mat_sap_code || '-'}</td><td>${r.re_code || '-'}</td><td class="tr">${(r.net_volume || 0).toFixed(4)}</td><td class="tr">${(r.total_request_volume || 0).toFixed(4)}</td><td class="tc">${r.package_no || '-'}/${r.total_packages || '-'}</td><td class="tc">${r.created_at ? new Date(r.created_at).toLocaleString('en-GB') : '-'}</td></tr>
+    `).join('')
+
+    const ingredientRows = (data.ingredient_totals || []).map((ing: any, i: number) => `
+      <tr><td class="tc">${i+1}</td><td class="tb">${ing.mat_sap_code || '-'}</td><td>${ing.re_code || '-'}</td><td class="tr">${(ing.total_net || 0).toFixed(4)}</td><td class="tr">${(ing.total_request || 0).toFixed(4)}</td><td class="tr">${((ing.total_net || 0) - (ing.total_request || 0)).toFixed(4)}</td><td class="tc">${ing.count}</td></tr>
+    `).join('')
+
+    const s = data.summary || {}
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pre-Batch Summary Report</title>
+    <style>@page{size:A4 landscape;margin:8mm 10mm}*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Courier Prime',monospace;font-size:13px;color:#222;line-height:1.4}.header{background:#1565c0;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:4px;margin-bottom:8px}.header h1{font-size:22px;margin:0}.info-bar{background:#e3f2fd;padding:8px 14px;border-radius:3px;margin-bottom:10px;font-size:13px;color:#1565c0;font-weight:bold}.section-title{background:#37474f;color:#fff;padding:8px 14px;font-size:14px;font-weight:bold;border-radius:3px;margin:12px 0 4px}table.dt{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}table.dt th{background:#546e7a;color:#fff;padding:4px 8px;text-align:left;font-size:10px;text-transform:uppercase}table.dt td{padding:4px 8px;border-bottom:1px solid #e0e0e0;overflow:hidden;text-overflow:ellipsis}.grand{background:#1565c0;color:#fff;padding:12px 18px;border-radius:4px;font-size:14px;margin-top:10px;display:flex;justify-content:space-between}.footer{border-top:2px solid #1565c0;font-size:10px;color:#888;padding:6px 0;margin-top:10px;display:flex;justify-content:space-between}.tr{text-align:right}.tc{text-align:center}.tb{font-weight:bold}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>
+    <div class="header"><div><h1>🧪 Pre-Batch Summary Report</h1><div style="font-size:12px;margin-top:3px;opacity:.85">xMixing Control System</div></div><div style="font-size:12px;text-align:right;opacity:.9">Generated: ${now}</div></div>
+    <div class="info-bar">📅 Period: ${prebatchReportFromDate.value || 'All'} — ${prebatchReportToDate.value || 'All'} | Total Records: ${s.total_records || 0} | Total Net: ${(s.total_net_volume || 0).toFixed(4)} kg</div>
+    <div class="section-title">📋 Pre-Batch Records</div>
+    <table class="dt"><thead><tr><th style="width:3%">#</th><th style="width:16%">Batch Record ID</th><th style="width:10%">Plan ID</th><th style="width:14%">Mat SAP Code</th><th style="width:8%">RE Code</th><th style="width:10%" class="tr">Net Vol (kg)</th><th style="width:10%" class="tr">Request (kg)</th><th style="width:8%" class="tc">Pkg</th><th style="width:12%" class="tc">Date</th></tr></thead>
+    <tbody>${recordRows || '<tr><td colspan="9" class="tc">No records</td></tr>'}</tbody></table>
+    <div class="section-title">📊 Ingredient Totals</div>
+    <table class="dt"><thead><tr><th style="width:4%">#</th><th style="width:18%">Mat SAP Code</th><th style="width:10%">RE Code</th><th style="width:14%" class="tr">Total Net (kg)</th><th style="width:14%" class="tr">Total Request (kg)</th><th style="width:14%" class="tr">Variance (kg)</th><th style="width:8%" class="tc">Count</th></tr></thead>
+    <tbody>${ingredientRows}</tbody></table>
+    <div class="grand"><span>Total: ${s.total_records || 0} pre-batch records</span><span>Net Volume: ${(s.total_net_volume || 0).toFixed(4)} kg</span></div>
+    <div class="footer"><span>xMixing 2025 | xMix.co.th</span><span>Pre-Batch Summary Report</span></div>
+    </body></html>`
+    printWindow.document.open(); printWindow.document.write(html); printWindow.document.close()
+    showPreBatchReportDialog.value = false
+  } catch (e) { console.error(e); printWindow.close(); $q.notify({ type: 'negative', message: 'Failed', position: 'top' }) }
+  finally { prebatchReportLoading.value = false }
+}
+
 // ─── Lifecycle ───
 onMounted(() => {
   fetchIngredients()
@@ -291,7 +349,12 @@ onMounted(() => {
             </q-select>
           </div>
         </div>
-        <div class="text-caption text-blue-2">{{ t('prodPlan.version') }} 0.2</div>
+        <div class="row items-center q-gutter-sm">
+          <q-btn flat round dense icon="assessment" text-color="white" @click="showPreBatchReportDialog = true">
+            <q-tooltip>Pre-Batch Summary Report</q-tooltip>
+          </q-btn>
+          <div class="text-caption text-blue-2">{{ t('prodPlan.version') }} 0.2</div>
+        </div>
       </div>
     </div>
 
@@ -1406,6 +1469,27 @@ onMounted(() => {
       </q-card>
     </q-dialog>
 
+    <!-- Pre-Batch Report Dialog -->
+    <q-dialog v-model="showPreBatchReportDialog">
+      <q-card style="min-width: 400px;">
+        <q-card-section class="bg-primary text-white">
+          <div class="text-h6"><q-icon name="assessment" class="q-mr-sm" />Pre-Batch Summary Report</div>
+          <div class="text-caption">Select date range for the report</div>
+        </q-card-section>
+        <q-card-section class="q-gutter-md">
+          <q-input v-model="prebatchReportFromDate" label="From Date" filled mask="##/##/####" fill-mask>
+            <template #append><q-icon name="event" class="cursor-pointer"><q-popup-proxy cover><q-date v-model="prebatchReportFromDate" mask="DD/MM/YYYY" /></q-popup-proxy></q-icon></template>
+          </q-input>
+          <q-input v-model="prebatchReportToDate" label="To Date" filled mask="##/##/####" fill-mask>
+            <template #append><q-icon name="event" class="cursor-pointer"><q-popup-proxy cover><q-date v-model="prebatchReportToDate" mask="DD/MM/YYYY" /></q-popup-proxy></q-icon></template>
+          </q-input>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn color="primary" icon="print" label="Generate Report" :loading="prebatchReportLoading" @click="printPreBatchReport" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 

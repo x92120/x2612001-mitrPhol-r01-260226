@@ -927,6 +927,98 @@ const fetchIngredients = async () => {
     if (res.ok) ingredientsMaster.value = await res.json()
   } catch (e) { console.error('Failed to fetch ingredients:', e) }
 }
+// ── Reports ──────────────────────────────────
+const showDailyReportDialog = ref(false)
+const dailyReportDate = ref(formatDateForInput(new Date()))
+const dailyReportLoading = ref(false)
+
+const printDailyReport = async () => {
+  dailyReportLoading.value = true
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) {
+    $q.notify({ type: 'warning', message: 'Popup blocked. Allow popups.', position: 'top' })
+    dailyReportLoading.value = false
+    return
+  }
+  printWindow.document.write('<html><body><h2 style="font-family:sans-serif;color:#1565c0;">⏳ Loading...</h2></body></html>')
+  try {
+    const apiDate = formatDateToApi(dailyReportDate.value)
+    let url = `${appConfig.apiBaseUrl}/reports/production-daily`
+    if (apiDate) url += `?date=${apiDate}`
+    const data = await $fetch<any>(url)
+    const now = new Date().toLocaleString('en-GB')
+    const dateLabel = dailyReportDate.value || 'Today'
+
+    const plansHTML = (data.plans || []).map((p: any, idx: number) => {
+      const batchRows = (p.batches || []).map((b: any, bi: number) => `
+        <tr><td class="tc">${bi+1}</td><td>${b.batch_id}</td><td class="tr">${(b.batch_size || 0).toFixed(4)}</td><td class="tc">${b.status}</td></tr>
+      `).join('')
+      return `
+        <div class="plan-card">
+          <div class="plan-head">
+            <span class="plan-num">${idx+1}.</span>
+            <span class="plan-id">${p.plan_id}</span>
+            <span class="plan-sku">${p.sku_id} — ${p.sku_name || ''}</span>
+            <span class="plan-status badge-${p.status?.toLowerCase()}">${p.status}</span>
+          </div>
+          <table class="dt"><thead><tr><th style="width:4%">#</th><th>Batch ID</th><th class="tr">Size (kg)</th><th class="tc">Status</th></tr></thead>
+          <tbody>${batchRows || '<tr><td colspan="4" class="tc">No batches</td></tr>'}</tbody></table>
+          <div class="plan-summary">
+            Plant: <strong>${p.plant || '-'}</strong> | Volume: <strong>${(p.total_volume || 0).toFixed(4)}</strong> kg | Batches: <strong>${p.num_batches || 0}</strong>
+          </div>
+        </div>`
+    }).join('')
+
+    const consumptionRows = (data.ingredient_consumption || []).map((c: any, i: number) => `
+      <tr><td class="tc">${i+1}</td><td class="tb">${c.mat_sap_code || '-'}</td><td>${c.re_code || '-'}</td><td class="tr">${(c.total_volume || 0).toFixed(4)}</td><td class="tc">${c.transaction_count}</td></tr>
+    `).join('')
+
+    const s = data.summary || {}
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Production Daily Report</title>
+    <style>
+      @page{size:A4 landscape;margin:8mm 10mm}*{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'Courier Prime','Courier New',monospace;font-size:13px;color:#222;line-height:1.4}
+      .header{background:#1565c0;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:4px;margin-bottom:8px}
+      .header h1{font-size:22px;margin:0}.header .meta{font-size:12px;text-align:right;opacity:.9}
+      .info-bar{background:#e3f2fd;padding:8px 14px;border-radius:3px;margin-bottom:10px;font-size:13px;color:#1565c0;font-weight:bold}
+      .plan-card{margin-bottom:12px}.plan-head{background:#263238;color:#fff;padding:8px 14px;font-size:13px;border-radius:3px;margin-bottom:2px}
+      .plan-num{color:#ffc107;font-weight:bold;margin-right:6px}.plan-id{font-weight:bold;margin-right:12px}
+      .plan-sku{font-size:12px;opacity:.85;margin-right:12px}
+      .plan-status{float:right;padding:2px 8px;border-radius:3px;font-size:11px}
+      .badge-planned{background:#fff3e0;color:#e65100}.badge-in\ progress,.badge-active{background:#e3f2fd;color:#1565c0}.badge-completed,.badge-done{background:#e8f5e9;color:#2e7d32}.badge-cancelled{background:#ffebee;color:#c62828}
+      table.dt{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:2px}
+      table.dt th{background:#546e7a;color:#fff;padding:4px 8px;text-align:left;font-size:10px;text-transform:uppercase}
+      table.dt td{padding:4px 8px;border-bottom:1px solid #e0e0e0}
+      .plan-summary{background:#eceff1;padding:6px 14px;font-size:12px;border-radius:0 0 3px 3px}
+      .section-title{background:#37474f;color:#fff;padding:8px 14px;font-size:14px;font-weight:bold;border-radius:3px;margin:12px 0 4px}
+      .grand{background:#1565c0;color:#fff;padding:12px 18px;border-radius:4px;font-size:14px;margin-top:10px;display:flex;justify-content:space-between}
+      .footer{border-top:2px solid #1565c0;font-size:10px;color:#888;padding:6px 0;margin-top:10px;display:flex;justify-content:space-between}
+      .tr{text-align:right}.tc{text-align:center}.tb{font-weight:bold}
+      @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+    </style></head><body>
+    <div class="header"><div><h1>🏭 Production Daily Report</h1><div style="font-size:12px;margin-top:3px;opacity:.85">xMixing Control System</div></div><div class="meta">Date: ${dateLabel}<br>Generated: ${now}</div></div>
+    <div class="info-bar">📅 Date: ${dateLabel} | Plans: ${s.total_plans || 0} | Batches: ${s.total_batches || 0} | Total Volume: ${(s.total_volume || 0).toFixed(4)} kg</div>
+    <div class="section-title">📋 Production Plans</div>
+    ${plansHTML || '<p style="padding:12px;color:#999;">No plans for this date</p>'}
+    ${consumptionRows ? `<div class="section-title">🧪 Ingredient Consumption</div>
+    <table class="dt"><thead><tr><th style="width:4%">#</th><th>Mat SAP Code</th><th>RE Code</th><th class="tr">Volume (kg)</th><th class="tc">Transactions</th></tr></thead>
+    <tbody>${consumptionRows}</tbody></table>` : ''}
+    <div class="grand"><span>Daily Total: ${s.total_plans || 0} plans, ${s.total_batches || 0} batches</span><span>Total Volume: ${(s.total_volume || 0).toFixed(4)} kg</span></div>
+    <div class="footer"><span>xMixing 2025 | xMix.co.th</span><span>Production Daily Report — ${dateLabel}</span></div>
+    </body></html>`
+
+    printWindow.document.open()
+    printWindow.document.write(html)
+    printWindow.document.close()
+    showDailyReportDialog.value = false
+  } catch (e) {
+    console.error('Failed to generate daily report:', e)
+    printWindow.close()
+    $q.notify({ type: 'negative', message: 'Failed to generate report', position: 'top' })
+  } finally {
+    dailyReportLoading.value = false
+  }
+}
 
 onMounted(() => {
   fetchPlants()
@@ -948,7 +1040,12 @@ onMounted(() => {
             <q-icon name="account_tree" size="sm" />
             <div class="text-h6 text-weight-bolder">{{ t('prodPlan.title') }}</div>
           </div>
-          <div class="text-caption text-weight-bold text-blue-2">{{ t('prodPlan.version') }} 0.3</div>
+          <div class="row items-center q-gutter-sm">
+            <q-btn flat round dense icon="assessment" text-color="white" @click="showDailyReportDialog = true">
+              <q-tooltip>Production Daily Report</q-tooltip>
+            </q-btn>
+            <div class="text-caption text-weight-bold text-blue-2">{{ t('prodPlan.version') }} 0.3</div>
+          </div>
         </div>
       </div>
 
@@ -1398,6 +1495,31 @@ onMounted(() => {
       </q-card>
     </q-dialog>
 
+
+    <!-- Daily Report Dialog -->
+    <q-dialog v-model="showDailyReportDialog">
+      <q-card style="min-width: 380px;">
+        <q-card-section class="bg-primary text-white">
+          <div class="text-h6"><q-icon name="assessment" class="q-mr-sm" />Production Daily Report</div>
+          <div class="text-caption">Select date for the report</div>
+        </q-card-section>
+        <q-card-section>
+          <q-input v-model="dailyReportDate" label="Date" filled mask="##/##/####" fill-mask>
+            <template #append>
+              <q-icon name="event" class="cursor-pointer">
+                <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                  <q-date v-model="dailyReportDate" mask="DD/MM/YYYY" />
+                </q-popup-proxy>
+              </q-icon>
+            </template>
+          </q-input>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn color="primary" icon="print" label="Generate Report" :loading="dailyReportLoading" @click="printDailyReport" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     </q-page>
   </RouterView>

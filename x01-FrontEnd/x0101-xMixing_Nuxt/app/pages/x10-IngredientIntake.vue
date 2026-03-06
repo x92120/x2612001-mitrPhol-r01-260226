@@ -1153,69 +1153,96 @@ function openStockAdjustDialog(row: any) {
   showAdjustDialog.value = true
 }
 
-// Print stock adjustment report filtered by date range
-function printAdjustmentReport() {
-  let reportRows = adjustments.value
-  if (adjReportFrom.value) {
-    reportRows = reportRows.filter((r: any) => {
-      const d = new Date(r.adjusted_at)
-      return d >= new Date(adjReportFrom.value + 'T00:00:00')
-    })
-  }
-  if (adjReportTo.value) {
-    reportRows = reportRows.filter((r: any) => {
-      const d = new Date(r.adjusted_at)
-      return d <= new Date(adjReportTo.value + 'T23:59:59')
-    })
+// Print stock movement report (adjustments + pre-batch usage) filtered by date range
+async function printAdjustmentReport() {
+  const params = new URLSearchParams()
+  if (adjReportFrom.value) params.set('date_from', adjReportFrom.value)
+  if (adjReportTo.value) params.set('date_to', adjReportTo.value)
+
+  let movements: any[] = []
+  try {
+    movements = await $fetch<any[]>(`${appConfig.apiBaseUrl}/stock-adjustments/movements/?${params.toString()}`)
+  } catch (e) {
+    console.error('Failed to fetch movements:', e)
+    // Fallback to local adjustments data
+    movements = adjustments.value.map((r: any) => ({
+      movement_type: 'adjustment',
+      date: r.adjusted_at,
+      intake_lot_id: r.intake_lot_id,
+      mat_sap_code: r.mat_sap_code || '',
+      re_code: r.re_code || '',
+      material_description: r.material_description || '',
+      direction: r.adjust_type,
+      qty: r.adjust_qty,
+      prev_vol: r.prev_remain_vol,
+      new_vol: r.new_remain_vol,
+      reason: r.adjust_reason || '',
+      remark: r.remark || '',
+      user: r.adjusted_by || '',
+      reference: '',
+    }))
   }
 
   const fromLabel = adjReportFrom.value || 'Beginning'
   const toLabel = adjReportTo.value || 'Now'
 
   const htmlContent = `
-    <html><head><title>Stock Adjustment Report</title>
+    <html><head><title>Stock Movement Report</title>
     <style>
-      body { font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; color: #333; }
-      h1 { color: #00695c; font-size: 22px; margin-bottom: 4px; }
-      .subtitle { color: #666; font-size: 14px; margin-bottom: 16px; }
-      table { width: 100%; border-collapse: collapse; font-size: 12px; }
-      th { background: #00695c; color: white; padding: 8px 6px; text-align: left; }
-      td { padding: 6px; border-bottom: 1px solid #ddd; }
+      @page { size: landscape; margin: 10mm; }
+      body { font-family: 'Segoe UI', Arial, sans-serif; margin: 16px; color: #333; }
+      h1 { color: #1565c0; font-size: 20px; margin-bottom: 4px; }
+      .subtitle { color: #666; font-size: 13px; margin-bottom: 12px; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      th { background: #1565c0; color: white; padding: 6px 5px; text-align: left; white-space: nowrap; }
+      td { padding: 5px; border-bottom: 1px solid #ddd; }
       tr:nth-child(even) { background: #f5f5f5; }
       .increase { color: #2e7d32; font-weight: bold; }
       .decrease { color: #c62828; font-weight: bold; }
-      .footer { margin-top: 16px; font-size: 11px; color: #999; text-align: right; }
-      @media print { body { margin: 10px; } }
+      .prebatch { color: #1565c0; }
+      .adjustment { color: #6a1b9a; }
+      .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; }
+      .badge-adj { background: #f3e5f5; color: #6a1b9a; }
+      .badge-pre { background: #e3f2fd; color: #1565c0; }
+      .footer { margin-top: 12px; font-size: 10px; color: #999; text-align: right; }
+      .summary { display: flex; gap: 24px; margin-bottom: 12px; font-size: 12px; }
+      .summary-item { padding: 4px 12px; border-radius: 4px; background: #f5f5f5; }
+      @media print { body { margin: 8px; } }
     </style></head><body>
-    <h1>📋 Stock Adjustment Report</h1>
-    <div class="subtitle">Period: ${fromLabel} — ${toLabel} &nbsp;|&nbsp; Total Records: ${reportRows.length}</div>
+    <h1>📋 Stock Movement Report</h1>
+    <div class="subtitle">Period: ${fromLabel} — ${toLabel}</div>
+    <div class="summary">
+      <div class="summary-item">Total: <strong>${movements.length}</strong></div>
+      <div class="summary-item"><span class="badge badge-adj">ADJ</span> Adjustments: <strong>${movements.filter(m => m.movement_type === 'adjustment').length}</strong></div>
+      <div class="summary-item"><span class="badge badge-pre">PRE</span> Pre-batch: <strong>${movements.filter(m => m.movement_type === 'prebatch').length}</strong></div>
+    </div>
     <table>
       <thead>
         <tr>
-          <th>Date/Time</th><th>Lot ID</th><th>SAP Code</th><th>RE Code</th>
-          <th>Material</th><th>Type</th><th>Qty</th><th>Before</th><th>After</th>
-          <th>Reason</th><th>Remark</th><th>By</th>
+          <th>Date/Time</th><th>Source</th><th>Lot ID</th><th>SAP Code</th><th>RE Code</th>
+          <th>Direction</th><th>Qty</th><th>Before</th><th>After</th>
+          <th>Reason</th><th>Reference</th><th>By</th>
         </tr>
       </thead>
       <tbody>
-        ${reportRows.map((r: any) => `
+        ${movements.map((m: any) => `
           <tr>
-            <td>${formatDateTime(r.adjusted_at)}</td>
-            <td>${r.intake_lot_id || ''}</td>
-            <td>${r.mat_sap_code || ''}</td>
-            <td>${r.re_code || ''}</td>
-            <td>${r.material_description || ''}</td>
-            <td class="${r.adjust_type === 'increase' ? 'increase' : 'decrease'}">
-              ${r.adjust_type === 'increase' ? '↑ Increase' : '↓ Decrease'}
+            <td>${m.date ? formatDateTime(m.date) : ''}</td>
+            <td><span class="badge ${m.movement_type === 'adjustment' ? 'badge-adj' : 'badge-pre'}">${m.movement_type === 'adjustment' ? 'ADJ' : 'PRE'}</span></td>
+            <td>${m.intake_lot_id || ''}</td>
+            <td>${m.mat_sap_code || ''}</td>
+            <td>${m.re_code || ''}</td>
+            <td class="${m.direction === 'increase' ? 'increase' : 'decrease'}">
+              ${m.direction === 'increase' ? '↑ Increase' : '↓ Decrease'}
             </td>
-            <td class="${r.adjust_type === 'increase' ? 'increase' : 'decrease'}">
-              ${r.adjust_type === 'increase' ? '+' : '−'}${r.adjust_qty?.toFixed(3) || '0.000'}
+            <td class="${m.direction === 'increase' ? 'increase' : 'decrease'}">
+              ${m.direction === 'increase' ? '+' : '−'}${m.qty?.toFixed(3) || '0.000'}
             </td>
-            <td>${r.prev_remain_vol?.toFixed(3) || ''}</td>
-            <td>${r.new_remain_vol?.toFixed(3) || ''}</td>
-            <td>${r.adjust_reason || ''}</td>
-            <td>${r.remark || ''}</td>
-            <td>${r.adjusted_by || ''}</td>
+            <td>${m.prev_vol != null ? m.prev_vol.toFixed(3) : '-'}</td>
+            <td>${m.new_vol != null ? m.new_vol.toFixed(3) : '-'}</td>
+            <td>${m.reason || ''}</td>
+            <td style="font-size:10px">${m.reference || m.remark || ''}</td>
+            <td>${m.user || ''}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -1320,12 +1347,397 @@ const stockOverviewSummary = computed(() => {
 const adjustments = ref<any[]>([])
 const adjColumnFilters = ref<Record<string, string>>({})
 
+// Usage details map (keyed by intake_lot_id)
+const lotUsageMap = ref<Record<string, any[]>>({})
+const fetchLotUsage = async (lotId: string) => {
+  try {
+    const data = await $fetch<any[]>(`${appConfig.apiBaseUrl}/stock-adjustments/usage/${lotId}`)
+    lotUsageMap.value[lotId] = data
+  } catch (e) {
+    console.error('Failed to fetch lot usage:', e)
+    lotUsageMap.value[lotId] = []
+  }
+}
+
+// ── Expiry Alert Report ──────────────────────────────────────────────────
+const printExpiryReport = async () => {
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) return
+  printWindow.document.write('<html><body><h2 style="font-family:sans-serif;color:#1565c0;">⏳ Loading expiry data...</h2></body></html>')
+  try {
+    const data = await $fetch<any>(`${appConfig.apiBaseUrl}/reports/expiry-alert`)
+    const now = new Date().toLocaleString('en-GB')
+
+    const buildRows = (items: any[], label: string, bgClass: string) => {
+      return (items || []).map((r: any, i: number) => `
+        <tr class="${bgClass}"><td class="tc">${i+1}</td><td class="tb">${r.mat_sap_code || '-'}</td><td>${r.re_code || '-'}</td><td>${r.intake_lot_id}</td><td class="tr">${(r.remain_vol || 0).toFixed(4)}</td><td>${r.intake_to || '-'}</td><td class="tc">${r.expire_date ? new Date(r.expire_date).toLocaleDateString('en-GB') : '-'}</td><td class="tc ${r.days_left !== null && r.days_left < 0 ? 'text-red' : ''}">${r.days_left !== null ? r.days_left : '-'}</td></tr>
+      `).join('')
+    }
+
+    const s = data.summary || {}
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Expiry Alert Report</title>
+    <style>@page{size:A4 landscape;margin:8mm 10mm}*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Courier Prime',monospace;font-size:13px;color:#222;line-height:1.4}.header{background:#c62828;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:4px;margin-bottom:8px}.header h1{font-size:22px;margin:0}.info-bar{background:#ffebee;padding:8px 14px;border-radius:3px;margin-bottom:10px;font-size:13px;color:#c62828;font-weight:bold}.section-title{padding:8px 14px;font-size:14px;font-weight:bold;border-radius:3px;margin:12px 0 4px;color:#fff}.sec-expired{background:#c62828}.sec-warning{background:#ef6c00}.sec-ok{background:#2e7d32}table.dt{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}table.dt th{background:#546e7a;color:#fff;padding:4px 8px;text-align:left;font-size:10px;text-transform:uppercase}table.dt td{padding:4px 8px;border-bottom:1px solid #e0e0e0;overflow:hidden;text-overflow:ellipsis}.bg-exp{background:#ffebee}.bg-warn{background:#fff8e1}.bg-ok{background:#e8f5e9}.text-red{color:#c62828;font-weight:bold}.grand{background:#37474f;color:#fff;padding:12px 18px;border-radius:4px;font-size:14px;margin-top:10px;display:flex;justify-content:space-between}.footer{border-top:2px solid #c62828;font-size:10px;color:#888;padding:6px 0;margin-top:10px;display:flex;justify-content:space-between}.tr{text-align:right}.tc{text-align:center}.tb{font-weight:bold}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>
+    <div class="header"><div><h1>⚠️ Ingredient Expiry Alert</h1><div style="font-size:12px;margin-top:3px;opacity:.85">xMixing Control System</div></div><div style="font-size:12px;text-align:right;opacity:.9">Generated: ${now}</div></div>
+    <div class="info-bar">📦 Total Active Lots: ${s.total_lots || 0} | 🔴 Expired: ${s.expired_count || 0} | 🟠 Expiring (30d): ${s.warning_count || 0} | 🟢 OK: ${s.ok_count || 0}</div>
+    ${(data.expired || []).length > 0 ? `<div class="section-title sec-expired">🔴 EXPIRED (${data.expired.length} lots)</div><table class="dt"><thead><tr><th style="width:3%">#</th><th>Mat SAP Code</th><th>RE Code</th><th>Intake Lot ID</th><th class="tr">Remain (kg)</th><th>Location</th><th class="tc">Expire Date</th><th class="tc">Days Left</th></tr></thead><tbody>${buildRows(data.expired, 'Expired', 'bg-exp')}</tbody></table>` : ''}
+    ${(data.warning || []).length > 0 ? `<div class="section-title sec-warning">🟠 EXPIRING SOON — within 30 days (${data.warning.length} lots)</div><table class="dt"><thead><tr><th style="width:3%">#</th><th>Mat SAP Code</th><th>RE Code</th><th>Intake Lot ID</th><th class="tr">Remain (kg)</th><th>Location</th><th class="tc">Expire Date</th><th class="tc">Days Left</th></tr></thead><tbody>${buildRows(data.warning, 'Warning', 'bg-warn')}</tbody></table>` : ''}
+    <div class="section-title sec-ok">🟢 OK — ${(data.ok || []).length} lots with > 30 days remaining</div>
+    <div class="grand"><span>Total: ${s.total_lots || 0} active lots</span><span>🔴 ${s.expired_count || 0} Expired | 🟠 ${s.warning_count || 0} Warning | 🟢 ${s.ok_count || 0} OK</span></div>
+    <div class="footer"><span>xMixing 2025 | xMix.co.th</span><span>Ingredient Expiry Alert Report</span></div>
+    </body></html>`
+    printWindow.document.open(); printWindow.document.write(html); printWindow.document.close()
+  } catch (e) { console.error(e); printWindow.close(); $q.notify({ type: 'negative', message: 'Failed', position: 'top' }) }
+}
+
+// ── Traceability Report ──────────────────────────────────────────────────
+const showTraceDialog = ref(false)
+const traceSearchId = ref('')
+const traceLoading = ref(false)
+
+const printTraceReport = async () => {
+  if (!traceSearchId.value.trim()) { $q.notify({ type: 'warning', message: 'Enter Lot ID or Batch ID' }); return }
+  traceLoading.value = true
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) { traceLoading.value = false; return }
+  printWindow.document.write('<html><body><h2 style="font-family:sans-serif;color:#1565c0;">⏳ Tracing...</h2></body></html>')
+  try {
+    const data = await $fetch<any>(`${appConfig.apiBaseUrl}/reports/traceability/${encodeURIComponent(traceSearchId.value.trim())}`)
+    const now = new Date().toLocaleString('en-GB')
+    let bodyContent = ''
+
+    if (data.type === 'forward' && data.forward) {
+      const lot = data.forward.lot
+      const usages = data.forward.used_in || []
+      const usageRows = usages.map((u: any, i: number) => `
+        <tr><td class="tc">${i+1}</td><td>${u.batch_record_id}</td><td>${u.plan_id || '-'}</td><td>${u.re_code || '-'}</td><td class="tr">${(u.take_volume || 0).toFixed(4)}</td><td class="tc">${u.date ? new Date(u.date).toLocaleString('en-GB') : '-'}</td></tr>
+      `).join('')
+      bodyContent = `
+        <div class="section-title">📦 Source Intake Lot</div>
+        <div class="info-card"><strong>${lot.intake_lot_id}</strong> | Mat SAP: ${lot.mat_sap_code || '-'} | RE: ${lot.re_code || '-'}<br>Intake: ${(lot.intake_vol || 0).toFixed(4)} kg | Remain: ${(lot.remain_vol || 0).toFixed(4)} kg | Desc: ${lot.material_description || '-'}</div>
+        <div class="section-title">🔗 Used In (${usages.length} records) — Forward Trace</div>
+        <table class="dt"><thead><tr><th style="width:3%">#</th><th>Batch Record ID</th><th>Plan ID</th><th>RE Code</th><th class="tr">Volume Used (kg)</th><th class="tc">Date</th></tr></thead>
+        <tbody>${usageRows || '<tr><td colspan="6" class="tc">Not used in any batch yet</td></tr>'}</tbody></table>
+      `
+    } else if (data.type === 'backward' && data.backward) {
+      const batch = data.backward.batch
+      const ings = data.backward.ingredients || []
+      const ingRows = ings.map((ing: any, i: number) => {
+        const lotRows = (ing.lots_used || []).map((l: any) => `
+          <tr class="bg-ok"><td></td><td class="q-pl-lg">↳ ${l.intake_lot_id}</td><td>${l.mat_sap_code || '-'}</td><td class="tr">${(l.take_volume || 0).toFixed(4)}</td><td>${l.intake_from || '-'}</td></tr>
+        `).join('')
+        return `<tr><td class="tc">${i+1}</td><td class="tb">${ing.re_code}</td><td>${ing.ingredient_name || '-'}</td><td class="tr">${(ing.required_volume || 0).toFixed(4)}</td><td></td></tr>${lotRows}`
+      }).join('')
+      bodyContent = `
+        <div class="section-title">🏭 Batch Info</div>
+        <div class="info-card"><strong>${batch.batch_id}</strong> | SKU: ${batch.sku_id} | Size: ${(batch.batch_size || 0).toFixed(4)} kg | Status: ${batch.status}<br>Plan: ${data.backward.plan.plan_id} | ${data.backward.plan.sku_name || '-'}</div>
+        <div class="section-title">🧪 Ingredients & Lot Sources — Backward Trace</div>
+        <table class="dt"><thead><tr><th style="width:3%">#</th><th>RE Code / Lot ID</th><th>Name / Mat SAP</th><th class="tr">Volume (kg)</th><th>Source</th></tr></thead>
+        <tbody>${ingRows || '<tr><td colspan="5" class="tc">No ingredients found</td></tr>'}</tbody></table>
+      `
+    }
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Traceability Report</title>
+    <style>@page{size:A4 portrait;margin:10mm}*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Courier Prime',monospace;font-size:13px;color:#222;line-height:1.4}.header{background:#1565c0;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:4px;margin-bottom:8px}.header h1{font-size:22px;margin:0}.info-bar{background:#e3f2fd;padding:8px 14px;border-radius:3px;margin-bottom:10px;font-size:13px;color:#1565c0;font-weight:bold}.info-card{background:#f5f5f5;padding:10px 14px;border-left:4px solid #1565c0;border-radius:0 4px 4px 0;margin-bottom:10px;font-size:12px}.section-title{background:#37474f;color:#fff;padding:8px 14px;font-size:14px;font-weight:bold;border-radius:3px;margin:12px 0 4px}table.dt{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}table.dt th{background:#546e7a;color:#fff;padding:4px 8px;text-align:left;font-size:10px;text-transform:uppercase}table.dt td{padding:4px 8px;border-bottom:1px solid #e0e0e0;overflow:hidden;text-overflow:ellipsis}.bg-ok{background:#f5f5f5}.grand{background:#1565c0;color:#fff;padding:12px 18px;border-radius:4px;font-size:14px;margin-top:10px}.footer{border-top:2px solid #1565c0;font-size:10px;color:#888;padding:6px 0;margin-top:10px;display:flex;justify-content:space-between}.tr{text-align:right}.tc{text-align:center}.tb{font-weight:bold}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>
+    <div class="header"><div><h1>🔗 Traceability Report</h1><div style="font-size:12px;margin-top:3px;opacity:.85">xMixing Control System</div></div><div style="font-size:12px;text-align:right;opacity:.9">Generated: ${now}</div></div>
+    <div class="info-bar">🔍 Search: ${traceSearchId.value} | Trace Type: ${data.type === 'forward' ? '➡️ Forward (Lot → Batch)' : '⬅️ Backward (Batch → Lot)'}</div>
+    ${bodyContent}
+    <div class="grand">Traceability Report — ${data.type === 'forward' ? 'Forward' : 'Backward'} Trace for: ${traceSearchId.value}</div>
+    <div class="footer"><span>xMixing 2025 | xMix.co.th</span><span>Traceability Report</span></div>
+    </body></html>`
+    printWindow.document.open(); printWindow.document.write(html); printWindow.document.close()
+    showTraceDialog.value = false
+  } catch (e: any) {
+    console.error(e); printWindow.close()
+    $q.notify({ type: 'negative', message: e?.data?.detail || 'Not found — enter valid Lot ID or Batch ID', position: 'top' })
+  } finally { traceLoading.value = false }
+}
+
+// ── Summary Report ──────────────────────────────────────────────────────────
+const showSummaryReport = ref(false)
+const summaryFromDate = ref(formatDateForInput(new Date()))
+const summaryToDate = ref(formatDateForInput(new Date()))
+const summaryLoading = ref(false)
+
+const printSummaryReport = async () => {
+  summaryLoading.value = true
+  // Open window BEFORE async call to avoid popup blocker
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) {
+    $q.notify({ type: 'warning', message: 'Popup blocked. Please allow popups for this site.', position: 'top' })
+    summaryLoading.value = false
+    return
+  }
+  printWindow.document.write('<html><body><h2 style="font-family:sans-serif;color:#1565c0;">⏳ Loading report data...</h2></body></html>')
+  try {
+    const fromApi = formatDateToApi(summaryFromDate.value)
+    const toApi = formatDateToApi(summaryToDate.value)
+    let url = `${appConfig.apiBaseUrl}/stock-adjustments/summary-report`
+    const params: string[] = []
+    if (fromApi) params.push(`from_date=${fromApi}`)
+    if (toApi) params.push(`to_date=${toApi}`)
+    if (params.length) url += '?' + params.join('&')
+
+    const data = await $fetch<Record<string, any[]>>(url)
+    const warehouses = Object.keys(data).sort()
+    const now = new Date().toLocaleString('en-GB')
+    const fromLabel = summaryFromDate.value || 'All'
+    const toLabel = summaryToDate.value || 'All'
+
+    // Build warehouse sections — grouped by ingredient (mat_sap_code + re_code)
+    const warehouseSections = warehouses.map(wh => {
+      const lots = data[wh] || []
+
+      // Group lots by mat_sap_code + re_code
+      const ingredientMap = new Map<string, any[]>()
+      for (const lot of lots) {
+        const key = `${lot.mat_sap_code || '-'}||${lot.re_code || '-'}`
+        if (!ingredientMap.has(key)) ingredientMap.set(key, [])
+        ingredientMap.get(key)!.push(lot)
+      }
+
+      // Warehouse totals
+      const whTotalIntake = lots.reduce((s: number, l: any) => s + (l.intake_vol || 0), 0)
+      const whTotalUsed = lots.reduce((s: number, l: any) => s + (l.used_vol || 0), 0)
+      const whTotalAdj = lots.reduce((s: number, l: any) => s + (l.adj_total || 0), 0)
+      const whTotalRemain = lots.reduce((s: number, l: any) => s + (l.remain_vol || 0), 0)
+
+      // Build ingredient groups
+      const ingredientSections = Array.from(ingredientMap.entries()).map(([key, ingLots], ingIdx) => {
+        const [matSap, reCode] = key.split('||')
+        const ingIntake = ingLots.reduce((s: number, l: any) => s + (l.intake_vol || 0), 0)
+        const ingUsed = ingLots.reduce((s: number, l: any) => s + (l.used_vol || 0), 0)
+        const ingAdj = ingLots.reduce((s: number, l: any) => s + (l.adj_total || 0), 0)
+        const ingRemain = ingLots.reduce((s: number, l: any) => s + (l.remain_vol || 0), 0)
+
+        // Individual lot rows
+        const lotRows = ingLots.map((lot: any, lotIdx: number) => `
+          <tr class="lot-row">
+            <td class="text-center" style="color:#999;">${lotIdx + 1}</td>
+            <td>${lot.intake_lot_id}</td>
+            <td>${lot.lot_id || '-'}</td>
+            <td class="text-right">${(lot.intake_vol || 0).toFixed(4)}</td>
+            <td class="text-right text-red">${(lot.used_vol || 0).toFixed(4)}</td>
+            <td class="text-right">${(lot.adj_total || 0).toFixed(4)}</td>
+            <td class="text-right text-green text-bold">${(lot.remain_vol || 0).toFixed(4)}</td>
+            <td class="text-center">${lot.intake_at ? new Date(lot.intake_at).toLocaleDateString('en-GB') : '-'}</td>
+            <td class="text-center">${lot.expire_date ? new Date(lot.expire_date).toLocaleDateString('en-GB') : '-'}</td>
+          </tr>
+        `).join('')
+
+        return `
+          <!-- Ingredient Header -->
+          <div class="ing-header">
+            <span class="ing-num">${ingIdx + 1}.</span>
+            <span class="ing-sap">${matSap}</span>
+            <span class="ing-re">${reCode}</span>
+            <span class="ing-desc">${ingLots[0]?.material_description || ''}</span>
+            <span class="ing-count">${ingLots.length} lot${ingLots.length > 1 ? 's' : ''}</span>
+          </div>
+
+          <!-- Lot Detail Table -->
+          <table class="lot-table">
+            <colgroup>
+              <col style="width:3%;">
+              <col style="width:18%;">
+              <col style="width:10%;">
+              <col style="width:11%;">
+              <col style="width:11%;">
+              <col style="width:11%;">
+              <col style="width:14%;">
+              <col style="width:11%;">
+              <col style="width:11%;">
+            </colgroup>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Intake Lot ID</th>
+                <th>Supplier Lot</th>
+                <th class="text-right">Intake (kg)</th>
+                <th class="text-right">Usage (kg)</th>
+                <th class="text-right">Adjust (kg)</th>
+                <th class="text-right">Remain On-hand (kg)</th>
+                <th class="text-center">Intake Date</th>
+                <th class="text-center">Expiry</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${lotRows}
+              <!-- Ingredient Summary -->
+              <tr class="ing-summary-row">
+                <td colspan="3" class="text-right text-bold">
+                  Summary for ${matSap} (${reCode}):
+                </td>
+                <td class="text-right text-bold">${ingIntake.toFixed(4)}</td>
+                <td class="text-right text-bold text-red">${ingUsed.toFixed(4)}</td>
+                <td class="text-right text-bold">${ingAdj.toFixed(4)}</td>
+                <td class="text-right text-bold text-green">${ingRemain.toFixed(4)}</td>
+                <td colspan="2"></td>
+              </tr>
+            </tbody>
+          </table>
+        `
+      }).join('')
+
+      return `
+        <!-- Location Section -->
+        <div class="location-section">
+          <div class="location-header">
+            <span class="loc-badge">${wh}</span>
+            <span class="loc-title">Location: ${wh}</span>
+          </div>
+
+          ${ingredientSections}
+
+          <!-- Location Total -->
+          <div class="location-total">
+            <span>Location Total (${wh}) — ${lots.length} lots, ${ingredientMap.size} ingredients</span>
+            <span>
+              Intake: <strong>${whTotalIntake.toFixed(4)}</strong> |
+              Usage: <strong class="red">${whTotalUsed.toFixed(4)}</strong> |
+              Adjust: <strong>${whTotalAdj.toFixed(4)}</strong> |
+              Remain: <strong class="green">${whTotalRemain.toFixed(4)}</strong> kg
+            </span>
+          </div>
+        </div>
+      `
+    }).join('')
+
+    // Grand totals
+    const allLots = warehouses.flatMap(wh => data[wh] || [])
+    const grandIntake = allLots.reduce((s: number, l: any) => s + (l.intake_vol || 0), 0)
+    const grandUsed = allLots.reduce((s: number, l: any) => s + (l.used_vol || 0), 0)
+    const grandAdj = allLots.reduce((s: number, l: any) => s + (l.adj_total || 0), 0)
+    const grandRemain = allLots.reduce((s: number, l: any) => s + (l.remain_vol || 0), 0)
+    const totalIngredients = warehouses.reduce((count, wh) => {
+      const lots = data[wh] || []
+      const keys = new Set(lots.map((l: any) => `${l.mat_sap_code}||${l.re_code}`))
+      return count + keys.size
+    }, 0)
+
+    const html = `<!DOCTYPE html>
+<html><head>
+  <meta charset="utf-8">
+  <title>Stock Summary Report</title>
+  <style>
+    @page { size: A4 landscape; margin: 8mm 10mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Courier Prime', 'Courier New', Courier, monospace; font-size: 13px; color: #222; line-height: 1.4; }
+
+    /* Header & Footer */
+    .report-header { background: #1565c0; color: white; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; margin-bottom: 6px; }
+    .report-header h1 { font-size: 22px; margin: 0; }
+    .report-header .sub { font-size: 12px; margin-top: 3px; opacity: 0.85; }
+    .report-header .meta { font-size: 12px; text-align: right; opacity: 0.9; }
+    .date-bar { background: #e3f2fd; padding: 8px 14px; border-radius: 3px; margin-bottom: 10px; font-size: 13px; color: #1565c0; font-weight: bold; }
+    .footer { border-top: 2px solid #1565c0; font-size: 10px; color: #888; padding: 6px 0; margin-top: 10px; display: flex; justify-content: space-between; }
+
+    /* Location section */
+    .location-section { margin-bottom: 16px; }
+    .location-header { background: #263238; color: white; padding: 10px 16px; font-size: 16px; font-weight: bold; border-radius: 3px; margin-bottom: 6px; }
+    .loc-badge { background: #ffc107; color: #000; padding: 3px 10px; border-radius: 4px; font-size: 13px; margin-right: 8px; font-weight: bold; }
+    .loc-title { vertical-align: middle; }
+    .location-total { background: #37474f; color: white; padding: 8px 14px; border-radius: 3px; margin-top: 6px; font-size: 13px; display: flex; justify-content: space-between; }
+    .location-total .red { color: #ef9a9a; }
+    .location-total .green { color: #a5d6a7; }
+
+    /* Ingredient header */
+    .ing-header { background: #e8eaf6; padding: 7px 14px; margin-top: 8px; margin-bottom: 2px; border-left: 4px solid #3f51b5; border-radius: 2px; font-size: 13px; }
+    .ing-num { color: #5c6bc0; font-weight: bold; margin-right: 6px; }
+    .ing-sap { font-weight: bold; color: #1a237e; font-size: 14px; margin-right: 12px; }
+    .ing-re { background: #c8e6c9; color: #2e7d32; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: bold; margin-right: 12px; }
+    .ing-desc { color: #666; font-size: 12px; }
+    .ing-count { float: right; color: #5c6bc0; font-size: 12px; font-weight: bold; }
+
+    /* Lot detail table */
+    table.lot-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 2px; table-layout: fixed; }
+    table.lot-table th { background: #546e7a; color: white; padding: 4px 8px; text-align: left; font-size: 10px; text-transform: uppercase; overflow: hidden; }
+    table.lot-table td { padding: 4px 8px; border-bottom: 1px solid #e0e0e0; overflow: hidden; text-overflow: ellipsis; word-break: break-all; }
+    table.lot-table tr.lot-row:nth-child(even) td { background: #fafafa; }
+    table.lot-table tr.lot-row:hover td { background: #f3f3f3; }
+
+    /* Ingredient summary row */
+    .ing-summary-row td { background: #e8eaf6 !important; font-weight: bold; border-top: 2px solid #3f51b5; border-bottom: 2px solid #3f51b5; }
+
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .text-bold { font-weight: bold; }
+    .text-red { color: #c62828; }
+    .text-green { color: #2e7d32; }
+
+    /* Grand total */
+    .grand-total { background: #1565c0; color: white; padding: 12px 18px; border-radius: 4px; font-size: 14px; margin-top: 10px; }
+    .grand-total .row { display: flex; justify-content: space-between; align-items: center; }
+    .grand-total table { width: 100%; margin-top: 6px; }
+    .grand-total table td { padding: 3px 8px; font-size: 13px; }
+
+    @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+  <!-- Report Header -->
+  <div class="report-header">
+    <div>
+      <h1>📦 Stock Summary Report</h1>
+      <div class="sub">xMixing Control System — Ingredient Inventory</div>
+    </div>
+    <div class="meta">
+      Generated: ${now}
+    </div>
+  </div>
+
+  <!-- Date range bar -->
+  <div class="date-bar">
+    📅 Period: ${fromLabel} — ${toLabel}
+    &nbsp;&nbsp;|&nbsp;&nbsp;
+    Locations: ${warehouses.join(', ')}
+    &nbsp;&nbsp;|&nbsp;&nbsp;
+    Total Ingredients: ${totalIngredients}
+    &nbsp;&nbsp;|&nbsp;&nbsp;
+    Total Lots: ${allLots.length}
+  </div>
+
+  ${warehouseSections}
+
+  <!-- Grand Total -->
+  <div class="grand-total">
+    <div class="row">
+      <span><strong>Grand Total</strong> — ${allLots.length} lots, ${totalIngredients} ingredients across ${warehouses.length} locations</span>
+    </div>
+    <table>
+      <tr>
+        <td>Total Intake:</td><td class="text-right"><strong>${grandIntake.toFixed(4)}</strong> kg</td>
+        <td>Total Usage:</td><td class="text-right"><strong>${grandUsed.toFixed(4)}</strong> kg</td>
+        <td>Total Adjust:</td><td class="text-right"><strong>${grandAdj.toFixed(4)}</strong> kg</td>
+        <td>Total Remain:</td><td class="text-right"><strong>${grandRemain.toFixed(4)}</strong> kg</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="footer">
+    <span>xMixing 2025 | xMix.co.th</span>
+    <span>Stock Summary Report — ${fromLabel} to ${toLabel}</span>
+  </div>
+</body>
+</html>`
+
+    printWindow.document.open()
+    printWindow.document.write(html)
+    printWindow.document.close()
+    showSummaryReport.value = false
+  } catch (e) {
+    console.error('Failed to generate summary report:', e)
+    printWindow.close()
+    $q.notify({ type: 'negative', message: 'Failed to generate report', position: 'top' })
+  } finally {
+    summaryLoading.value = false
+  }
+}
+
 const adjColumns = computed<QTableColumn[]>(() => [
   { name: 'adjusted_at', label: 'Date/Time', field: 'adjusted_at', align: 'center' as const, sortable: true, format: (val: any) => formatDateTime(val) },
   { name: 'intake_lot_id', label: 'Lot ID', field: 'intake_lot_id', align: 'left' as const, sortable: true },
   { name: 'mat_sap_code', label: 'SAP Code', field: 'mat_sap_code', align: 'left' as const, sortable: true },
   { name: 're_code', label: 'RE Code', field: 're_code', align: 'left' as const, sortable: true },
-  { name: 'material_description', label: 'Material', field: 'material_description', align: 'left' as const, sortable: true },
   { name: 'adjust_type', label: 'Type', field: 'adjust_type', align: 'center' as const, sortable: true },
   { name: 'adjust_qty', label: 'Qty', field: 'adjust_qty', align: 'right' as const, sortable: true },
   { name: 'prev_remain_vol', label: 'Before', field: 'prev_remain_vol', align: 'right' as const, sortable: true },
@@ -1446,6 +1858,15 @@ watch(adjSelectedReCode, () => {
           <div class="text-h6 text-weight-bolder">{{ t('ingredient.title') }}</div>
         </div>
         <div class="row items-center q-gutter-sm">
+          <q-btn icon="assessment" round flat text-color="white" @click="showSummaryReport = true" title="Stock Summary Report">
+            <q-tooltip>Stock Summary Report</q-tooltip>
+          </q-btn>
+          <q-btn icon="warning_amber" round flat text-color="yellow-4" @click="printExpiryReport" title="Expiry Alert">
+            <q-tooltip>Ingredient Expiry Alert</q-tooltip>
+          </q-btn>
+          <q-btn icon="device_hub" round flat text-color="white" @click="showTraceDialog = true" title="Traceability Report">
+            <q-tooltip>Traceability Report</q-tooltip>
+          </q-btn>
           <q-btn icon="save" round flat text-color="white" @click="onSave" :loading="isSaving" title="Save Intake" />
           <q-btn icon="clear_all" round flat text-color="white" @click="onClear" title="Clear Form" />
         </div>
@@ -1864,7 +2285,7 @@ watch(adjSelectedReCode, () => {
                     </q-btn>
                     <q-btn
                       icon="tune"
-                      color="teal-8"
+                      color="blue-8"
                       unelevated
                       round
                       dense
@@ -2042,6 +2463,50 @@ watch(adjSelectedReCode, () => {
                           </q-item>
                         </q-card>
                       </div>
+                    </div>
+
+                    <!-- Usage Details (Pre-batch) -->
+                    <div class="q-mt-md">
+                      <div class="text-subtitle2 q-mb-xs text-primary row items-center">
+                        <q-icon name="output" class="q-mr-xs" />
+                        Usage Details (Pre-batch)
+                        <q-btn flat dense round icon="refresh" size="sm" color="primary" class="q-ml-sm"
+                          @click="fetchLotUsage(props.row.intake_lot_id)" />
+                      </div>
+                      <div v-if="!lotUsageMap[props.row.intake_lot_id]" class="text-grey-7 italic q-pl-md">
+                        <q-btn flat dense size="sm" color="primary" label="Load usage data"
+                          @click="fetchLotUsage(props.row.intake_lot_id)" />
+                      </div>
+                      <div v-else-if="lotUsageMap[props.row.intake_lot_id].length === 0" class="text-grey-7 italic q-pl-md">
+                        No pre-batch usage recorded for this lot.
+                      </div>
+                      <q-markup-table v-else dense flat bordered separator="cell" class="text-caption" style="max-height: 250px; overflow-y: auto;">
+                        <thead>
+                          <tr class="bg-blue-1">
+                            <th class="text-left">Batch Record ID</th>
+                            <th class="text-left">Plan ID</th>
+                            <th class="text-left">RE Code</th>
+                            <th class="text-right">Volume (kg)</th>
+                            <th class="text-center">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="u in lotUsageMap[props.row.intake_lot_id]" :key="u.id">
+                            <td class="text-bold">{{ u.batch_record_id || '-' }}</td>
+                            <td>{{ u.plan_id || '-' }}</td>
+                            <td class="text-blue-9 text-bold">{{ u.re_code || '-' }}</td>
+                            <td class="text-right text-red-8 text-bold">−{{ u.take_volume?.toFixed(4) }}</td>
+                            <td class="text-center">{{ formatDateTime(u.created_at) }}</td>
+                          </tr>
+                          <tr class="bg-grey-2">
+                            <td colspan="3" class="text-right text-bold">Total Used:</td>
+                            <td class="text-right text-red-9 text-bold">
+                              −{{ lotUsageMap[props.row.intake_lot_id].reduce((s: number, u: any) => s + (u.take_volume || 0), 0).toFixed(4) }} kg
+                            </td>
+                            <td class="text-center text-grey-7">{{ lotUsageMap[props.row.intake_lot_id].length }} records</td>
+                          </tr>
+                        </tbody>
+                      </q-markup-table>
                     </div>
                   </div>
                 </q-td>
@@ -2349,11 +2814,11 @@ watch(adjSelectedReCode, () => {
     <q-dialog v-model="showAdjustDialog" maximized transition-show="slide-up" transition-hide="slide-down">
       <q-card class="column" style="max-width: 100vw;">
         <!-- Dialog Header -->
-        <q-card-section class="q-pa-sm bg-teal-8 text-white row items-center justify-between">
+        <q-card-section class="q-pa-sm bg-blue-8 text-white row items-center justify-between">
           <div class="row items-center q-gutter-sm">
             <q-icon name="tune" size="sm" />
             <div class="text-h6 text-weight-bold">Stock Adjustment</div>
-            <q-badge v-if="adjSelectedLot" color="white" text-color="teal-9" class="text-weight-bold">
+            <q-badge v-if="adjSelectedLot" color="white" text-color="blue-9" class="text-weight-bold">
               {{ adjSelectedReCode }} | {{ adjSelectedLotId }}
             </q-badge>
           </div>
@@ -2383,7 +2848,7 @@ watch(adjSelectedReCode, () => {
 
       <!-- Adjustment Form -->
       <q-card flat bordered class="shadow-1 q-mb-md">
-        <q-card-section class="q-pa-sm bg-teal-8 text-white row items-center">
+        <q-card-section class="q-pa-sm bg-blue-8 text-white row items-center">
           <q-icon name="tune" class="q-mr-xs" />
           <div class="text-subtitle2 text-weight-bold">New Stock Adjustment</div>
         </q-card-section>
@@ -2474,7 +2939,7 @@ watch(adjSelectedReCode, () => {
                 <template v-slot:body="props">
                   <q-tr
                     :props="props"
-                    :class="adjSelectedLotId === props.row.intake_lot_id ? 'bg-teal-1 text-weight-bold' : ''"
+                    :class="adjSelectedLotId === props.row.intake_lot_id ? 'bg-blue-1 text-weight-bold' : ''"
                     style="cursor: pointer;"
                     @click="adjSelectedLotId = props.row.intake_lot_id"
                   >
@@ -2540,9 +3005,9 @@ watch(adjSelectedReCode, () => {
               </q-card>
             </div>
             <div class="col-12 col-md-3">
-              <q-card flat bordered class="bg-teal-1 text-center q-pa-sm">
+              <q-card flat bordered class="bg-blue-1 text-center q-pa-sm">
                 <div class="text-caption text-grey-7">New Value</div>
-                <div class="text-h6 text-weight-bold" :class="(adjNewRemainVol ?? adjRemaining) < 0 ? 'text-red-8' : 'text-teal-9'">
+                <div class="text-h6 text-weight-bold" :class="(adjNewRemainVol ?? adjRemaining) < 0 ? 'text-red-8' : 'text-blue-9'">
                   {{ (adjNewRemainVol ?? adjRemaining).toFixed(3) }} <span class="text-caption">kg</span>
                 </div>
               </q-card>
@@ -2579,7 +3044,7 @@ watch(adjSelectedReCode, () => {
             <div class="col-12 col-md-4">
               <q-btn
                 label="Submit Adjustment"
-                color="teal-8" icon="check"
+                color="blue-8" icon="check"
                 unelevated no-caps class="full-width"
                 :loading="adjSubmitting"
                 :disable="!adjSelectedLot || adjNewRemainVol === null || !adjReason"
@@ -2592,7 +3057,7 @@ watch(adjSelectedReCode, () => {
 
       <!-- Adjustment History Table -->
       <q-card flat bordered class="shadow-1 overflow-hidden" style="border-radius: 8px;">
-        <q-card-section class="q-pa-sm bg-teal-7 text-white row items-center justify-between">
+        <q-card-section class="q-pa-sm bg-blue-7 text-white row items-center justify-between">
           <div class="text-subtitle2 text-weight-bold">
             <q-icon name="history" class="q-mr-xs" />
             Adjustment History ({{ filteredAdjustments.length }})
@@ -2610,7 +3075,7 @@ watch(adjSelectedReCode, () => {
           style="max-height: calc(100vh - 500px);"
         >
           <template v-slot:header="props">
-            <q-tr :props="props" class="bg-teal-1">
+            <q-tr :props="props" class="bg-blue-1">
               <q-th v-for="col in props.cols" :key="col.name" :props="props" class="text-weight-bold">
                 {{ col.label }}
               </q-th>
@@ -2660,6 +3125,87 @@ watch(adjSelectedReCode, () => {
         </q-table>
       </q-card>
         </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- Stock Summary Report Dialog -->
+    <q-dialog v-model="showSummaryReport">
+      <q-card style="min-width: 450px;">
+        <q-card-section class="bg-blue-9 text-white">
+          <div class="row items-center q-gutter-sm">
+            <q-icon name="assessment" size="sm" />
+            <div class="text-h6">Stock Summary Report</div>
+          </div>
+        </q-card-section>
+
+        <q-card-section class="q-pt-lg">
+          <div class="text-subtitle2 q-mb-sm text-grey-8">Select date range for the report</div>
+          <div class="row q-col-gutter-md">
+            <div class="col-6">
+              <q-input filled v-model="summaryFromDate" label="From Date" mask="##/##/####" placeholder="DD/MM/YYYY">
+                <template v-slot:append>
+                  <q-icon name="event" class="cursor-pointer">
+                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                      <q-date v-model="summaryFromDate" mask="DD/MM/YYYY">
+                        <div class="row items-center justify-end">
+                          <q-btn v-close-popup label="Close" color="primary" flat />
+                        </div>
+                      </q-date>
+                    </q-popup-proxy>
+                  </q-icon>
+                </template>
+              </q-input>
+            </div>
+            <div class="col-6">
+              <q-input filled v-model="summaryToDate" label="To Date" mask="##/##/####" placeholder="DD/MM/YYYY">
+                <template v-slot:append>
+                  <q-icon name="event" class="cursor-pointer">
+                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                      <q-date v-model="summaryToDate" mask="DD/MM/YYYY">
+                        <div class="row items-center justify-end">
+                          <q-btn v-close-popup label="Close" color="primary" flat />
+                        </div>
+                      </q-date>
+                    </q-popup-proxy>
+                  </q-icon>
+                </template>
+              </q-input>
+            </div>
+          </div>
+          <div class="q-mt-md text-caption text-grey-7">
+            Report includes: Intake lots, stock details, pre-batch usage, and adjustments grouped by warehouse (FH, SPP).
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-pa-md">
+          <q-btn flat label="Cancel" color="grey" v-close-popup />
+          <q-btn
+            icon="print"
+            label="Generate Report"
+            color="blue-9"
+            :loading="summaryLoading"
+            @click="printSummaryReport"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Traceability Report Dialog -->
+    <q-dialog v-model="showTraceDialog">
+      <q-card style="min-width: 420px;">
+        <q-card-section class="bg-primary text-white">
+          <div class="text-h6"><q-icon name="device_hub" class="q-mr-sm" />Traceability Report</div>
+          <div class="text-caption">Enter an Intake Lot ID (forward trace) or Batch ID (backward trace)</div>
+        </q-card-section>
+        <q-card-section>
+          <q-input v-model="traceSearchId" label="Lot ID or Batch ID" filled autofocus @keyup.enter="printTraceReport">
+            <template #prepend><q-icon name="search" /></template>
+          </q-input>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn color="primary" icon="print" label="Generate Report" :loading="traceLoading" @click="printTraceReport" />
+        </q-card-actions>
       </q-card>
     </q-dialog>
 

@@ -15,6 +15,7 @@ from .router_views import router as views_router
 from .router_warehouses import router as warehouses_router
 from .router_translations import router as translations_router
 from .router_stock_adjustments import router as stock_adjustments_router
+from .router_reports import router as reports_router
 
 __all__ = [
     "auth_router",
@@ -27,5 +28,6 @@ __all__ = [
     "views_router",
     "warehouses_router",
     "translations_router",
-    "stock_adjustments_router"
+    "stock_adjustments_router",
+    "reports_router"
 ]

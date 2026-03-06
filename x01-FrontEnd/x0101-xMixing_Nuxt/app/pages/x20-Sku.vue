@@ -151,14 +151,15 @@ const groupedSteps = computed<{ phaseNum: string, steps: SkuStep[], firstStep: S
 const ingredientSummary = computed(() => {
   if (!selectedSkuId.value) return []
   const steps = skuStepsMap.value[selectedSkuId.value] || []
-  const map: { [key: string]: { re_code: string, name: string, warehouse: string, total: number, uom: string, phases: string[] } } = {}
+  const map: { [key: string]: { re_code: string, name: string, mat_sap_code: string, warehouse: string, total: number, uom: string, phases: string[] } } = {}
   steps.forEach(s => {
     if (s.ingredient_name && s.require && s.require > 0) {
       const key = s.re_code || s.ingredient_name || ''
-      // Look up warehouse from ingredient master data
+      // Look up warehouse and mat_sap_code from ingredient master data
       const ing = ingredients.value.find(i => i.re_code === s.re_code)
       const wh = ing?.warehouse || ''
-      if (!map[key]) map[key] = { re_code: s.re_code || '', name: s.ingredient_name || '', warehouse: wh, total: 0, uom: s.uom || s.ingredient_unit || 'kg', phases: [] }
+      const sapCode = ing?.mat_sap_code || ''
+      if (!map[key]) map[key] = { re_code: s.re_code || '', name: s.ingredient_name || '', mat_sap_code: sapCode, warehouse: wh, total: 0, uom: s.uom || s.ingredient_unit || 'kg', phases: [] }
       map[key].total += s.require
       if (!map[key].phases.includes(s.phase_number)) map[key].phases.push(s.phase_number)
     }
@@ -177,6 +178,7 @@ const filteredIngredientSummary = computed(() => {
     list = list.filter(i => 
       (i.re_code || '').toLowerCase().includes(q) || 
       (i.name || '').toLowerCase().includes(q) ||
+      (i.mat_sap_code || '').toLowerCase().includes(q) ||
       (i.warehouse || '').toLowerCase().includes(q)
     )
   }
@@ -1143,12 +1145,14 @@ const printSkuReport = async (sku: SkuMaster) => {
   const phases = Object.keys(phaseMap).sort()
 
   // Build required ingredients summary
-  const ingredientMap: { [key: string]: { name: string, re_code: string, total: number, uom: string, phases: string[] } } = {}
+  const ingredientMap: { [key: string]: { name: string, re_code: string, mat_sap_code: string, total: number, uom: string, phases: string[] } } = {}
   steps.forEach(s => {
     if (s.ingredient_name && s.require && s.require > 0) {
       const key = s.re_code || s.ingredient_name || ''
+      const ing = ingredients.value.find(i => i.re_code === s.re_code)
+      const sapCode = ing?.mat_sap_code || ''
       if (!ingredientMap[key]) {
-        ingredientMap[key] = { name: s.ingredient_name || '', re_code: s.re_code || '', total: 0, uom: s.uom || s.ingredient_unit || 'kg', phases: [] }
+        ingredientMap[key] = { name: s.ingredient_name || '', re_code: s.re_code || '', mat_sap_code: sapCode, total: 0, uom: s.uom || s.ingredient_unit || 'kg', phases: [] }
       }
       ingredientMap[key].total += s.require
       if (!ingredientMap[key].phases.includes(s.phase_number)) {
@@ -1176,9 +1180,9 @@ const printSkuReport = async (sku: SkuMaster) => {
   <meta charset="utf-8">
   <title>SKU Report - ${sku.sku_id}</title>
   <style>
-    @page { size: A4; margin: 12mm 15mm; }
+    @page { size: A4; margin: 10mm 12mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Courier Prime', 'Courier New', Courier, monospace; font-size: 11px; color: #222; line-height: 1.4; }
+    body { font-family: 'Courier Prime', 'Courier New', Courier, monospace; font-size: 16px; color: #222; line-height: 1.4; }
 
     /* Repeating header/footer via table trick */
     .page-wrapper { display: table; width: 100%; }
@@ -1186,33 +1190,33 @@ const printSkuReport = async (sku: SkuMaster) => {
     .page-footer { display: table-footer-group; }
     .page-body { display: table-row-group; }
 
-    .report-header { background: #0384fc; color: white; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; margin-bottom: 4px; }
-    .report-header h1 { font-size: 16px; margin: 0; }
-    .report-header .meta { font-size: 9px; text-align: right; opacity: 0.9; }
-    .report-footer { border-top: 2px solid #0384fc; font-size: 8px; color: #888; padding: 6px 0; display: flex; justify-content: space-between; margin-top: 4px; }
+    .report-header { background: #0384fc; color: white; padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; margin-bottom: 6px; }
+    .report-header h1 { font-size: 24px; margin: 0; }
+    .report-header .meta { font-size: 13px; text-align: right; opacity: 0.9; }
+    .report-footer { border-top: 2px solid #0384fc; font-size: 12px; color: #888; padding: 6px 0; display: flex; justify-content: space-between; margin-top: 4px; }
 
     .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; margin-bottom: 12px; }
     .info-box { background: #f5f7fa; border: 1px solid #dde; border-radius: 3px; padding: 6px 10px; }
-    .info-box .label { font-size: 8px; color: #666; text-transform: uppercase; font-weight: bold; }
-    .info-box .value { font-size: 12px; font-weight: bold; color: #1a237e; margin-top: 1px; }
+    .info-box .label { font-size: 12px; color: #666; text-transform: uppercase; font-weight: bold; }
+    .info-box .value { font-size: 18px; font-weight: bold; color: #1a237e; margin-top: 1px; }
 
-    .section-title { font-size: 13px; font-weight: bold; color: #1a237e; margin: 12px 0 6px 0; border-bottom: 2px solid #1a237e; padding-bottom: 3px; }
-    .phase-header { background: #e8eaf6; padding: 6px 12px; font-weight: bold; font-size: 11px; color: #283593; border-left: 4px solid #3f51b5; margin-top: 10px; margin-bottom: 2px; border-radius: 2px; page-break-after: avoid; }
+    .section-title { font-size: 20px; font-weight: bold; color: #1a237e; margin: 14px 0 8px 0; border-bottom: 2px solid #1a237e; padding-bottom: 3px; }
+    .phase-header { background: #e8eaf6; padding: 8px 14px; font-weight: bold; font-size: 16px; color: #283593; border-left: 4px solid #3f51b5; margin-top: 12px; margin-bottom: 3px; border-radius: 2px; page-break-after: avoid; }
 
-    table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 10px; }
-    table.data-table th { background: #37474f; color: white; padding: 4px 5px; text-align: left; font-weight: bold; font-size: 8px; text-transform: uppercase; }
-    table.data-table td { padding: 3px 5px; border-bottom: 1px solid #e0e0e0; }
+    table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 15px; }
+    table.data-table th { background: #37474f; color: white; padding: 5px 6px; text-align: left; font-weight: bold; font-size: 12px; text-transform: uppercase; }
+    table.data-table td { padding: 4px 6px; border-bottom: 1px solid #e0e0e0; }
     table.data-table tr:nth-child(even) td { background: #fafafa; }
 
-    table.ingredient-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 10px; }
-    table.ingredient-table th { background: #1b5e20; color: white; padding: 4px 6px; text-align: left; font-weight: bold; font-size: 8px; text-transform: uppercase; }
-    table.ingredient-table td { padding: 3px 6px; border-bottom: 1px solid #c8e6c9; }
+    table.ingredient-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 15px; }
+    table.ingredient-table th { background: #1b5e20; color: white; padding: 5px 8px; text-align: left; font-weight: bold; font-size: 12px; text-transform: uppercase; }
+    table.ingredient-table td { padding: 4px 8px; border-bottom: 1px solid #c8e6c9; }
     table.ingredient-table tr:nth-child(even) td { background: #f1f8e9; }
     table.ingredient-table tr.total-row td { background: #e8f5e9; font-weight: bold; border-top: 2px solid #2e7d32; }
 
     .text-right { text-align: right; }
     .text-center { text-align: center; }
-    .badge { display: inline-block; background: #e3f2fd; color: #1565c0; padding: 1px 5px; border-radius: 3px; font-size: 8px; font-weight: bold; }
+    .badge { display: inline-block; background: #e3f2fd; color: #1565c0; padding: 2px 6px; border-radius: 3px; font-size: 12px; font-weight: bold; }
     .badge-green { background: #e8f5e9; color: #2e7d32; }
     .page-break { page-break-before: always; }
     @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
@@ -1268,7 +1272,7 @@ const printSkuReport = async (sku: SkuMaster) => {
             <tr>
               <th style="width:30px;">#</th>
               <th style="width:90px;">RE Code</th>
-              <th>Ingredient Name</th>
+              <th>Mat SAP Code</th>
               <th class="text-right" style="width:80px;">Total Amount</th>
               <th class="text-center" style="width:50px;">UOM</th>
               <th style="width:120px;">Used in Phases</th>
@@ -1279,15 +1283,15 @@ const printSkuReport = async (sku: SkuMaster) => {
               <tr>
                 <td class="text-center">${idx + 1}</td>
                 <td><span class="badge badge-green">${ing.re_code || '-'}</span></td>
-                <td>${ing.name}</td>
-                <td class="text-right"><strong>${ing.total.toFixed(3)}</strong></td>
+                <td>${ing.mat_sap_code || '-'}</td>
+                <td class="text-right"><strong>${ing.total.toFixed(4)}</strong></td>
                 <td class="text-center">${ing.uom}</td>
                 <td>${ing.phases.join(', ')}</td>
               </tr>
             `).join('')}
             <tr class="total-row">
               <td colspan="3" class="text-right">Total Ingredients: ${ingredientList.length}</td>
-              <td class="text-right">${ingredientList.reduce((sum, i) => sum + i.total, 0).toFixed(3)}</td>
+              <td class="text-right">${ingredientList.reduce((sum, i) => sum + i.total, 0).toFixed(4)}</td>
               <td class="text-center">-</td>
               <td>-</td>
             </tr>
@@ -1657,7 +1661,7 @@ const printSkuReport = async (sku: SkuMaster) => {
                 <q-icon v-if="ingredientSortField === 're_code'" :name="ingredientSortAsc ? 'arrow_upward' : 'arrow_downward'" size="xs" />
               </th>
               <th class="text-left cursor-pointer" @click="toggleIngredientSort('name')">
-                Ingredient
+                Mat SAP Code
                 <q-icon v-if="ingredientSortField === 'name'" :name="ingredientSortAsc ? 'arrow_upward' : 'arrow_downward'" size="xs" />
               </th>
               <th class="text-left cursor-pointer" @click="toggleIngredientSort('warehouse')">
@@ -1678,9 +1682,9 @@ const printSkuReport = async (sku: SkuMaster) => {
           <tbody>
             <tr v-for="ing in filteredIngredientSummary" :key="ing.re_code || ing.name">
               <td class="text-bold text-green-9">{{ ing.re_code || '?' }}</td>
-              <td>{{ ing.name }}</td>
+              <td>{{ ing.mat_sap_code || '-' }}</td>
               <td>{{ ing.warehouse || '-' }}</td>
-              <td class="text-right text-bold">{{ ing.total.toFixed(2) }}</td>
+              <td class="text-right text-bold">{{ ing.total.toFixed(4) }}</td>
               <td class="text-center">{{ ing.uom }}</td>
               <td class="text-center">{{ ing.phases.join(', ') }}</td>
             </tr>
