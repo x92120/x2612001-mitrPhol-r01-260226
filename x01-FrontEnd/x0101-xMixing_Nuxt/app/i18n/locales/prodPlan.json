@@ -56,7 +56,10 @@
         "prodPlan.printLabel": "Print Label",
         "prodPlan.failedGenerateLabel": "Failed to generate label",
         "prodPlan.noBatchesToPrint": "No batches to print",
-        "prodPlan.failedGenerateLabels": "Failed to generate labels"
+        "prodPlan.failedGenerateLabels": "Failed to generate labels",
+        "prodPlan.dailyReport": "Production Daily Report",
+        "prodPlan.dailyReportDesc": "Select date for the report",
+        "prodPlan.batchRecordReport": "Batch Record Report"
     },
     "th": {
         "prodPlan.title": "รายการแผนการผลิต",
@@ -115,6 +118,9 @@
         "prodPlan.printLabel": "พิมพ์ฉลาก",
         "prodPlan.failedGenerateLabel": "ไม่สามารถสร้างฉลากได้",
         "prodPlan.noBatchesToPrint": "ไม่มีแบตช์ให้พิมพ์",
-        "prodPlan.failedGenerateLabels": "ไม่สามารถสร้างฉลากทั้งหมดได้"
+        "prodPlan.failedGenerateLabels": "ไม่สามารถสร้างฉลากทั้งหมดได้",
+        "prodPlan.dailyReport": "รายงานการผลิตประจำวัน",
+        "prodPlan.dailyReportDesc": "เลือกวันที่สำหรับรายงาน",
+        "prodPlan.batchRecordReport": "รายงานบันทึกแบทช์"
     }
 }

@@ -1393,6 +1393,55 @@ const printExpiryReport = async () => {
 const showTraceDialog = ref(false)
 const traceSearchId = ref('')
 const traceLoading = ref(false)
+const traceOptions = ref<{ label: string; value: string; group: string }[]>([])
+const traceFilteredOptions = ref<{ label: string; value: string; group: string }[]>([])
+const traceOptionsLoading = ref(false)
+
+const fetchTraceOptions = async () => {
+  traceOptionsLoading.value = true
+  try {
+    const [lotsRes, batchesRes] = await Promise.all([
+      $fetch<any[]>(`${appConfig.apiBaseUrl}/ingredient-intake/?limit=500`, { headers: getAuthHeader() as Record<string, string> }).catch(() => []),
+      $fetch<any[]>(`${appConfig.apiBaseUrl}/production-batches/`, { headers: getAuthHeader() as Record<string, string> }).catch(() => []),
+    ])
+    const opts: { label: string; value: string; group: string }[] = []
+    // Add lot IDs
+    const seenLots = new Set<string>()
+    for (const lot of (lotsRes || [])) {
+      const id = lot.intake_lot_id
+      if (id && !seenLots.has(id)) {
+        seenLots.add(id)
+        opts.push({ label: `📦 ${id} — ${lot.mat_sap_code || ''} (${lot.re_code || ''})`, value: id, group: 'Intake Lots' })
+      }
+    }
+    // Add batch IDs
+    const seenBatches = new Set<string>()
+    for (const b of (batchesRes || [])) {
+      const id = b.batch_id
+      if (id && !seenBatches.has(id)) {
+        seenBatches.add(id)
+        opts.push({ label: `🏭 ${id} — ${b.sku_id || ''} (${b.status || ''})`, value: id, group: 'Batches' })
+      }
+    }
+    traceOptions.value = opts
+    traceFilteredOptions.value = opts
+  } catch (e) { console.error('Failed to fetch trace options:', e) }
+  finally { traceOptionsLoading.value = false }
+}
+
+const onTraceFilter = (val: string, update: (fn: () => void) => void) => {
+  update(() => {
+    const q = (val || '').toLowerCase()
+    traceFilteredOptions.value = q
+      ? traceOptions.value.filter(o => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q))
+      : traceOptions.value
+  })
+}
+
+const onOpenTraceDialog = () => {
+  showTraceDialog.value = true
+  if (traceOptions.value.length === 0) fetchTraceOptions()
+}
 
 const printTraceReport = async () => {
   if (!traceSearchId.value.trim()) { $q.notify({ type: 'warning', message: 'Enter Lot ID or Batch ID' }); return }
@@ -1864,7 +1913,7 @@ watch(adjSelectedReCode, () => {
           <q-btn icon="warning_amber" round flat text-color="yellow-4" @click="printExpiryReport" title="Expiry Alert">
             <q-tooltip>Ingredient Expiry Alert</q-tooltip>
           </q-btn>
-          <q-btn icon="device_hub" round flat text-color="white" @click="showTraceDialog = true" title="Traceability Report">
+          <q-btn icon="device_hub" round flat text-color="white" @click="onOpenTraceDialog" title="Traceability Report">
             <q-tooltip>Traceability Report</q-tooltip>
           </q-btn>
           <q-btn icon="save" round flat text-color="white" @click="onSave" :loading="isSaving" title="Save Intake" />
@@ -3192,19 +3241,49 @@ watch(adjSelectedReCode, () => {
 
     <!-- Traceability Report Dialog -->
     <q-dialog v-model="showTraceDialog">
-      <q-card style="min-width: 420px;">
+      <q-card style="min-width: 480px;">
         <q-card-section class="bg-primary text-white">
           <div class="text-h6"><q-icon name="device_hub" class="q-mr-sm" />Traceability Report</div>
-          <div class="text-caption">Enter an Intake Lot ID (forward trace) or Batch ID (backward trace)</div>
+          <div class="text-caption">Select an Intake Lot ID (forward trace) or Batch ID (backward trace)</div>
         </q-card-section>
         <q-card-section>
-          <q-input v-model="traceSearchId" label="Lot ID or Batch ID" filled autofocus @keyup.enter="printTraceReport">
+          <q-select
+            v-model="traceSearchId"
+            :options="traceFilteredOptions"
+            :loading="traceOptionsLoading"
+            label="Lot ID or Batch ID"
+            filled
+            use-input
+            input-debounce="200"
+            emit-value
+            map-options
+            option-value="value"
+            option-label="label"
+            @filter="onTraceFilter"
+            clearable
+            popup-content-class="trace-dropdown"
+          >
             <template #prepend><q-icon name="search" /></template>
-          </q-input>
+            <template #no-option>
+              <q-item>
+                <q-item-section class="text-grey text-italic">
+                  {{ traceOptionsLoading ? 'Loading...' : 'No matching IDs found — type to filter' }}
+                </q-item-section>
+              </q-item>
+            </template>
+            <template #option="scope">
+              <q-item v-bind="scope.itemProps">
+                <q-item-section>
+                  <q-item-label>{{ scope.opt.label }}</q-item-label>
+                </q-item-section>
+              </q-item>
+              <q-separator v-if="scope.index === traceFilteredOptions.findIndex(o => o.group === 'Batches') - 1" />
+            </template>
+          </q-select>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Cancel" v-close-popup />
-          <q-btn color="primary" icon="print" label="Generate Report" :loading="traceLoading" @click="printTraceReport" />
+          <q-btn color="primary" icon="print" label="Generate Report" :loading="traceLoading" @click="printTraceReport" :disable="!traceSearchId" />
         </q-card-actions>
       </q-card>
     </q-dialog>

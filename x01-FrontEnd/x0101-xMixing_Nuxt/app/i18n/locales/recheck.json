@@ -38,7 +38,9 @@
         "recheck.selectBatchPrompt": "Select a batch from the left",
         "recheck.scanBoxFirst": "Scan a Box first!",
         "recheck.batchReleased": "Batch approved and released!",
-        "recheck.productionReady": "PRODUCTION READY"
+        "recheck.productionReady": "PRODUCTION READY",
+        "recheck.qcReport": "Quality Check Report",
+        "recheck.qcReportDesc": "Select date range for the report"
     },
     "th": {
         "recheck.title": "ตรวจสอบการบรรจุแบทช์",
@@ -79,6 +81,8 @@
         "recheck.selectBatchPrompt": "เลือกแบทช์จากด้านซ้าย",
         "recheck.scanBoxFirst": "สแกนกล่องก่อน!",
         "recheck.batchReleased": "อนุมัติและปล่อยแบทช์แล้ว!",
-        "recheck.productionReady": "พร้อมผลิต"
+        "recheck.productionReady": "พร้อมผลิต",
+        "recheck.qcReport": "รายงานการตรวจสอบคุณภาพ",
+        "recheck.qcReportDesc": "เลือกช่วงวันที่สำหรับรายงาน"
     }
 }

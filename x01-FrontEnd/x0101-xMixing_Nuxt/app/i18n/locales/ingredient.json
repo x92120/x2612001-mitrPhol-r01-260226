@@ -84,7 +84,16 @@
         "ingredient.intakeVolLabel": "Intake Vol",
         "ingredient.package": "Package",
         "ingredient.material": "Material",
-        "ingredient.weight": "Weight"
+        "ingredient.weight": "Weight",
+        "ingredient.expiryAlert": "Ingredient Expiry Alert",
+        "ingredient.traceability": "Traceability Report",
+        "ingredient.traceabilityDesc": "Select Lot ID (forward trace) or Batch ID (backward trace)",
+        "ingredient.stockAdjustment": "Stock Adjustment",
+        "ingredient.adjustType": "Adjust Type",
+        "ingredient.adjustVolume": "Adjust Volume (kg)",
+        "ingredient.adjustReason": "Reason",
+        "ingredient.adjustSuccess": "Stock adjusted successfully",
+        "ingredient.adjustFailed": "Stock adjustment failed"
     },
     "th": {
         "ingredient.title": "รับวัตถุดิบ",
@@ -171,6 +180,15 @@
         "ingredient.intakeVolLabel": "ปริมาณรับเข้า",
         "ingredient.package": "ถุง",
         "ingredient.material": "วัตถุดิบ",
-        "ingredient.weight": "น้ำหนัก"
+        "ingredient.weight": "น้ำหนัก",
+        "ingredient.expiryAlert": "แจ้งเตือนวัตถุดิบหมดอายุ",
+        "ingredient.traceability": "รายงานการสอบกลับ",
+        "ingredient.traceabilityDesc": "เลือก Lot ID (สอบไปข้างหน้า) หรือ Batch ID (สอบย้อนกลับ)",
+        "ingredient.stockAdjustment": "ปรับสต็อก",
+        "ingredient.adjustType": "ประเภทการปรับ",
+        "ingredient.adjustVolume": "ปริมาณที่ปรับ (กก.)",
+        "ingredient.adjustReason": "เหตุผล",
+        "ingredient.adjustSuccess": "ปรับสต็อกสำเร็จ",
+        "ingredient.adjustFailed": "ปรับสต็อกไม่สำเร็จ"
     }
 }

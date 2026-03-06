@@ -19,7 +19,9 @@
         "prebatch.unstable": "Unstable",
         "prebatch.overweight": "Overweight",
         "prebatch.underweight": "Underweight",
-        "prebatch.withinTolerance": "Within Tolerance"
+        "prebatch.withinTolerance": "Within Tolerance",
+        "prebatch.summaryReport": "Pre-Batch Summary Report",
+        "prebatch.summaryReportDesc": "Select date range for the report"
     },
     "th": {
         "prebatch.title": "เตรียมแบทช์",
@@ -41,6 +43,8 @@
         "prebatch.unstable": "ไม่คงที่",
         "prebatch.overweight": "น้ำหนักเกิน",
         "prebatch.underweight": "น้ำหนักต่ำ",
-        "prebatch.withinTolerance": "อยู่ในค่าที่ยอมรับ"
+        "prebatch.withinTolerance": "อยู่ในค่าที่ยอมรับ",
+        "prebatch.summaryReport": "รายงานสรุปการเตรียมแบทช์",
+        "prebatch.summaryReportDesc": "เลือกช่วงวันที่สำหรับรายงาน"
     }
 }

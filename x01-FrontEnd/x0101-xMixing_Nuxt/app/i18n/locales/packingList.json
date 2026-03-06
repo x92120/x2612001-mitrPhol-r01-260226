@@ -22,7 +22,11 @@
         "packingList.bagNotFound": "Bag not found in this batch",
         "packingList.alreadyPacked": "This bag is already packed",
         "packingList.allFhPacked": "All FH bags packed! Ready to close box.",
-        "packingList.allSppPacked": "All SPP bags packed! Ready to close box."
+        "packingList.allSppPacked": "All SPP bags packed! Ready to close box.",
+        "packingList.requiredIngredients": "Required Ingredients",
+        "packingList.soundSettings": "Sound Settings",
+        "packingList.packingReport": "Packing List Report",
+        "packingList.selectPlan": "Select Plan"
     },
     "th": {
         "packingList.productionPlans": "แผนการผลิต",
@@ -47,6 +51,10 @@
         "packingList.bagNotFound": "ไม่พบถุงในแบตช์นี้",
         "packingList.alreadyPacked": "ถุงนี้แพ็คแล้ว",
         "packingList.allFhPacked": "ถุง FH แพ็คครบทุกถุงแล้ว! พร้อมปิดกล่อง",
-        "packingList.allSppPacked": "ถุง SPP แพ็คครบทุกถุงแล้ว! พร้อมปิดกล่อง"
+        "packingList.allSppPacked": "ถุง SPP แพ็คครบทุกถุงแล้ว! พร้อมปิดกล่อง",
+        "packingList.requiredIngredients": "ส่วนผสมที่ต้องการ",
+        "packingList.soundSettings": "ตั้งค่าเสียง",
+        "packingList.packingReport": "รายงานรายการบรรจุ",
+        "packingList.selectPlan": "เลือกแผน"
     }
 }
