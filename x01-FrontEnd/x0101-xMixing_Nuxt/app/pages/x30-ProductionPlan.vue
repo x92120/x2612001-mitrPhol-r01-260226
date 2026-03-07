@@ -97,8 +97,7 @@ const plantNames = ref<Record<string, string>>({})
 // Data from API
 const availableSkus = ref<any[]>([])
 const plans = ref<any[]>([])
-const ingredientsMaster = ref<any[]>([])
-const ingredientWhFilter = ref('All')
+
 const showAll = ref(false)
 
 // Column filters
@@ -872,61 +871,32 @@ const getStatusColor = (status: string) => {
   return 'text-blue-8'
 }
 
+// Read ingredients directly from plan data (embedded in API response)
 const getPlanIngredients = (plan: any) => {
-  if (!plan.batches || plan.batches.length === 0) return []
-  const ingredientsMap: Record<string, any> = {}
+  return plan.ingredients || []
+}
+
+const getIngredientsByWarehouse = (plan: any) => {
+  const items = getPlanIngredients(plan)
+  const groups: Record<string, { wh: string, items: any[], totalVol: number }> = {}
+  const order = ['MIX', 'FH', 'SPP']
   
-  plan.batches.forEach((b: any) => {
-     if(b.reqs) {
-        b.reqs.forEach((req: any) => {
-           if (!ingredientsMap[req.re_code]) {
-               // Look up warehouse from ingredient master
-               const ingMaster = ingredientsMaster.value.find((i: any) => i.re_code === req.re_code)
-               ingredientsMap[req.re_code] = {
-                   re_code: req.re_code,
-                   name: req.ingredient_name || req.re_code,
-                   wh: ingMaster?.warehouse || '-',
-                   vol_per_batch: req.required_volume || 0,
-                   total_vol: 0
-               }
-           }
-           ingredientsMap[req.re_code].total_vol += (req.required_volume || 0)
-        })
-     }
-  })
-
-  // Provide deterministic sorting by re_code
-  return Object.values(ingredientsMap).sort((a, b) => a.re_code.localeCompare(b.re_code))
-}
-
-const ingredientColumns = computed<QTableColumn[]>(() => [
-  { name: 're_code', label: t('prodPlan.ingredientCode'), field: 're_code', align: 'left', sortable: true },
-  { name: 'name', label: t('prodPlan.ingredientName'), field: 'name', align: 'left', sortable: true },
-  { name: 'wh', label: 'Warehouse', field: 'wh', align: 'center', sortable: true },
-  { name: 'vol_per_batch', label: t('prodPlan.volPerBatch'), field: 'vol_per_batch', align: 'right', sortable: true, format: val => val?.toFixed(5) },
-  { name: 'total_vol', label: t('prodPlan.totalVol'), field: 'total_vol', align: 'right', sortable: true, format: val => val?.toFixed(5) },
-])
-
-const getFilteredPlanIngredients = (plan: any) => {
-  const all = getPlanIngredients(plan)
-  if (ingredientWhFilter.value === 'All') return all
-  return all.filter((i: any) => i.wh === ingredientWhFilter.value)
-}
-
-const getIngredientTotals = (plan: any) => {
-  const items = getFilteredPlanIngredients(plan)
-  return {
-    vol_per_batch: items.reduce((sum: number, i: any) => sum + (i.vol_per_batch || 0), 0),
-    total_vol: items.reduce((sum: number, i: any) => sum + (i.total_vol || 0), 0),
+  for (const ing of items) {
+    const wh = ing.wh || '-'
+    if (!groups[wh]) groups[wh] = { wh, items: [], totalVol: 0 }
+    groups[wh].items.push(ing)
+    groups[wh].totalVol += ing.total_vol || 0
   }
+  
+  // Sort: MIX first, then FH, then SPP, then others
+  return Object.values(groups).sort((a, b) => {
+    const ai = order.indexOf(a.wh)
+    const bi = order.indexOf(b.wh)
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+  })
 }
 
-const fetchIngredients = async () => {
-  try {
-    const res = await fetch(`${appConfig.apiBaseUrl}/ingredients/`)
-    if (res.ok) ingredientsMaster.value = await res.json()
-  } catch (e) { console.error('Failed to fetch ingredients:', e) }
-}
+
 // ── Reports ──────────────────────────────────
 const showDailyReportDialog = ref(false)
 const dailyReportDate = ref(formatDateForInput(new Date()))
@@ -1024,7 +994,6 @@ onMounted(() => {
   fetchPlants()
   fetchSkus()
   fetchPlans()
-  fetchIngredients()
 })
 </script>
 
@@ -1306,66 +1275,82 @@ onMounted(() => {
             <!-- Expanded Row for Batches -->
             <q-tr v-show="props.expand" :props="props" class="bg-blue-grey-1">
               <q-td colspan="100%" class="q-pa-md">
-                <div class="row q-col-gutter-lg">
-                  <!-- Ingredients List -->
-                  <div class="col-12 col-md-5">
-                    <div class="row items-center q-mb-sm q-gutter-x-sm">
-                      <div class="text-subtitle2 text-blue-9">{{ t('prodPlan.ingredientRequirement') }}</div>
-                      <q-space />
-                      <q-select
-                        v-model="ingredientWhFilter"
-                        :options="['All', 'FH', 'SPP', 'MIX']"
-                        dense
-                        outlined
-                        size="xs"
-                        style="min-width: 80px;"
-                        bg-color="white"
-                      />
+                <div class="row q-col-gutter-md">
+                  <!-- Ingredient Requirements grouped by Warehouse -->
+                  <div class="col-12 col-md-5" style="max-height: 440px; overflow-y: auto;">
+                    <div class="text-subtitle2 text-weight-bold q-mb-xs" style="color:#37474f;">
+                      <q-icon name="science" size="xs" class="q-mr-xs" />
+                      Ingredient Requirements
                     </div>
-                    <q-table
-                      :rows="getFilteredPlanIngredients(props.row)"
-                      :columns="ingredientColumns"
-                      row-key="re_code"
-                      flat
-                      dense
-                      hide-bottom
-                      :pagination="{ rowsPerPage: 0 }"
-                      class="bg-white shadow-1"
-                      style="border-radius: 6px; border: 1px solid #e0e0e0;"
-                    >
-                      <template v-slot:header="ingProps">
-                        <q-tr :props="ingProps" class="bg-grey-2">
-                          <q-th v-for="col in ingProps.cols" :key="col.name" :props="ingProps" class="text-weight-bold">
-                            <template v-if="col.name === 'vol_per_batch'">
-                              {{ col.label }}<br/>
-                              <span class="text-blue-7" style="font-size: 1.3rem;">{{ getIngredientTotals(props.row).vol_per_batch.toFixed(5) }}</span>
-                            </template>
-                            <template v-else-if="col.name === 'total_vol'">
-                              {{ col.label }}<br/>
-                              <span class="text-blue-7" style="font-size: 1.3rem;">{{ getIngredientTotals(props.row).total_vol.toFixed(5) }}</span>
-                            </template>
-                            <template v-else>
-                              {{ col.label }}
-                            </template>
-                          </q-th>
-                        </q-tr>
+                    
+                    <!-- No ingredients -->
+                    <div v-if="getPlanIngredients(props.row).length === 0" class="text-center q-pa-md text-grey-6">
+                      <q-icon name="info" size="sm" class="q-mr-xs" />
+                      <span class="text-caption">No ingredient requirements</span>
+                    </div>
+                    
+                    <!-- Grouped by Warehouse -->
+                    <template v-else>
+                      <template v-for="whGroup in getIngredientsByWarehouse(props.row)" :key="whGroup.wh">
+                        <!-- Warehouse Header -->
+                        <div 
+                          class="q-pa-xs q-px-sm q-mb-none text-white text-weight-bold row items-center justify-between"
+                          :style="{ 
+                            background: whGroup.wh === 'MIX' ? '#7b1fa2' : whGroup.wh === 'FH' ? '#1565c0' : '#00897b',
+                            borderRadius: '4px 4px 0 0',
+                            fontSize: '0.75rem',
+                            marginTop: '6px'
+                          }"
+                        >
+                          <span>
+                            <q-icon :name="whGroup.wh === 'MIX' ? 'blender' : whGroup.wh === 'FH' ? 'science' : 'inventory_2'" size="xs" class="q-mr-xs" />
+                            {{ whGroup.wh }} ({{ whGroup.items.length }})
+                          </span>
+                          <span>{{ whGroup.totalVol.toFixed(2) }} kg</span>
+                        </div>
+                        <!-- Ingredient Rows -->
+                        <table 
+                          style="width:100%; border-collapse:collapse; font-size:0.72rem; margin-bottom:2px;"
+                          :style="{ 
+                            borderLeft: '3px solid ' + (whGroup.wh === 'MIX' ? '#7b1fa2' : whGroup.wh === 'FH' ? '#1565c0' : '#00897b'),
+                          }"
+                        >
+                          <thead>
+                            <tr style="background:#f5f5f5;">
+                              <th style="padding:2px 6px; text-align:left; font-weight:600;">RE Code</th>
+                              <th style="padding:2px 6px; text-align:left; font-weight:600;">Name</th>
+                              <th style="padding:2px 6px; text-align:right; font-weight:600;">Vol/Batch</th>
+                              <th style="padding:2px 6px; text-align:right; font-weight:600;">Total</th>
+                              <th style="padding:2px 6px; text-align:left; font-weight:600;">Phases</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr v-for="ing in whGroup.items" :key="ing.re_code" style="border-bottom:1px solid #eee;">
+                              <td 
+                                style="padding:2px 6px; font-weight:600;"
+                                :style="{ color: whGroup.wh === 'MIX' ? '#7b1fa2' : whGroup.wh === 'FH' ? '#1565c0' : '#00897b' }"
+                              >{{ ing.re_code }}</td>
+                              <td style="padding:2px 6px; color:#555;">{{ ing.name }}</td>
+                              <td style="padding:2px 6px; text-align:right; font-weight:500;">{{ ing.vol_per_batch.toFixed(4) }}</td>
+                              <td style="padding:2px 6px; text-align:right; font-weight:700;">{{ ing.total_vol.toFixed(4) }}</td>
+                              <td style="padding:2px 6px;">
+                                <span 
+                                  v-for="ph in (ing.phases || '').split(',')" :key="ph" 
+                                  v-if="ph.trim()"
+                                  style="display:inline-block; background:#eceff1; border-radius:3px; padding:0 4px; margin:1px 2px; font-size:0.65rem; color:#455a64;"
+                                >{{ ph.trim() }}</span>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </template>
-                      <template v-slot:body="ingProps">
-                         <q-tr :props="ingProps" class="hover-bg">
-                           <q-td v-for="col in ingProps.cols" :key="col.name" :props="ingProps">
-                             <template v-if="col.name === 're_code'">
-                               <span class="text-weight-medium text-blue-8">{{ col.value }}</span>
-                             </template>
-                             <template v-else-if="col.name === 'vol_per_batch' || col.name === 'total_vol'">
-                               <span class="text-weight-bold">{{ col.value }}</span>
-                             </template>
-                             <template v-else>
-                               {{ col.value }}
-                             </template>
-                           </q-td>
-                         </q-tr>
-                      </template>
-                    </q-table>
+                      
+                      <!-- Grand Total -->
+                      <div v-if="getPlanIngredients(props.row).length > 0" class="q-pa-xs q-px-sm text-weight-bold row justify-between" style="background:#263238; color:#fff; border-radius:0 0 4px 4px; font-size:0.75rem; margin-top:2px;">
+                        <span>Total: {{ getPlanIngredients(props.row).length }} ingredients</span>
+                        <span>{{ getPlanIngredients(props.row).reduce((s: number, i: any) => s + i.total_vol, 0).toFixed(2) }} kg</span>
+                      </div>
+                    </template>
                   </div>
 
                   <!-- Batches List -->
@@ -1378,10 +1363,9 @@ onMounted(() => {
                         row-key="batch_id"
                         flat
                         dense
-                        hide-bottom
-                        :pagination="{ rowsPerPage: 0 }"
+                        :pagination="{ rowsPerPage: 20 }"
                         class="bg-white shadow-1"
-                        style="border-radius: 6px; border: 1px solid #e0e0e0;"
+                        style="border-radius: 6px; border: 1px solid #e0e0e0; max-height: 400px; overflow-y: auto;"
                       >
                         <template v-slot:header="batchProps">
                           <q-tr :props="batchProps" class="bg-grey-2">

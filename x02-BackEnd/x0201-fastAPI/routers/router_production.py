@@ -30,10 +30,128 @@ router = APIRouter(tags=["Production"])
 # PRODUCTION PLAN ENDPOINTS
 # =============================================================================
 
-@router.get("/production-plans/", response_model=List[schemas.ProductionPlan])
+@router.get("/production-plans/")
 def get_production_plans(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    """Get all production plans with their batches."""
-    return crud.get_production_plans(db, skip=skip, limit=limit)
+    """Get all production plans with their batches (lightweight, no reqs)."""
+    from sqlalchemy import text as sql_text, bindparam
+    
+    # 1. Fetch plans
+    plans = db.execute(sql_text("""
+        SELECT id, plan_id, sku_id, sku_name, plant, total_volume, total_plan_volume,
+               batch_size, num_batches, start_date, finish_date, status,
+               flavour_house, spp, created_by, updated_by, created_at, updated_at
+        FROM production_plans
+        ORDER BY created_at DESC
+        LIMIT :limit OFFSET :skip
+    """), {"skip": skip, "limit": limit}).fetchall()
+    
+    plan_ids = [p.id for p in plans]
+    
+    # 2. Fetch batches for these plans (single query)
+    batches_by_plan: dict = {}
+    if plan_ids:
+        batches = db.execute(
+            sql_text("""
+                SELECT id, plan_id, batch_id, sku_id, plant, batch_size, status,
+                       flavour_house, spp, batch_prepare, ready_to_product, production, done,
+                       fh_boxed_at, spp_boxed_at, fh_delivered_at, fh_delivered_by,
+                       spp_delivered_at, spp_delivered_by, created_at, updated_at
+                FROM production_batches
+                WHERE plan_id IN :plan_ids
+            """).bindparams(bindparam("plan_ids", expanding=True)),
+            {"plan_ids": plan_ids}
+        ).fetchall()
+        
+        for b in batches:
+            pid = b.plan_id
+            if pid not in batches_by_plan:
+                batches_by_plan[pid] = []
+            batches_by_plan[pid].append({
+                "id": b.id, "plan_id": b.plan_id, "batch_id": b.batch_id,
+                "sku_id": b.sku_id, "plant": b.plant, "batch_size": b.batch_size,
+                "status": b.status, "flavour_house": bool(b.flavour_house),
+                "spp": bool(b.spp), "batch_prepare": bool(b.batch_prepare),
+                "ready_to_product": bool(b.ready_to_product),
+                "production": bool(b.production), "done": bool(b.done),
+                "fh_boxed_at": b.fh_boxed_at, "spp_boxed_at": b.spp_boxed_at,
+                "fh_delivered_at": b.fh_delivered_at, "fh_delivered_by": b.fh_delivered_by,
+                "spp_delivered_at": b.spp_delivered_at, "spp_delivered_by": b.spp_delivered_by,
+                "created_at": b.created_at, "updated_at": b.updated_at,
+            })
+    
+    # 3. Fetch aggregated ingredients per plan (single query)
+    ingredients_by_plan: dict = {}
+    plan_id_strs = [p.plan_id for p in plans if p.plan_id]
+    if plan_id_strs:
+        ing_rows = db.execute(sql_text("""
+            SELECT 
+                r.plan_id,
+                r.re_code,
+                r.ingredient_name,
+                i.warehouse AS wh,
+                r.required_volume AS vol_per_batch,
+                SUM(r.required_volume) AS total_vol
+            FROM prebatch_reqs r
+            LEFT JOIN ingredients i ON i.re_code = r.re_code
+            WHERE r.plan_id IN :plan_ids
+            GROUP BY r.plan_id, r.re_code, r.ingredient_name, i.warehouse, r.required_volume
+            ORDER BY i.warehouse, r.re_code
+        """).bindparams(bindparam("plan_ids", expanding=True)),
+        {"plan_ids": plan_id_strs}).fetchall()
+        
+        for r in ing_rows:
+            pid = r.plan_id  # string plan_id
+            if pid not in ingredients_by_plan:
+                ingredients_by_plan[pid] = []
+            ingredients_by_plan[pid].append({
+                "re_code": r.re_code,
+                "name": r.ingredient_name or r.re_code,
+                "wh": r.wh or "-",
+                "vol_per_batch": float(r.vol_per_batch or 0),
+                "total_vol": float(r.total_vol or 0),
+            })
+    
+    # 4. Fetch phase info from sku_steps
+    sku_ids = list(set(p.sku_id for p in plans if p.sku_id))
+    phase_map: dict = {}  # sku_id -> re_code -> phases
+    if sku_ids:
+        phase_rows = db.execute(sql_text("""
+            SELECT sku_id, re_code, GROUP_CONCAT(DISTINCT phase_number ORDER BY phase_number) AS phases
+            FROM sku_steps
+            WHERE sku_id IN :sku_ids
+            GROUP BY sku_id, re_code
+        """).bindparams(bindparam("sku_ids", expanding=True)),
+        {"sku_ids": sku_ids}).fetchall()
+        for pr in phase_rows:
+            if pr.sku_id not in phase_map:
+                phase_map[pr.sku_id] = {}
+            phase_map[pr.sku_id][pr.re_code] = pr.phases or ""
+    
+    # 5. Assemble result
+    result = []
+    for p in plans:
+        # Add phases to ingredients
+        plan_ingredients = ingredients_by_plan.get(p.plan_id, [])
+        sku_phases = phase_map.get(p.sku_id, {})
+        for ing in plan_ingredients:
+            ing["phases"] = sku_phases.get(ing["re_code"], "")
+        
+        result.append({
+            "id": p.id, "plan_id": p.plan_id, "sku_id": p.sku_id,
+            "sku_name": p.sku_name, "plant": p.plant,
+            "total_volume": p.total_volume, "total_plan_volume": p.total_plan_volume,
+            "batch_size": p.batch_size, "num_batches": p.num_batches,
+            "start_date": p.start_date, "finish_date": p.finish_date,
+            "status": p.status, "flavour_house": bool(p.flavour_house),
+            "spp": bool(p.spp), "created_by": p.created_by,
+            "updated_by": p.updated_by, "created_at": p.created_at,
+            "updated_at": p.updated_at,
+            "batches": batches_by_plan.get(p.id, []),
+            "ingredients": plan_ingredients,
+        })
+    
+    return result
+
 
 @router.get("/production-plans/{plan_id}", response_model=schemas.ProductionPlan)
 def get_production_plan(plan_id: int, db: Session = Depends(get_db)):
@@ -299,6 +417,28 @@ def update_prebatch_req_status_by_id(req_id: int, status: int, db: Session = Dep
 def get_prebatch_recs_by_batch(batch_id: str, db: Session = Depends(get_db)):
     """Get prebatch records filtered by batch ID."""
     return crud.get_prebatch_recs_by_batch(db, batch_id=batch_id)
+
+@router.get("/prebatch-recs/by-req-ids")
+def get_prebatch_recs_by_req_ids(req_ids: str, db: Session = Depends(get_db)):
+    """Get prebatch recs for multiple req_ids (comma-separated). Returns {req_id: [recs]}."""
+    ids = [int(x) for x in req_ids.split(",") if x.strip().isdigit()]
+    if not ids:
+        return {}
+    recs = db.query(models.PreBatchRec).filter(models.PreBatchRec.req_id.in_(ids)).all()
+    result: dict = {}
+    for rec in recs:
+        rid = rec.req_id
+        if rid not in result:
+            result[rid] = []
+        result[rid].append({
+            "id": rec.id,
+            "batch_record_id": rec.batch_record_id,
+            "package_no": rec.package_no,
+            "total_packages": rec.total_packages,
+            "net_volume": rec.net_volume,
+            "packing_status": rec.packing_status,
+        })
+    return result
 
 @router.get("/prebatch-recs/by-plan/{plan_id}", response_model=List[schemas.PreBatchRec])
 def get_prebatch_recs_by_plan(plan_id: str, db: Session = Depends(get_db)):

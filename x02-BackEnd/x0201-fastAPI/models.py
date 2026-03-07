@@ -89,10 +89,11 @@ class PackageContainerSize(Base):
 class IngredientIntakeList(Base):
     __tablename__ = "ingredient_intake_lists"
     intake_lot_id = Column(String(50), primary_key=True, index=True)
+    lot_id = Column(String(50), nullable=False, default="")
     intake_from = Column(String(50))
     intake_to = Column(String(50))
     blind_code = Column(String(50), index=True)
-    mat_sap_code = Column(String(50), nullable=False, index=True, unique=True)
+    mat_sap_code = Column(String(50), nullable=False, index=True)
     re_code = Column(String(50))
     material_description = Column(String(200))
     uom = Column(String(20))

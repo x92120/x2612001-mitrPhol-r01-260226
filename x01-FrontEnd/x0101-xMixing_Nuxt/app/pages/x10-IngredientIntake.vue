@@ -280,80 +280,85 @@ onUnmounted(() => {
     <q-tab-panel name="internal" class="q-pa-none">
        <div class="row q-mb-lg">
          <div class="col-12">
-           <q-card class="shadow-1 q-pa-md text-center bg-blue-1" style="min-height: 180px">
-              <q-icon name="qr_code_scanner" size="80px" color="blue-9" class="q-mb-sm" />
-              <div class="text-h5 text-weight-bolder text-blue-9">{{ t('ingredient.internalScanning') }}</div>
-              <div class="text-subtitle2 text-grey-7 q-mb-md">{{ t('ingredient.scanHint') }}</div>
-              
-              <div style="max-width: 600px; margin: 0 auto">
-                <q-input
-                  v-model="internalScanBuffer"
-                  outlined
-                  rounded dense
-                  bg-color="white"
-                   :placeholder="t('ingredient.waitingScan')"
-                  autofocus
-                  @keyup.enter="processInternalScan"
-                >
-                  <template v-slot:prepend>
-                    <q-icon name="input" color="blue-9" />
-                  </template>
-                </q-input>
-              </div>
+           <q-card class="shadow-1 q-pa-md bg-blue-1" style="min-height: 180px">
+              <div class="row items-center q-col-gutter-lg">
+                <!-- Left: QR Icon + Title -->
+                <div class="col-12 col-md-4 text-center">
+                  <q-icon name="qr_code_scanner" size="80px" color="blue-9" class="q-mb-sm" />
+                  <div class="text-h5 text-weight-bolder text-blue-9">{{ t('ingredient.internalScanning') }}</div>
+                  <div class="text-subtitle2 text-grey-7">{{ t('ingredient.scanHint') }}</div>
+                </div>
 
-              <div style="max-width: 600px; margin: 16px auto 0">
-                <q-input 
-                  outlined 
-                  dense 
-                  hide-bottom-space 
-                  v-model="xIngredientName" 
-                  :label="t('ingredient.ingredientName')" 
-                  readonly 
-                  bg-color="white"
-                  style="border: 2px dashed #ccc"
-                >
-                  <template v-slot:append>
-                    <q-btn icon="settings" color="primary" round flat size="sm" to="/x11-IngredientConfig" />
-                  </template>
-                </q-input>
-
-                <!-- Buffer Table for Batch Scan (Fast Trigger) -->
-                <div v-if="scanBuffer.length > 0" class="q-mt-xl text-left">
-                  <div class="row items-center q-gutter-sm q-mb-sm">
-                    <div class="text-subtitle1 text-weight-bold text-blue-9">Pending Scans ({{ scanBuffer.length }})</div>
-                    <q-badge v-if="isAutoSaving" color="orange" flat class="q-ml-sm q-pa-xs animate-pulse">
-                        <q-icon name="sync" size="14px" class="q-mr-xs" />
-                        Auto-saving in 1.5s...
-                    </q-badge>
-                    <q-space />
-                    <q-btn label="Save All" color="positive" icon="save" @click="saveAllInBuffer" :loading="isSaving" unelevated />
-                    <q-btn label="Clear" color="grey" flat @click="scanBuffer = []" dense />
-                  </div>
-                  <q-table
-                    dense
-                    flat bordered
-                    :rows="scanBuffer"
-                    :columns="[
-                      { name: 'id', label: 'Intake ID', field: 'intake_lot_id', align: 'left', style: 'width: 150px' },
-                      { name: 'name', label: 'Material', field: 'material_description', align: 'left' },
-                      { name: 'vol', label: 'Vol (kg)', field: 'intake_vol', align: 'right', style: 'width: 100px' },
-                      { name: 'actions', label: '', field: 'actions', align: 'center', style: 'width: 50px' }
-                    ]"
-                    row-key="intake_lot_id"
-                    hide-pagination
-                    :rows-per-page-options="[0]"
-                    class="bg-white"
+                <!-- Right: Scan Input + Ingredient Name -->
+                <div class="col-12 col-md-8">
+                  <q-input
+                    v-model="internalScanBuffer"
+                    outlined
+                    rounded dense
+                    bg-color="white"
+                    :placeholder="t('ingredient.waitingScan')"
+                    autofocus
+                    @keyup.enter="processInternalScan"
                   >
-                    <template v-slot:body-cell-actions="props">
-                      <q-td :props="props">
-                        <q-btn icon="close" size="sm" flat round color="negative" @click="scanBuffer.splice(scanBuffer.indexOf(props.row), 1)" />
-                      </q-td>
+                    <template v-slot:prepend>
+                      <q-icon name="input" color="blue-9" />
                     </template>
-                  </q-table>
+                  </q-input>
+
+                  <q-input 
+                    class="q-mt-sm"
+                    outlined 
+                    dense 
+                    hide-bottom-space 
+                    v-model="xIngredientName" 
+                    :label="t('ingredient.ingredientName')" 
+                    readonly 
+                    bg-color="white"
+                    style="border: 2px dashed #ccc"
+                  >
+                    <template v-slot:append>
+                      <q-btn icon="settings" color="primary" round flat size="sm" to="/x11-IngredientConfig" />
+                    </template>
+                  </q-input>
                 </div>
               </div>
+
+              <!-- Buffer Table for Batch Scan (Fast Trigger) -->
+              <div v-if="scanBuffer.length > 0" class="q-mt-lg text-left">
+                <div class="row items-center q-gutter-sm q-mb-sm">
+                  <div class="text-subtitle1 text-weight-bold text-blue-9">Pending Scans ({{ scanBuffer.length }})</div>
+                  <q-badge v-if="isAutoSaving" color="orange" flat class="q-ml-sm q-pa-xs animate-pulse">
+                      <q-icon name="sync" size="14px" class="q-mr-xs" />
+                      Auto-saving in 1.5s...
+                  </q-badge>
+                  <q-space />
+                  <q-btn label="Save All" color="positive" icon="save" @click="saveAllInBuffer" :loading="isSaving" unelevated />
+                  <q-btn label="Clear" color="grey" flat @click="scanBuffer = []" dense />
+                </div>
+                <q-table
+                  dense
+                  flat bordered
+                  :rows="scanBuffer"
+                  :columns="[
+                    { name: 'id', label: 'Intake ID', field: 'intake_lot_id', align: 'left', style: 'width: 150px' },
+                    { name: 'name', label: 'Material', field: 'material_description', align: 'left' },
+                    { name: 'vol', label: 'Vol (kg)', field: 'intake_vol', align: 'right', style: 'width: 100px' },
+                    { name: 'actions', label: '', field: 'actions', align: 'center', style: 'width: 50px' }
+                  ]"
+                  row-key="intake_lot_id"
+                  hide-pagination
+                  :rows-per-page-options="[0]"
+                  class="bg-white"
+                >
+                  <template v-slot:body-cell-actions="props">
+                    <q-td :props="props">
+                      <q-btn icon="close" size="sm" flat round color="negative" @click="scanBuffer.splice(scanBuffer.indexOf(props.row), 1)" />
+                    </q-td>
+                  </template>
+                </q-table>
+              </div>
               
-              <div class="q-mt-xl text-caption text-grey-6 row justify-center items-center">
+              <div class="q-mt-lg text-caption text-grey-6 row justify-center items-center">
                   <q-icon name="flash_on" color="orange" class="q-mr-xs" />
                   Hands-Free scanning active. Records are saved and cleared automatically.
               </div>

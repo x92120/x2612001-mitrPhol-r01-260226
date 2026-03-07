@@ -3,7 +3,7 @@
  * Extracted from x50-PackingList.vue to keep the page component focused on UI logic.
  */
 import QRCode from 'qrcode'
-import { useLabelPrinter } from './useLabelPrinter'
+import { useLabelPrinter } from '../useLabelPrinter'
 
 export interface PackingPrintDeps {
     $q: any

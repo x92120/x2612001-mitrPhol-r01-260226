@@ -149,6 +149,7 @@ const form = ref<Ingredient>({
 const columns = computed((): QTableColumn[] => [
   { name: 'mat_sap_code', label: t('ingConfig.matSapCode'), field: 'mat_sap_code', align: 'left', sortable: true },
   { name: 're_code', label: t('ingConfig.reCode'), field: 're_code', align: 'left', sortable: true },
+  { name: 'ingredient_ref_id', label: 'Ref ID', field: (row: any) => `I0${String(row.id || 0).padStart(5, '0')}`, align: 'left', sortable: true },
   { name: 'name', label: t('ingConfig.ingredientName'), field: 'name', align: 'left', sortable: true },
   { name: 'package_container_type', label: t('ingConfig.containerType'), field: 'package_container_type', align: 'left', sortable: true },
   { name: 'Group', label: t('ingConfig.group'), field: 'Group', align: 'left', sortable: true },

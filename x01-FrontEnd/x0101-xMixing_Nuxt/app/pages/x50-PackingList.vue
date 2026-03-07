@@ -8,7 +8,7 @@ import { useQuasar } from 'quasar'
 import { appConfig } from '~/appConfig/config'
 import { useAuth } from '../composables/useAuth'
 import { useMqttLocalDevice } from '../composables/useMqttLocalDevice'
-import { usePackingPrints } from '../composables/usePackingPrints'
+import { usePackingPrints } from '../composables/packing/usePackingPrints'
 
 const $q = useQuasar()
 const { getAuthHeader } = useAuth()
@@ -34,11 +34,12 @@ const scanSPP = ref('')
 // Scan simulation dialog
 const showScanDialog = ref(false)
 const scanDialogWh = ref<'FH' | 'SPP'>('FH')
+const scanDialogFilter = ref('')
 
 // Warehouse sort
 const whSortCol = ref<'bag_id' | 're_code' | 'weight' | 'status' | 'batch_id' | 'plan_id'>('re_code')
 const whSortAsc = ref(true)
-const filterMiddleWh = ref<'FH' | 'SPP'>('FH')
+const filterMiddleWh = ref<'ALL' | 'FH' | 'SPP'>('ALL')
 const middleHideBoxed = ref(false)   // false = show All, true = hide Boxed
 const filterReCode = ref('')         // filter ingredients by re_code
 
@@ -426,6 +427,23 @@ const fetchPlans = async () => {
     $q.notify({ type: 'negative', message: 'Failed to load production plans' })
   } finally {
     loading.value = false
+  }
+}
+
+/** Fetch reqs + recs for a batch on-demand (when user expands it) */
+const fetchBatchReqs = async (batch: any) => {
+  if (batch._reqsLoaded) return // already loaded
+  batch._reqsLoading = true
+  try {
+    const reqs = await $fetch<any[]>(`${appConfig.apiBaseUrl}/prebatch-reqs/by-batch/${batch.batch_id}`, {
+      headers: getAuthHeader() as Record<string, string>
+    })
+    batch.reqs = reqs || []
+    batch._reqsLoaded = true
+  } catch (e) {
+    console.error('Error fetching reqs for', batch.batch_id, e)
+  } finally {
+    batch._reqsLoading = false
   }
 }
 
@@ -893,7 +911,7 @@ onMounted(async () => {
           <!-- Department Filter -->
           <q-select
             v-model="filterMiddleWh"
-            :options="['FH', 'SPP']"
+            :options="['ALL', 'FH', 'SPP']"
             dense outlined options-dense
             style="width: 80px;"
             class="text-weight-bold"
@@ -931,7 +949,7 @@ onMounted(async () => {
     <div class="row q-col-gutter-sm" style="flex:1;min-height:0;overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap;">
 
       <!-- ═══ LEFT PANEL: Production Plans + Transferred ═══ -->
-      <div class="col-2 column q-gutter-y-sm" style="height:100%;min-height:0;overflow:hidden;">
+      <div class="col-4 column q-gutter-y-sm" style="height:100%;min-height:0;overflow:hidden;">
         <q-card class="column shadow-2" style="flex:1;min-height:0;overflow:hidden;">
           <q-card-section class="bg-blue-9 text-white q-py-xs">
             <div class="row items-center justify-between no-wrap">
@@ -975,7 +993,7 @@ onMounted(async () => {
                       v-for="batch in (plan.batches || [])" :key="batch.batch_id"
                       dense expand-separator
                       :header-class="selectedBatch?.batch_id === batch.batch_id ? 'bg-blue-1 text-blue-9' : 'bg-grey-1 text-grey-9'"
-                      @show="onBatchClick(batch, plan)"
+                      @show="onBatchClick(batch, plan); fetchBatchReqs(batch)"
                     >
                       <template v-slot:header>
                         <q-item-section avatar style="min-width:20px">
@@ -1000,37 +1018,103 @@ onMounted(async () => {
                         </q-item-section>
                       </template>
 
-                      <!-- Level 3: ingredients -->
-                      <q-list dense class="q-pl-md bg-white">
-                        <q-item
-                          v-for="req in (batch.reqs || [])" :key="req.id"
-                          dense style="min-height:28px"
-                        >
-                          <q-item-section avatar style="min-width:18px">
-                            <q-icon
-                              :name="req.status === 2 ? 'check_circle' : (req.status === 1 ? 'hourglass_top' : 'radio_button_unchecked')"
-                              :color="req.status === 2 ? 'blue-7' : (req.status === 1 ? 'orange-7' : 'grey-4')"
-                              size="xs"
-                            />
-                          </q-item-section>
-                          <q-item-section>
-                            <q-item-label style="font-size:0.7rem" class="text-mono">
-                              {{ req.re_code }}
-                            </q-item-label>
-                          </q-item-section>
-                          <q-item-section side>
-                            <span class="text-weight-bold" style="font-size:0.7rem">
-                              {{ req.required_volume?.toFixed(1) }} kg
-                            </span>
-                          </q-item-section>
-                          <q-item-section side style="min-width:52px">
-                            <q-badge
-                              :color="req.status === 2 ? 'blue-7' : (req.status === 1 ? 'orange-7' : 'grey-4')"
-                              :label="req.status === 2 ? 'Done' : (req.status === 1 ? 'In-Prog' : 'Waiting')"
-                              style="font-size:0.6rem"
-                            />
-                          </q-item-section>
-                        </q-item>
+                      <!-- Level 3: grouped by WH → RE-Code → PreBatch Packages -->
+                      <div v-if="batch._reqsLoading" class="text-center q-pa-sm">
+                        <q-spinner color="blue" size="sm" /> <span class="text-caption text-grey">Loading...</span>
+                      </div>
+                      <q-list v-else dense separator class="q-pl-sm">
+                        <!-- WH Groups -->
+                        <template v-for="whGroup in (() => {
+                          const reqs = (batch.reqs || []).filter((r: any) => filterMiddleWh === 'ALL' ? true : (filterMiddleWh === 'FH' ? isFH(r.wh || '') : isSPP(r.wh || '')))
+                          const groups: Record<string, any[]> = {}
+                          reqs.forEach((r: any) => { const w = r.wh || '-'; if (!groups[w]) groups[w] = []; groups[w].push(r) })
+                          return Object.entries(groups).map(([wh, items]) => ({ wh, items, totalVol: items.reduce((s: number, i: any) => s + (i.required_volume || 0), 0) }))
+                        })()" :key="whGroup.wh">
+                          <q-expansion-item
+                            dense expand-separator
+                            :header-class="whGroup.wh === 'FH' ? 'bg-blue-1' : (whGroup.wh === 'SPP' ? 'bg-light-blue-1' : 'bg-grey-2')"
+                          >
+                            <template v-slot:header>
+                              <q-item-section avatar style="min-width:20px">
+                                <q-badge
+                                  :color="whGroup.wh === 'FH' ? 'blue-6' : (whGroup.wh === 'SPP' ? 'light-blue-6' : 'grey-6')"
+                                  :label="whGroup.wh"
+                                  style="font-size:0.6rem;"
+                                />
+                              </q-item-section>
+                              <q-item-section>
+                                <q-item-label class="text-weight-bold" style="font-size:0.72rem">
+                                  {{ whGroup.wh }} — {{ whGroup.items.length }} items
+                                </q-item-label>
+                              </q-item-section>
+                              <q-item-section side>
+                                <span class="text-weight-bold" style="font-size:0.68rem">{{ whGroup.totalVol.toFixed(4) }} kg</span>
+                              </q-item-section>
+                            </template>
+
+                            <!-- RE-Code items within WH group -->
+                            <q-list dense separator class="q-pl-sm">
+                              <q-expansion-item
+                                v-for="req in whGroup.items" :key="req.id"
+                                dense expand-separator
+                                :header-class="req.status === 2 ? 'bg-blue-1' : (req.status === 1 ? 'bg-orange-1' : '')"
+                              >
+                                <template v-slot:header>
+                                  <q-item-section avatar style="min-width:18px">
+                                    <q-icon
+                                      :name="req.status === 2 ? 'check_circle' : (req.status === 1 ? 'hourglass_top' : 'radio_button_unchecked')"
+                                      :color="req.status === 2 ? 'blue-7' : (req.status === 1 ? 'orange-7' : 'grey-4')"
+                                      size="xs"
+                                    />
+                                  </q-item-section>
+                                  <q-item-section>
+                                    <q-item-label style="font-size:0.7rem" class="text-weight-bold">
+                                      {{ req.re_code }}
+                                    </q-item-label>
+                                  </q-item-section>
+                                  <q-item-section side>
+                                    <span class="text-weight-bold" style="font-size:0.68rem">{{ req.required_volume?.toFixed(4) }}</span>
+                                  </q-item-section>
+                                  <q-item-section side style="min-width:44px">
+                                    <q-badge
+                                      :color="req.status === 2 ? 'blue-7' : (req.status === 1 ? 'orange-7' : 'grey-4')"
+                                      :label="req.status === 2 ? 'Done' : (req.status === 1 ? 'Batch' : 'Wait')"
+                                      style="font-size:0.55rem"
+                                    />
+                                  </q-item-section>
+                                </template>
+
+                                <!-- PreBatch Package IDs -->
+                                <q-list dense class="q-pl-md bg-grey-1">
+                                  <q-item
+                                    v-for="rec in (req.recs || [])" :key="rec.id"
+                                    dense style="min-height:24px;"
+                                  >
+                                    <q-item-section avatar style="min-width:16px">
+                                      <q-icon
+                                        :name="rec.packing_status === 1 ? 'check_box' : 'check_box_outline_blank'"
+                                        :color="rec.packing_status === 1 ? 'blue-6' : 'grey-4'"
+                                        size="xs"
+                                      />
+                                    </q-item-section>
+                                    <q-item-section>
+                                      <q-item-label style="font-size:0.62rem;font-family:monospace;">
+                                        {{ rec.batch_record_id }}
+                                      </q-item-label>
+                                    </q-item-section>
+                                    <q-item-section side>
+                                      <span style="font-size:0.62rem;font-weight:bold;">{{ rec.net_volume?.toFixed(4) }} kg</span>
+                                    </q-item-section>
+                                  </q-item>
+                                  <q-item v-if="!req.recs || req.recs.length === 0" dense style="min-height:22px">
+                                    <q-item-section class="text-grey-5 text-italic" style="font-size:0.6rem">No packages yet</q-item-section>
+                                  </q-item>
+                                </q-list>
+                              </q-expansion-item>
+                            </q-list>
+                          </q-expansion-item>
+                        </template>
+
                         <q-item v-if="!batch.reqs || batch.reqs.length === 0" style="min-height:28px">
                           <q-item-section class="text-grey text-italic" style="font-size:0.65rem">No requirements</q-item-section>
                         </q-item>
@@ -1054,9 +1138,9 @@ onMounted(async () => {
       </div>
 
 
-      <!-- ═══ RIGHT PANEL: Packing Box + Pre-Batch Package ═══ -->
+      <!-- ═══ PANEL 2+3: Packing Box + Pre-Batch Packages ═══ -->
       <div class="col-4 column q-gutter-y-sm" style="order:2;height:100%;min-height:0;overflow:hidden;">
-        <q-card class="col-auto shadow-2">
+        <q-card class="column shadow-2" style="flex:0 0 30%;min-height:0;overflow:hidden;">
           <q-card-section class="bg-indigo-9 text-white q-py-xs">
             <div class="row items-center justify-between no-wrap">
               <div class="row items-center q-gutter-xs">
@@ -1069,7 +1153,7 @@ onMounted(async () => {
                   flat round dense icon="print" size="sm"
                   :color="(filterMiddleWh === 'FH' ? allFhPacked : allSppPacked) ? 'white' : 'indigo-3'"
                   :disable="!(filterMiddleWh === 'FH' ? allFhPacked : allSppPacked)"
-                  @click="printBoxLabel(filterMiddleWh)"
+                  @click="printBoxLabel(filterMiddleWh === 'ALL' ? 'FH' : filterMiddleWh)"
                 >
                   <q-tooltip>{{ (filterMiddleWh === 'FH' ? allFhPacked : allSppPacked) ? 'Print Box Packing Label' : 'Pack all bags first' }}</q-tooltip>
                 </q-btn>
@@ -1124,8 +1208,8 @@ onMounted(async () => {
           </q-card-section>
         </q-card>
 
-
-        <q-card class="col column shadow-2">
+        <!-- Pre-Batch Packages -->
+        <q-card class="col column shadow-2" style="flex:1;min-height:0;overflow:hidden;">
           <q-card-section :class="filterMiddleWh === 'FH' ? 'bg-blue-8 text-white' : 'bg-light-blue-8 text-white'" class="q-py-xs">
             <div class="row items-center justify-between no-wrap">
               <div class="row items-center q-gutter-xs">
@@ -1143,7 +1227,7 @@ onMounted(async () => {
                   dense flat size="xs" icon="unarchive" label="Boxed"
                   :color="(filterMiddleWh === 'FH' ? allFhPacked : allSppPacked) ? 'white' : 'blue-3'"
                   :disable="!(filterMiddleWh === 'FH' ? allFhPacked : allSppPacked)"
-                  @click="onCloseBox(filterMiddleWh)"
+                  @click="onCloseBox(filterMiddleWh === 'ALL' ? 'FH' : filterMiddleWh)"
                   class="text-weight-bold"
                 />
               </div>
@@ -1191,7 +1275,7 @@ onMounted(async () => {
           <div class="col relative-position">
             <q-scroll-area class="fit q-pa-xs">
               <div v-if="!selectedBatch" class="text-center q-pa-lg text-grey">
-                <q-icon name="inventory_2" size="xl" class="q-mb-sm" /><br>
+                <q-icon name="inventory_2" size="xl" class="q-mb-xs" /><br>
                 {{ t('packingList.selectBatchToView') }}
               </div>
 
@@ -1270,7 +1354,7 @@ onMounted(async () => {
 
       </div>
       <!-- ═══ 4TH PANEL: Ready to Delivery ═══ -->
-      <div class="col-3 column" style="order:3;height:100%;min-height:0;overflow:hidden;">
+      <div class="col-4 column" style="order:3;height:100%;min-height:0;overflow:hidden;">
         <q-card class="column shadow-2" style="flex:1;min-height:0;overflow:hidden;">
           <q-card-section class="bg-indigo-7 text-white q-py-xs">
             <div class="row items-center justify-between no-wrap">
@@ -1339,7 +1423,7 @@ onMounted(async () => {
 
                     <q-item-section side style="padding-right:0;min-width:28px">
                       <q-btn flat round dense icon="print" size="xs" color="indigo-4"
-                        @click.stop="printPackingBoxReport(row.batch_id, filterMiddleWh)">
+                        @click.stop="printPackingBoxReport(row.batch_id, filterMiddleWh === 'ALL' ? 'FH' : filterMiddleWh)">
                         <q-tooltip>Print Box Report (A4)</q-tooltip>
                       </q-btn>
                     </q-item-section>
@@ -1502,51 +1586,64 @@ onMounted(async () => {
               <q-btn flat round dense icon="close" color="white" v-close-popup />
             </div>
           </div>
-          <div class="text-caption q-mt-xs" style="opacity: 0.8;">
-            Click a bag to simulate scanning it into the packing box
-          </div>
+        </q-card-section>
+
+        <!-- Filter -->
+        <q-card-section class="q-py-xs">
+          <q-input
+            v-model="scanDialogFilter"
+            outlined dense clearable
+            placeholder="Filter by Packing-ID or RE-Code..."
+            bg-color="grey-1"
+          >
+            <template v-slot:prepend>
+              <q-icon name="filter_list" size="sm" />
+            </template>
+          </q-input>
         </q-card-section>
 
         <q-separator />
 
         <q-card-section class="q-pa-none" style="max-height: 45vh; overflow: auto;">
-          <q-list dense separator>
-            <q-item
-              v-for="bag in scanDialogBags" :key="bag.id"
-              clickable v-ripple
-              @click="onSimScanClick(bag)"
-              :class="isPacked(bag) ? 'bg-blue-1' : ''"
-              style="min-height: 48px;"
-            >
-              <q-item-section avatar style="min-width: 30px;">
-                <q-icon
-                  :name="isPacked(bag) ? 'check_circle' : 'qr_code'"
-                  :color="isPacked(bag) ? 'blue' : 'grey-6'"
-                  size="sm"
-                />
-              </q-item-section>
-              <q-item-section>
-                <q-item-label class="text-weight-bold" style="font-size: 0.8rem;">
-                  {{ bag.re_code }} — {{ bag.net_volume?.toFixed(3) }} kg
-                </q-item-label>
-                <q-item-label caption style="font-size: 0.65rem;">
-                  {{ bag.batch_record_id }}
-                </q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <q-badge
-                  :color="isPacked(bag) ? 'blue' : 'blue-grey'"
-                  :label="isPacked(bag) ? 'Packed' : 'Tap to scan'"
-                />
-              </q-item-section>
-            </q-item>
-            <q-item v-if="scanDialogBags.length === 0">
-              <q-item-section class="text-center text-grey q-pa-lg">
-                <q-icon name="inbox" size="lg" class="q-mb-sm" /><br>
-                No {{ scanDialogWh }} pre-batch bags available
-              </q-item-section>
-            </q-item>
-          </q-list>
+          <table style="width:100%;border-collapse:collapse;font-size:0.75rem;">
+            <thead>
+              <tr style="background:#f5f5f5;border-bottom:1px solid #e0e0e0;position:sticky;top:0;z-index:1;">
+                <th style="text-align:left;padding:6px 8px;">Packing-ID</th>
+                <th style="text-align:left;padding:6px 8px;">RE-Code</th>
+                <th style="text-align:right;padding:6px 8px;width:100px;">Volume</th>
+                <th style="text-align:center;padding:6px 8px;width:90px;">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="bag in scanDialogBags.filter((b: any) => {
+                  if (!scanDialogFilter) return true
+                  const q = scanDialogFilter.toLowerCase()
+                  return (b.batch_record_id || '').toLowerCase().includes(q) || (b.re_code || '').toLowerCase().includes(q)
+                })"
+                :key="bag.id"
+                :class="isPacked(bag) ? 'bg-blue-1' : ''"
+                style="border-bottom:1px solid #f0f0f0;cursor:pointer;"
+                @click="onSimScanClick(bag)"
+              >
+                <td style="padding:6px 8px;font-family:monospace;font-size:0.68rem;">{{ bag.batch_record_id }}</td>
+                <td style="padding:6px 8px;font-weight:600;">{{ bag.re_code }}</td>
+                <td style="padding:6px 8px;text-align:right;font-weight:bold;">{{ bag.net_volume?.toFixed(4) }} kg</td>
+                <td style="padding:6px 8px;text-align:center;">
+                  <q-badge
+                    :color="isPacked(bag) ? 'blue' : 'blue-grey'"
+                    :label="isPacked(bag) ? 'Packed' : 'Tap to scan'"
+                  />
+                </td>
+              </tr>
+              <tr v-if="scanDialogBags.length === 0">
+                <td colspan="4" style="padding:24px;text-align:center;color:#999;">
+                  <q-icon name="inbox" size="lg" class="q-mb-sm" /><br>
+                  No {{ scanDialogWh }} pre-batch bags available
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </q-card-section>
       </q-card>
     </q-dialog>

@@ -843,15 +843,15 @@ onMounted(() => {
                     <!-- Container Size -->
                     <div class="col-12 col-md-3">
                         <div class="text-subtitle2 q-mb-xs text-no-wrap">Container Size (kg)</div>
-                        \u003cq-select
+                        <q-select
                             outlined
-                            v-model=\"containerSize\"
-                            :options=\"containerSizeOptions\"
+                            v-model="containerSize"
+                            :options="containerSizeOptions"
                             dense
-                            bg-color=\"white\"
-                            input-class=\"text-right\"
-                        \u003e
-                        \u003c/q-select\u003e
+                            bg-color="white"
+                            input-class="text-right"
+                        >
+                        </q-select>
                     </div>
 
                     <!-- Next Package No -->

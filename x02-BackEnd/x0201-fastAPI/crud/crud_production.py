@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from typing import Optional, List
 from datetime import date, datetime
@@ -8,8 +8,9 @@ import schemas
 
 # Production Plan CRUD
 def get_production_plans(db: Session, skip: int = 0, limit: int = 1000) -> List[models.ProductionPlan]:
+    from sqlalchemy.orm import lazyload
     return db.query(models.ProductionPlan).options(
-        joinedload(models.ProductionPlan.batches).joinedload(models.ProductionBatch.reqs)
+        selectinload(models.ProductionPlan.batches).lazyload(models.ProductionBatch.reqs)
     ).order_by(models.ProductionPlan.created_at.desc()).offset(skip).limit(limit).all()
 
 def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate) -> models.ProductionPlan:
@@ -27,15 +28,19 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
             total_plan_volume = num_batches * plan_data.batch_size
 
         # Generate plan_id
-        # Format: plan-{plant}-{yyyy-mm-dd}-{nnn}
+        # Format: Pnnn-YYMMDD-ppp  (P001=Plant 1, P002=Plant 2, ...)
         today = date.today()
-        date_str = today.strftime("%Y-%m-%d")
-        plant_str = plan_data.plant.replace(" ", "") if plan_data.plant else "Unknown"
+        date_str = today.strftime("%y%m%d")  # YYMMDD
         
-        # Find the max existing sequence by checking BOTH production_plans AND
-        # production_batches tables. This handles orphaned records from failed
-        # creations or deletions that didn't cascade properly.
-        prefix = f"plan-{plant_str}-{date_str}-"
+        # Extract plant number from plant field (e.g. "Line-1" → 1, "Line-2" → 2)
+        plant_raw = plan_data.plant or "Line-1"
+        import re
+        plant_match = re.search(r'(\d+)', plant_raw)
+        plant_num = int(plant_match.group(1)) if plant_match else 1
+        plant_code = f"P{plant_num:03d}"
+        
+        # Find max existing sequence for this plant+date
+        prefix = f"{plant_code}-{date_str}-"
 
         # Check max sequence in production_plans
         max_plan_id = db.query(sa_func.max(models.ProductionPlan.plan_id)).filter(
@@ -45,15 +50,13 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
         seq_from_plans = 0
         if max_plan_id:
             try:
-                # plan_id = "plan-Line-1-2026-02-23-001"
-                # We need the sequence part after the date: split on prefix to get "001"
+                # plan_id = "P001-260305-001" → suffix = "001"
                 suffix = max_plan_id[len(prefix):]
                 seq_from_plans = int(suffix)
             except (ValueError, IndexError):
                 seq_from_plans = 0
 
-        # Also check max sequence in production_batches (orphaned batch_ids)
-        # batch_id format: "plan-Line-1-2026-02-23-001-001" (plan_id + "-" + batch_seq)
+        # Also check max sequence in production_batches
         max_batch_id = db.query(sa_func.max(models.ProductionBatch.batch_id)).filter(
             models.ProductionBatch.batch_id.like(f"{prefix}%")
         ).scalar()
@@ -61,8 +64,7 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
         seq_from_batches = 0
         if max_batch_id:
             try:
-                # batch_id = "plan-Line-1-2026-02-23-003-001"
-                # Extract plan sequence: remove prefix -> "003-001", take first part
+                # batch_id = "P001-260305-003-001" → suffix = "003-001", take first part
                 suffix = max_batch_id[len(prefix):]
                 plan_seq_part = suffix.split("-")[0]
                 seq_from_batches = int(plan_seq_part)
@@ -70,7 +72,7 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
                 seq_from_batches = 0
 
         sequence = max(seq_from_plans, seq_from_batches) + 1
-        plan_id_str = f"plan-{plant_str}-{date_str}-{sequence:03d}"
+        plan_id_str = f"{plant_code}-{date_str}-{sequence:02d}"
 
         # === SINGLE TRANSACTION: Plan + History + Batches + Requirements ===
         db_plan = models.ProductionPlan(
@@ -121,13 +123,7 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
                 if step.re_code not in ingredient_template:
                     ing = db.query(models.Ingredient).filter(models.Ingredient.re_code == step.re_code).first()
                     ing_name = ing.name if ing else step.re_code
-                    # Find default warehouse
-                    wh_loc = "-"
-                    first_stock = db.query(models.IngredientIntakeList.intake_from).filter(
-                        models.IngredientIntakeList.re_code == step.re_code
-                    ).first()
-                    if first_stock:
-                        wh_loc = first_stock[0]
+                    wh_loc = ing.warehouse if ing and ing.warehouse else "-"
                     ingredient_template[step.re_code] = {'qty': 0, 'name': ing_name, 'wh': wh_loc}
                 
                 ingredient_template[step.re_code]['qty'] += step_req
@@ -174,7 +170,9 @@ def create_production_plan(db: Session, plan_data: schemas.ProductionPlanCreate)
         raise RuntimeError(f"Database error: {str(e)}")
 
 def get_production_batches(db: Session, skip: int = 0, limit: int = 1000) -> List[models.ProductionBatch]:
-   return db.query(models.ProductionBatch).order_by(models.ProductionBatch.created_at.desc()).offset(skip).limit(limit).all()
+   return db.query(models.ProductionBatch).options(
+       joinedload(models.ProductionBatch.reqs)
+   ).order_by(models.ProductionBatch.created_at.desc()).offset(skip).limit(limit).all()
 
 def update_production_batch_status(db: Session, batch_id: int, status: str) -> Optional[models.ProductionBatch]:
     batch = db.query(models.ProductionBatch).filter(models.ProductionBatch.id == batch_id).first()

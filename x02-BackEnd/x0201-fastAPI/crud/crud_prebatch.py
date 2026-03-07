@@ -185,8 +185,10 @@ def delete_prebatch_rec(db: Session, record_id: int) -> bool:
 # ---------------------------------------------------------------------------
 
 def get_prebatch_reqs_by_batch(db: Session, batch_id: str) -> List[models.PreBatchReq]:
-    """Get ingredient requirements for a specific batch."""
-    return db.query(models.PreBatchReq).filter(models.PreBatchReq.batch_id == batch_id).all()
+    """Get ingredient requirements for a specific batch, with prebatch recs."""
+    return db.query(models.PreBatchReq).options(
+        selectinload(models.PreBatchReq.recs)
+    ).filter(models.PreBatchReq.batch_id == batch_id).all()
 
 
 def update_prebatch_req_status(db: Session, batch_id: str, re_code: str, status: int) -> bool:

@@ -293,11 +293,24 @@ class PreBatchReqBase(BaseModel):
 class PreBatchReqCreate(PreBatchReqBase):
     pass
 
+class PreBatchRecSummary(BaseModel):
+    """Lightweight rec for nesting inside PreBatchReq"""
+    id: int
+    batch_record_id: str
+    package_no: Optional[int] = None
+    total_packages: Optional[int] = None
+    net_volume: Optional[float] = None
+    packing_status: Optional[int] = 0
+
+    class Config:
+        from_attributes = True
+
 class PreBatchReq(PreBatchReqBase):
     id: int
     total_packaged: Optional[float] = 0.0
     created_at: datetime
     updated_at: Optional[datetime] = None
+    recs: List[PreBatchRecSummary] = []
 
     class Config:
         from_attributes = True
@@ -410,6 +423,16 @@ class ProductionBatch(ProductionBatchBase):
     class Config:
         from_attributes = True
 
+class ProductionBatchSummary(ProductionBatchBase):
+    """Lightweight batch for plans list — no reqs loaded."""
+    id: int
+    plan_id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 # Production Plan Schema
 class ProductionPlanBase(BaseModel):
     plan_id: Optional[str] = None
@@ -440,6 +463,18 @@ class ProductionPlan(ProductionPlanBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     batches: List[ProductionBatch] = []
+
+    class Config:
+        from_attributes = True
+
+class ProductionPlanSummary(ProductionPlanBase):
+    """Lightweight plan for list — batches without reqs."""
+    id: int
+    created_by: Optional[str] = None
+    updated_by: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    batches: List[ProductionBatchSummary] = []
 
     class Config:
         from_attributes = True
