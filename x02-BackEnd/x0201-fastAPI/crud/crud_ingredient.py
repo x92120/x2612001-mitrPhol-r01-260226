@@ -6,9 +6,9 @@ import models
 import schemas
 
 # Ingredient CRUD
-def get_ingredient_by_id(db: Session, ingredient_id: str) -> Optional[models.Ingredient]:
-    """Get ingredient by ID"""
-    return db.query(models.Ingredient).filter(models.Ingredient.ingredient_id == ingredient_id).first()
+def get_ingredient_by_id(db: Session, ingredient_db_id: int) -> Optional[models.Ingredient]:
+    """Get ingredient by DB ID"""
+    return db.query(models.Ingredient).filter(models.Ingredient.id == ingredient_db_id).first()
 
 def get_ingredient_by_mat_sap_code(db: Session, mat_sap_code: str) -> Optional[models.Ingredient]:
     """Get ingredient by mat_sap_code"""
@@ -16,16 +16,16 @@ def get_ingredient_by_mat_sap_code(db: Session, mat_sap_code: str) -> Optional[m
 
 def search_ingredient(db: Session, query: str) -> Optional[models.Ingredient]:
     """Search ingredient by ID or blind code"""
-    # Try by ID first
-    ingredient = db.query(models.Ingredient).filter(models.Ingredient.ingredient_id == query).first()
-    if ingredient:
-        return ingredient
     # Try by mat_sap_code
     ingredient = db.query(models.Ingredient).filter(models.Ingredient.mat_sap_code == query).first()
     if ingredient:
         return ingredient
     # Try by re_code
     ingredient = db.query(models.Ingredient).filter(models.Ingredient.re_code == query).first()
+    if ingredient:
+        return ingredient
+    # Try by name (case-insensitive substring)
+    ingredient = db.query(models.Ingredient).filter(models.Ingredient.name.ilike(f"%{query}%")).first()
     if ingredient:
         return ingredient
     # Try by blind_code
@@ -184,11 +184,11 @@ def get_ingredient_intake_lists(db: Session, skip: int = 0, limit: int = 100) ->
         .order_by(models.IngredientIntakeList.intake_at.desc())\
         .offset(skip).limit(limit).all()
 
-def get_ingredient_intake_list(db: Session, list_id: int) -> Optional[models.IngredientIntakeList]:
+def get_ingredient_intake_list(db: Session, list_id: str) -> Optional[models.IngredientIntakeList]:
     """Get ingredient intake list by ID"""
     return db.query(models.IngredientIntakeList)\
         .options(joinedload(models.IngredientIntakeList.history), joinedload(models.IngredientIntakeList.packages))\
-        .filter(models.IngredientIntakeList.id == list_id).first()
+        .filter(models.IngredientIntakeList.intake_lot_id == list_id).first()
 
 def create_ingredient_intake_list(db: Session, list_data: schemas.IngredientIntakeListCreate) -> models.IngredientIntakeList:
     """Create new ingredient intake list with error handling and individual package generation"""
@@ -200,7 +200,7 @@ def create_ingredient_intake_list(db: Session, list_data: schemas.IngredientInta
 
         # Log initial creation history
         db_history = models.IngredientIntakeHistory(
-            intake_list_id=db_list.id,
+            intake_list_id=db_list.intake_lot_id,
             action="Created",
             new_status=db_list.status,
             changed_by=db_list.intake_by,
@@ -222,7 +222,7 @@ def create_ingredient_intake_list(db: Session, list_data: schemas.IngredientInta
                     pkg_weight = std_pkg_vol
                 
                 db_package = models.IntakePackageReceive(
-                    intake_list_id=db_list.id,
+                    intake_list_id=db_list.intake_lot_id,
                     package_no=i,
                     weight=pkg_weight,
                     created_by=db_list.intake_by
@@ -239,10 +239,10 @@ def create_ingredient_intake_list(db: Session, list_data: schemas.IngredientInta
         db.rollback()
         raise RuntimeError(f"Database error: {str(e)}")
 
-def update_ingredient_intake_list(db: Session, list_id: int, list_update: schemas.IngredientIntakeListCreate) -> Optional[models.IngredientIntakeList]:
+def update_ingredient_intake_list(db: Session, list_id: str, list_update: schemas.IngredientIntakeListCreate) -> Optional[models.IngredientIntakeList]:
     """Update ingredient intake list"""
     try:
-        db_list = db.query(models.IngredientIntakeList).filter(models.IngredientIntakeList.id == list_id).first()
+        db_list = db.query(models.IngredientIntakeList).filter(models.IngredientIntakeList.intake_lot_id == list_id).first()
         if db_list:
             old_status = db_list.status
             update_data = list_update.dict(exclude_unset=True)
@@ -259,7 +259,7 @@ def update_ingredient_intake_list(db: Session, list_id: int, list_update: schema
             # Log history if status changed or just a general update
             action = "Status Change" if new_status and new_status != old_status else "Modified"
             db_history = models.IngredientIntakeHistory(
-                intake_list_id=db_list.id,
+                intake_list_id=db_list.intake_lot_id,
                 action=action,
                 old_status=old_status,
                 new_status=db_list.status,
@@ -274,10 +274,10 @@ def update_ingredient_intake_list(db: Session, list_id: int, list_update: schema
         db.rollback()
         raise RuntimeError(f"Database error: {str(e)}")
 
-def delete_ingredient_intake_list(db: Session, list_id: int) -> Optional[models.IngredientIntakeList]:
+def delete_ingredient_intake_list(db: Session, list_id: str) -> Optional[models.IngredientIntakeList]:
     """Delete ingredient intake list with error handling"""
     try:
-        db_list = db.query(models.IngredientIntakeList).filter(models.IngredientIntakeList.id == list_id).first()
+        db_list = db.query(models.IngredientIntakeList).filter(models.IngredientIntakeList.intake_lot_id == list_id).first()
         if db_list:
             db.delete(db_list)
             db.commit()

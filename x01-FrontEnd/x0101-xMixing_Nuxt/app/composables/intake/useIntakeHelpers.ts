@@ -41,7 +41,8 @@ export const formatDateToApi = (val: string | null | undefined) => {
 
 // ── Types ──
 export interface IngredientIntakeHistory {
-    id: number
+    id?: number
+    intake_list_id: string
     action: string
     old_status?: string
     new_status?: string
@@ -51,9 +52,7 @@ export interface IngredientIntakeHistory {
 }
 
 export interface IngredientIntake {
-    id: number
     intake_lot_id: string
-    lot_id: string
     intake_from: string
     intake_to: string
     blind_code: string | null

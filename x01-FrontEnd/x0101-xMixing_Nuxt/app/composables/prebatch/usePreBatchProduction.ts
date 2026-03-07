@@ -35,6 +35,8 @@ export function usePreBatchProduction(deps: ProductionDeps) {
     const isLoading = ref(false)
     const productionPlans = ref<any[]>([])
     const planFilter = ref('All')
+    const searchPlanId = ref('')
+    const searchSkuName = ref('')
     const productionPlanOptions = computed(() => {
         const options = productionPlans.value.map((plan: any) => ({
             label: `${plan.plan_id} (${plan.sku_id || 'No SKU'})`,
@@ -49,9 +51,23 @@ export function usePreBatchProduction(deps: ProductionDeps) {
     const batchIngredients = ref<Record<string, any[]>>({})
 
     const filteredProductionPlans = computed(() => {
-        const base = productionPlans.value.filter((p: any) => p.status !== 'Cancelled')
-        if (planFilter.value === 'All') return base
-        return base.filter((p: any) => p.plan_id === planFilter.value)
+        let base = productionPlans.value.filter((p: any) => p.status !== 'Cancelled')
+
+        if (planFilter.value !== 'All') {
+            base = base.filter((p: any) => p.plan_id === planFilter.value)
+        }
+
+        if (searchPlanId.value) {
+            const search = searchPlanId.value.toLowerCase()
+            base = base.filter((p: any) => p.plan_id.toLowerCase().includes(search))
+        }
+
+        if (searchSkuName.value) {
+            const search = searchSkuName.value.toLowerCase()
+            base = base.filter((p: any) => (p.sku_name || '').toLowerCase().includes(search) || (p.sku_id || '').toLowerCase().includes(search))
+        }
+
+        return base
     })
 
     const plansWithBatches = computed(() => {
@@ -210,18 +226,25 @@ export function usePreBatchProduction(deps: ProductionDeps) {
     const onBatchIngredientClick = async (batch: any, req: any, _plan: any) => {
         // Only send data to the weighing section (right pane)
         // Do NOT change the left monitor view (no onPlanShow / onBatchSelect)
+        const reqVol = req.required_volume || 0
         deps.selectedReCode.value = req.re_code
         deps.selectedRequirementId.value = req.id
         deps.isBatchSelected.value = true
-        deps.requireVolume.value = req.required_volume || 0
+        deps.requireVolume.value = reqVol
 
         // Store batch_id for record fetching
         selectedBatchIndex.value = filteredBatches.value.findIndex(b => b.batch_id === batch.batch_id)
 
         const ingInfo = deps.ingredients.value.find((i: any) => i.re_code === req.re_code)
-        if (ingInfo?.std_package_size && ingInfo.std_package_size > 0) {
-            deps.packageSize.value = ingInfo.std_package_size
+        const stdSize = ingInfo?.std_package_size || 0
+
+        // Auto initial select container size from request volume (cap at standard size if set)
+        if (stdSize > 0) {
+            deps.packageSize.value = Math.min(reqVol, stdSize)
+        } else {
+            deps.packageSize.value = reqVol
         }
+
         await deps.fetchPreBatchRecords()
     }
 
@@ -309,6 +332,8 @@ export function usePreBatchProduction(deps: ProductionDeps) {
         productionPlans,
         planFilter,
         productionPlanOptions,
+        searchPlanId,
+        searchSkuName,
         allBatches,
         filteredBatches,
         ingredientOptions,

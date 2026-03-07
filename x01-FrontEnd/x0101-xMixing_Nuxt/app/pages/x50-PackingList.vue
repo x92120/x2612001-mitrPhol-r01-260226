@@ -5,7 +5,7 @@
  */
 import { ref, computed, onMounted, watch } from 'vue'
 import { useQuasar } from 'quasar'
-import { appConfig } from '../appConfig/config'
+import { appConfig } from '~/appConfig/config'
 import { useAuth } from '../composables/useAuth'
 import { useMqttLocalDevice } from '../composables/useMqttLocalDevice'
 import { usePackingPrints } from '../composables/usePackingPrints'

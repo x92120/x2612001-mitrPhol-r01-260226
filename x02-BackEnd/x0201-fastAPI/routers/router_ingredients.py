@@ -47,9 +47,9 @@ def read_ingredients(
 
 
 @router.get("/ingredients/{ingredient_id}", response_model=schemas.Ingredient)
-def read_ingredient(ingredient_id: str, db: Session = Depends(get_db)):
+def read_ingredient(ingredient_id: int, db: Session = Depends(get_db)):
     """Get ingredient by ID."""
-    db_ingredient = crud.get_ingredient_by_id(db, ingredient_id=ingredient_id)
+    db_ingredient = crud.get_ingredient_by_id(db, ingredient_db_id=ingredient_id)
     if db_ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
     return db_ingredient
@@ -59,8 +59,8 @@ def read_ingredient(ingredient_id: str, db: Session = Depends(get_db)):
 def create_ingredient(ingredient: schemas.IngredientCreate, db: Session = Depends(get_db)):
     """Create new ingredient."""
     try:
-        if crud.get_ingredient_by_id(db, ingredient_id=ingredient.ingredient_id):
-            raise HTTPException(status_code=400, detail="Ingredient ID already exists")
+        if ingredient.mat_sap_code and crud.get_ingredient_by_mat_sap_code(db, mat_sap_code=ingredient.mat_sap_code):
+            raise HTTPException(status_code=400, detail="MAT.SAP Code already exists")
         return crud.create_ingredient(db=db, ingredient=ingredient)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -216,7 +216,7 @@ def migrate_add_intake_to(db: Session = Depends(get_db)):
 
 
 @router.get("/ingredient-intake-lists/{list_id}", response_model=schemas.IngredientIntakeList)
-def get_ingredient_intake_list(list_id: int, db: Session = Depends(get_db)):
+def get_ingredient_intake_list(list_id: str, db: Session = Depends(get_db)):
     """Get ingredient intake list by ID."""
     db_list = crud.get_ingredient_intake_list(db, list_id=list_id)
     if db_list is None:
@@ -236,7 +236,7 @@ def create_ingredient_intake_list(list_data: schemas.IngredientIntakeListCreate,
 
 
 @router.put("/ingredient-intake-lists/{list_id}", response_model=schemas.IngredientIntakeList)
-def update_ingredient_intake_list(list_id: int, list_data: schemas.IngredientIntakeListCreate, db: Session = Depends(get_db)):
+def update_ingredient_intake_list(list_id: str, list_data: schemas.IngredientIntakeListCreate, db: Session = Depends(get_db)):
     """Update ingredient intake list."""
     try:
         db_list = crud.update_ingredient_intake_list(db, list_id=list_id, list_update=list_data)
@@ -248,7 +248,7 @@ def update_ingredient_intake_list(list_id: int, list_data: schemas.IngredientInt
 
 
 @router.delete("/ingredient-intake-lists/{list_id}")
-def delete_ingredient_intake_list(list_id: int, db: Session = Depends(get_db)):
+def delete_ingredient_intake_list(list_id: str, db: Session = Depends(get_db)):
     """Delete ingredient intake list."""
     try:
         db_list = crud.delete_ingredient_intake_list(db, list_id=list_id)

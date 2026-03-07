@@ -96,9 +96,8 @@ class PackageContainerSize(PackageContainerSizeBase):
 class IngredientBase(BaseModel):
     """Base ingredient model"""
     blind_code: Optional[str] = Field(None, max_length=50)
-    mat_sap_code: Optional[str] = Field(None, max_length=50)
+    mat_sap_code: str = Field(..., min_length=1, max_length=50)
     re_code: Optional[str] = Field(None, max_length=50)
-    ingredient_id: str = Field(..., min_length=1, max_length=50)
     name: str = Field(..., min_length=1, max_length=150)
     std_package_size: Optional[float] = Field(25.0, ge=0)
     unit: str = Field("kg", max_length=20)
@@ -126,7 +125,6 @@ class Ingredient(IngredientBase):
 class IngredientIntakeListBase(BaseModel):
     """Base ingredient intake list model (merged with Receipt)"""
     intake_lot_id: str = Field(..., min_length=1, max_length=50)
-    lot_id: str = Field(..., min_length=1, max_length=50)
     intake_from: Optional[str] = Field(None, max_length=50) # Renamed from warehouse_location
     intake_to: Optional[str] = Field(None, max_length=50) # Destination warehouse
     blind_code: Optional[str] = Field(None, max_length=50)
@@ -164,11 +162,11 @@ class IngredientIntakeHistoryBase(BaseModel):
     changed_by: str
 
 class IngredientIntakeHistoryCreate(IngredientIntakeHistoryBase):
-    intake_list_id: int
+    intake_list_id: str
 
 class IngredientIntakeHistory(IngredientIntakeHistoryBase):
     id: int
-    intake_list_id: int
+    intake_list_id: str
     changed_at: datetime
 
     class Config:
@@ -181,11 +179,11 @@ class IntakePackageReceiveBase(BaseModel):
     created_by: Optional[str] = None
 
 class IntakePackageReceiveCreate(IntakePackageReceiveBase):
-    intake_list_id: int
+    intake_list_id: str
 
 class IntakePackageReceive(IntakePackageReceiveBase):
     id: int
-    intake_list_id: int
+    intake_list_id: str
     created_at: datetime
 
     class Config:
@@ -193,7 +191,6 @@ class IntakePackageReceive(IntakePackageReceiveBase):
 
 class IngredientIntakeList(IngredientIntakeListBase):
     """Ingredient intake list response model"""
-    id: int
     intake_at: datetime
     edit_at: Optional[datetime] = None
     history: List[IngredientIntakeHistory] = []

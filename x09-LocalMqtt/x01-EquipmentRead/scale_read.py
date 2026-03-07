@@ -62,33 +62,25 @@ heartbeat_lock = threading.Lock()
 def parse_protocol_A(payload: str) -> dict | None:
     """
     Protocol A: Binary-coded weight format
-    First char = header (A/B/C), then:
-      [0] status char ('0'=stable)
-      [1] sign char ('+'/'-')
-      [2:8] numeric data (6 digits)
-      [8]  decimal places
-      [10:12] unit (optional)
+    Often used by A&D scales or similar with [STX][STU][SIGN][WEIGHT][DEC][UNIT][ETX]
+    Example: '0+0001043 Kg052' -> -0.104 kg
     """
-    # Clean the string from control characters but keep sign and digits
+    # Filter printable characters but keep +/- .
     data = "".join(c for c in payload if c.isprintable() or c in '+-.' )
     
     try:
-        # Looking for pattern: [+-]6_digits + decimal_place_character
-        # E.g. "+0001043" or "-0001043" or "KA0-0001043"
-        # We search from the right to find the 7-digit numeric group preceded by sign
-        match = re.search(r'([+-])(\d{6})(\d)', data)
+        # Looking for numeric data: sign (optional), 5 or more digits, decimal indicator digit
+        # This regex looks for [+-] then at least 5 digits + the trailing decimal place count
+        match = re.search(r'([+-]?)(\d{5,8})(\d)', data)
         if not match:
-            # Try without sign if not found? No, Protocol A usually has sign
-            # Maybe it's missing sign in some frames? 
-            # Let's be more permissive: find 7 digits
-            match = re.search(r'(\d{6})(\d)', data)
-            if not match:
-                return None
+            # Fallback: maybe just digits?
+            match = re.search(r'(\d{5,8})(\d)', data)
+            if not match: return None
             sign_part = '+'
             val_str = match.group(1)
             decimal_char = match.group(2)
         else:
-            sign_part = match.group(1)
+            sign_part = match.group(1) or '+'
             val_str = match.group(2)
             decimal_char = match.group(3)
 
@@ -98,22 +90,20 @@ def parse_protocol_A(payload: str) -> dict | None:
         if sign_part == '-':
             final_weight = -final_weight
         
-        # Stability: assume the character before the sign is status
-        # In frame "0-0001043", the '0' is at index relative to sign
-        status_char = '0' # default
-        sign_index = payload.find(sign_part)
-        if sign_index > 0:
-            status_char = payload[sign_index-1]
+        # Stability: '0'=Stable, usually first char of payload or before sign
+        is_stable = True
+        status_char = '0'
+        if payload.find(sign_part) > 0:
+            status_char = payload[payload.find(sign_part)-1]
+            if status_char not in ('0', ' '):
+                is_stable = False
         
-        is_stable = (status_char == '0')
-
         unit_part = "kg"
-        # Often unit is Kg or g at the end
         if "kg" in payload.lower():
             unit_part = "kg"
-        elif "g" in payload.lower():
+        elif " g " in payload.lower() or payload.lower().endswith("g"):
             unit_part = "g"
-
+        
         return {
             "weight": final_weight,
             "unit": unit_part,
@@ -189,97 +179,85 @@ def scale_reader_thread(scale_id: str, config: dict, mqtt_client):
 
     while True:
         try:
-            with serial.Serial(port, BAUD, timeout=1) as ser:
+            with serial.Serial(port, BAUD, timeout=0.1) as ser:
                 print(f"[{scale_id}] ✅ Connected to {port}")
                 consecutive_errors = 0
+                buffer = b""
 
                 while True:
                     try:
-                        # Some scales need ENQ, others stream. Send ENQ just in case,
-                        # but don't fail if we don't get exactly what we want.
+                        # Request data if not streaming
                         if protocol != "protocol_GS":
                             ser.write(b'\x05')
-
-                        # Read strategy: try ETX first, if timeout try read_line
-                        line = ser.read_until(b'\x03')
-                        if not line or len(line) < 5:
-                            # Fallback: maybe it uses CRLF?
-                            line = ser.readline()
                         
-                        if line:
-                            # Clean bytes: remove STX (0x02) and ETX (0x03)
-                            clean_bytes = line
-                            if line.startswith(b'\x02') and line.endswith(b'\x03'):
-                                clean_bytes = line[1:-1]
-                            elif line.endswith(b'\x03'):
-                                clean_bytes = line[:-1]
-
-                            payload_str = "".join(
-                                c for c in clean_bytes.decode('ascii', errors='replace')
-                                if c.isprintable() or c == '.'
-                            )
-
-                            if payload_str:
-                                result = parser_fn(payload_str)
-                                if result:
-                                    consecutive_errors = 0
-                                    json_payload = json.dumps({
-                                        "weight": result["weight"],
-                                        "scale_id": scale_id,
-                                        "unit": result["unit"],
-                                        "stable": result["stable"],
-                                    })
-                                    mqtt_client.publish(topic, json_payload)
-
-                                    with heartbeat_lock:
-                                        last_payloads[scale_id] = result
-                                        scale_heartbeats[scale_id] = time.time()
-
-                                    print(f"[{scale_id}] {result['weight']} {result['unit']} (Stable: {result['stable']})")
-                                else:
-                                    consecutive_errors += 1
-                                    if len(payload_str) > 3:
-                                        print(f"[{scale_id}] ⚠ Unknown format: {payload_str[:30]}")
+                        # Read available data with a short sleep to allow accumulation
+                        time.sleep(0.1)
+                        if ser.in_waiting > 0:
+                            buffer += ser.read(ser.in_waiting)
+                            
+                            # Clean and check for frames
+                            # Search for latest complete frame using ETX or LF
+                            frame_data = None
+                            if b'\x03' in buffer: # ETX
+                                parts = buffer.split(b'\x03')
+                                buffer = parts.pop()
+                                if parts: frame_data = parts[-1]
+                            elif b'\r\n' in buffer: # CRLF
+                                parts = buffer.split(b'\r\n')
+                                buffer = parts.pop()
+                                if parts: frame_data = parts[-1]
+                            
+                            if frame_data:
+                                payload_str = "".join(
+                                    c for c in frame_data.decode('ascii', errors='replace')
+                                    if c.isprintable() or c in '+-.,'
+                                )
+                                
+                                if payload_str:
+                                    result = parser_fn(payload_str)
+                                    if result:
+                                        consecutive_errors = 0
+                                        mqtt_client.publish(topic, json.dumps({
+                                            "weight": result["weight"],
+                                            "scale_id": scale_id,
+                                            "unit": result["unit"],
+                                            "stable": result["stable"],
+                                        }))
+                                        with heartbeat_lock:
+                                            last_payloads[scale_id] = result
+                                            scale_heartbeats[scale_id] = time.time()
+                                    else:
+                                        consecutive_errors += 1
+                                        if len(payload_str) > 5:
+                                            print(f"[{scale_id}] ⚠ Unknown format: {payload_str[:30]}")
+                            
+                            # Fallback if buffer grows too large
+                            if len(buffer) > 256:
+                                buffer = b""
                         else:
-                            # No data received (timeout)
                             consecutive_errors += 1
 
-                        # If too many consecutive errors, publish error
+                        # Watchdog inside thread
                         if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
                             with heartbeat_lock:
                                 last = last_payloads.get(scale_id, {"weight": 0.0, "unit": "kg"})
-                            err = json.dumps({
+                            mqtt_client.publish(topic, json.dumps({
                                 "weight": last["weight"],
                                 "scale_id": scale_id,
                                 "unit": last["unit"],
                                 "error_msg": "error!!!",
-                                "detail": "No valid data for extended period",
-                            })
-                            mqtt_client.publish(topic, err)
-                            consecutive_errors = 0  # Reset so we don't spam
+                                "detail": "Data stream inconsistent",
+                            }))
+                            consecutive_errors = 0
 
-                    except serial.SerialTimeoutException:
-                        pass
+                    except serial.SerialException as se:
+                        print(f"[{scale_id}] ❌ Serial error on {port}: {se}")
+                        break # Reconnect
 
-                    # ── Sampling interval ──
                     time.sleep(SAMPLING_INTERVAL)
 
-        except Exception as e:
-            print(f"[{scale_id}] ❌ Connection lost on {port}: {e}. Retrying in 3s...")
-            # Publish error while disconnected
-            with heartbeat_lock:
-                last = last_payloads.get(scale_id, {"weight": 0.0, "unit": "kg"})
-            err = json.dumps({
-                "weight": last["weight"],
-                "scale_id": scale_id,
-                "unit": last["unit"],
-                "error_msg": "error!!!",
-                "detail": f"Connection lost: {e}",
-            })
-            try:
-                mqtt_client.publish(f"scale/{scale_id}", err)
-            except Exception:
-                pass
+        except Exception:
+            # Silent retry
             time.sleep(3)
 
 

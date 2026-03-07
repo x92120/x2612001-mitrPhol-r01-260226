@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useQuasar } from 'quasar'
-import { appConfig } from '../appConfig/config'
+import { appConfig } from '~/appConfig/config'
 import { useLabelPrinter } from '../composables/useLabelPrinter'
 
 const $q = useQuasar()

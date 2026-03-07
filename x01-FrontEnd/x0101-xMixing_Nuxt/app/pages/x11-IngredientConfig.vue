@@ -9,7 +9,6 @@ interface Ingredient {
   id?: number
   mat_sap_code: string
   re_code?: string
-  ingredient_id: string
   name: string
   unit: string
   Group?: string
@@ -18,11 +17,13 @@ interface Ingredient {
   creat_by: string
   update_by?: string
   package_container_type?: string
+  std_package_size?: number
 }
 
 const $q = useQuasar()
 const { getAuthHeader, user } = useAuth()
 const { t } = useI18n()
+const route = useRoute()
 
 // --- State ---
 const ingredients = ref<Ingredient[]>([])
@@ -90,10 +91,28 @@ const fetchContainerTypes = async () => {
 }
 
 // Load data on mount
-onMounted(() => {
-  fetchIngredients()
+onMounted(async () => {
+  await fetchIngredients()
   fetchWarehouses()
   fetchContainerTypes()
+
+  if (route.query.mat_sap_code) {
+    const code = String(route.query.mat_sap_code)
+    filters.value.mat_sap_code = code
+    showFilters.value = true
+
+    // If not found, auto open add dialog
+    const exists = ingredients.value.some(i => i.mat_sap_code === code)
+    if (!exists) {
+      openAddDialog()
+      form.value.mat_sap_code = code
+      $q.notify({
+        type: 'info',
+        message: `Material ${code} not found. Please create a configuration for it.`,
+        position: 'top'
+      })
+    }
+  }
 })
 
 const filters = ref<Record<string, string>>({})
@@ -117,7 +136,6 @@ const resetFilters = () => {
 const form = ref<Ingredient>({
   mat_sap_code: '',
   re_code: '',
-  ingredient_id: '',
   name: '',
   unit: 'kg',
   Group: '',
@@ -131,7 +149,6 @@ const form = ref<Ingredient>({
 const columns = computed((): QTableColumn[] => [
   { name: 'mat_sap_code', label: t('ingConfig.matSapCode'), field: 'mat_sap_code', align: 'left', sortable: true },
   { name: 're_code', label: t('ingConfig.reCode'), field: 're_code', align: 'left', sortable: true },
-  { name: 'ingredient_id', label: t('ingConfig.ingredientId'), field: 'ingredient_id', align: 'left', sortable: true },
   { name: 'name', label: t('ingConfig.ingredientName'), field: 'name', align: 'left', sortable: true },
   { name: 'package_container_type', label: t('ingConfig.containerType'), field: 'package_container_type', align: 'left', sortable: true },
   { name: 'Group', label: t('ingConfig.group'), field: 'Group', align: 'left', sortable: true },
@@ -147,7 +164,6 @@ const openAddDialog = () => {
   form.value = {
     mat_sap_code: '',
     re_code: '',
-    ingredient_id: '',
     name: '',
     unit: 'kg',
     Group: '',
@@ -193,7 +209,6 @@ const printLabel = async (row: Ingredient) => {
 
     // Generate QR code
     const qrData = {
-      id: row.ingredient_id,
       mat: row.mat_sap_code,
       re: row.re_code,
       name: row.name
@@ -209,7 +224,7 @@ const printLabel = async (row: Ingredient) => {
 
     svgTemplate = svgTemplate
       .replace('{{QRCode}}', qrSvgImage)
-      .replace('{{ReCode}}', row.re_code || row.ingredient_id || '')
+      .replace('{{ReCode}}', row.re_code || row.mat_sap_code || '')
       .replace('{{IngredientName}}', row.name || '')
       .replace('{{MatSapCode}}', row.mat_sap_code || '')
       .replace('{{ContainerType}}', row.package_container_type || 'Bag')
@@ -525,30 +540,44 @@ const onDeleteContainerType = async (id: number) => {
             class="q-mb-md"
           />
           <q-input v-model="form.re_code" :label="t('ingConfig.reCode')" dense class="q-mb-md" />
-          <q-input v-model="form.ingredient_id" :label="t('ingConfig.ingredientId') + ' *'" dense class="q-mb-md" />
           <q-input v-model="form.name" :label="t('ingConfig.ingredientName') + ' *'" dense class="q-mb-md" />
-          <q-input v-model="form.unit" :label="t('ingConfig.unit')" dense class="q-mb-md" />
-          
-          <q-select
-            v-model="form.package_container_type"
-            :options="packageContainerTypeOptions"
-            :label="t('ingConfig.containerType')"
-            dense
-            class="q-mb-md"
-          >
-            <template v-slot:after>
-              <q-btn
-                round
+
+          <div class="row q-col-gutter-sm q-mb-md">
+            <div class="col-5">
+              <q-select
+                v-model="form.package_container_type"
+                :options="packageContainerTypeOptions"
+                :label="t('ingConfig.containerType')"
                 dense
-                flat
-                icon="settings"
-                color="primary"
-                @click.stop="openContainerTypeManager"
               >
-                <q-tooltip>Manage Container Types</q-tooltip>
-              </q-btn>
-            </template>
-          </q-select>
+                <template v-slot:append>
+                  <q-btn
+                    round
+                    dense
+                    flat
+                    size="sm"
+                    icon="settings"
+                    color="primary"
+                    @click.stop="openContainerTypeManager"
+                  >
+                    <q-tooltip>Manage Container Types</q-tooltip>
+                  </q-btn>
+                </template>
+              </q-select>
+            </div>
+            <div class="col-4">
+              <q-input
+                v-model.number="form.std_package_size"
+                type="number"
+                step="0.001"
+                label="Size (kg) *"
+                dense
+              />
+            </div>
+            <div class="col-3">
+              <q-input v-model="form.unit" label="UOM *" dense />
+            </div>
+          </div>
 
           <q-input v-model="form.Group" :label="t('ingConfig.groupColorFlavor')" dense class="q-mb-md" />
           <q-select

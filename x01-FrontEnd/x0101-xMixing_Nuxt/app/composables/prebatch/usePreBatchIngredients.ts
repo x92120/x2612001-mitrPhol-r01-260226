@@ -26,6 +26,7 @@ export interface IngredientDeps {
     selectedIntakeLotId: any
     // Functions from other composables
     updatePrebatchItemStatus: (batchId: string, reCode: string, status: number) => Promise<void>
+    onBatchIngredientClick?: (batch: any, req: any, plan: any) => Promise<void>
 }
 
 export function usePreBatchIngredients(deps: IngredientDeps) {
@@ -220,13 +221,26 @@ export function usePreBatchIngredients(deps: IngredientDeps) {
         const batches = ingredientBatchDetail.value[ing.re_code] || []
         const firstPending = batches.find((bd: any) => bd.status !== 2)
         if (firstPending) {
-            // Set weighing data directly (no view change)
-            deps.isBatchSelected.value = true
-            deps.requireVolume.value = firstPending.required_volume || 0
-            deps.selectedRequirementId.value = firstPending.req_id || ing.req_id
+            if (deps.onBatchIngredientClick) {
+                // Use the centralized click handler that updates index and records
+                await deps.onBatchIngredientClick(
+                    { batch_id: firstPending.batch_id },
+                    { re_code: ing.re_code, id: firstPending.req_id || firstPending.id, required_volume: firstPending.required_volume, status: firstPending.status },
+                    null
+                )
+            } else {
+                // Fallback (older approach)
+                const reqVol = firstPending.required_volume || 0
+                deps.isBatchSelected.value = true
+                deps.requireVolume.value = reqVol
+                deps.selectedRequirementId.value = firstPending.req_id || firstPending.id || ing.req_id
 
-            if (ing.std_package_size && ing.std_package_size > 0) {
-                deps.packageSize.value = ing.std_package_size
+                const stdSize = ing.std_package_size || 0
+                if (stdSize > 0) {
+                    deps.packageSize.value = Math.min(reqVol, stdSize)
+                } else {
+                    deps.packageSize.value = reqVol
+                }
             }
 
             $q.notify({
@@ -255,9 +269,15 @@ export function usePreBatchIngredients(deps: IngredientDeps) {
             const ing = selectableIngredients.value.find(i => i.re_code === deps.selectedReCode.value)
             if (ing) {
                 // Always use per_batch for scale target (single batch amount)
-                deps.requireVolume.value = ing.per_batch || ing.batch_require || 0
-                if (ing.std_package_size > 0) {
-                    deps.packageSize.value = ing.std_package_size
+                const reqVol = ing.per_batch || ing.batch_require || 0
+                deps.requireVolume.value = reqVol
+
+                const stdSize = ing.std_package_size || 0
+                // Auto initial select container size from request volume (cap at standard size if set)
+                if (stdSize > 0) {
+                    deps.packageSize.value = Math.min(reqVol, stdSize)
+                } else {
+                    deps.packageSize.value = reqVol
                 }
             }
         } else {

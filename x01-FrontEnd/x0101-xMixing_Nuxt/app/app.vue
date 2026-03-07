@@ -60,45 +60,30 @@ const handleLogout = async () => {
       <q-toolbar>
         <q-toolbar-title>
           <div class="row items-center q-gutter-sm">
-            <img src="/x_logo-192.png" alt="xMixing" style="height: 32px; display: block;" />
+            <img src="/x_logo-192.png" alt="xMixing" style="height: 38px; display: block;" />
           </div>
         </q-toolbar-title>
 
-        <!-- Zoom Control: Slider + Dropdown -->
-        <div class="row items-center q-mr-md" style="min-width: 220px;">
+        <!-- Zoom Control -->
+        <div class="row items-center q-mr-md gt-xs" style="min-width: 200px;">
           <q-icon name="zoom_out" size="xs" class="q-mr-xs" />
-          <q-slider
-            v-model="zoomLevel"
-            :min="0.8"
-            :max="2.5"
-            :step="0.1"
-            color="white"
-            thumb-color="white"
-            track-color="blue-3"
-            dense
-            style="flex: 1;"
-          />
+          <q-slider v-model="zoomLevel" :min="0.8" :max="2.5" :step="0.1" color="white" dense style="flex: 1;" />
           <q-icon name="zoom_in" size="xs" class="q-mx-xs" />
           <q-select
             v-model="zoomLevel"
             :options="zoomOptions"
             emit-value
             map-options
-            dense
-            dark
-            borderless
-            style="min-width: 65px;"
-            popup-content-style="min-width: 80px;"
+            dense dark borderless
+            style="min-width: 60px;"
           />
         </div>
 
         <!-- Language Toggle -->
         <q-btn flat round dense @click="toggleLocale" class="q-mr-sm">
-          <span style="font-size: 30px">{{ localeFlag }}</span>
-          <q-tooltip>{{ localeName }}</q-tooltip>
+          <span style="font-size: 26px">{{ localeFlag }}</span>
         </q-btn>
 
-        <q-btn to="/x80-UserLogin" :label="t('nav.login')" flat icon="login" v-if="!user" />
         <q-btn :label="t('nav.logout')" flat icon="logout" v-if="user" @click="handleLogout" />
       </q-toolbar>
 

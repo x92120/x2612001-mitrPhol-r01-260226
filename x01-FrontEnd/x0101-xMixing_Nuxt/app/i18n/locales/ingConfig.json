@@ -24,7 +24,8 @@
         "ingConfig.failedSave": "Failed to save ingredient",
         "ingConfig.stdPrebatchSize": "Standard Prebatch Batch Size (kg)",
         "ingConfig.groupColorFlavor": "Group (Colour/Flavor)",
-        "ingConfig.refreshList": "Refresh List"
+        "ingConfig.refreshList": "Refresh List",
+        "ingConfig.containerType": "Container Type"
     },
     "th": {
         "ingConfig.title": "วัตถุดิบ",
@@ -51,6 +52,7 @@
         "ingConfig.failedSave": "ไม่สามารถบันทึกวัตถุดิบได้",
         "ingConfig.stdPrebatchSize": "ขนาด Prebatch มาตรฐาน (กก.)",
         "ingConfig.groupColorFlavor": "กลุ่ม (สี/รสชาติ)",
-        "ingConfig.refreshList": "รีเฟรชรายการ"
+        "ingConfig.refreshList": "รีเฟรชรายการ",
+        "ingConfig.containerType": "ประเภทภาชนะ"
     }
 }

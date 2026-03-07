@@ -31,9 +31,6 @@ export function usePreBatchRecords(deps: RecordDeps) {
     const recordToDelete = ref<any>(null)
     const showDeleteDialog = ref(false)
     const deleteInput = ref('')
-    const isPackageSizeLocked = ref(true)
-    const showAuthDialog = ref(false)
-    const authPassword = ref('')
     const selectedPreBatchLogs = ref<any[]>([])
 
     // --- Columns ---
@@ -164,35 +161,6 @@ export function usePreBatchRecords(deps: RecordDeps) {
         }
     }
 
-    const unlockPackageSize = () => {
-        if (!isPackageSizeLocked.value) {
-            isPackageSizeLocked.value = true
-            return
-        }
-        authPassword.value = ''
-        showAuthDialog.value = true
-    }
-
-    const verifyAuth = async () => {
-        if (!deps.user.value || !authPassword.value) return
-        try {
-            const payload = {
-                username_or_email: deps.user.value.username,
-                password: authPassword.value
-            }
-            await $fetch(`${appConfig.apiBaseUrl}/auth/verify`, {
-                method: 'POST',
-                body: payload
-            })
-            isPackageSizeLocked.value = false
-            showAuthDialog.value = false
-            authPassword.value = ''
-            $q.notify({ type: 'positive', message: 'Authorization successful' })
-        } catch (err) {
-            $q.notify({ type: 'negative', message: 'Invalid password. Authorization failed.' })
-        }
-    }
-
     // --- Watchers ---
     watch([preBatchLogs, () => deps.selectedBatch.value], ([logs, batch]) => {
         if (!logs || !batch) {
@@ -227,9 +195,6 @@ export function usePreBatchRecords(deps: RecordDeps) {
         recordToDelete,
         showDeleteDialog,
         deleteInput,
-        isPackageSizeLocked,
-        showAuthDialog,
-        authPassword,
         selectedPreBatchLogs,
         // Columns
         prebatchColumns,
@@ -245,7 +210,5 @@ export function usePreBatchRecords(deps: RecordDeps) {
         onDeleteRecord,
         onConfirmDeleteManual,
         onDeleteScanEnter,
-        unlockPackageSize,
-        verifyAuth,
     }
 }

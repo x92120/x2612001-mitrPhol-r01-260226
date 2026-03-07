@@ -15,6 +15,7 @@ import { useMqttLocalDevice } from '~/composables/useMqttLocalDevice'
 
 const $q = useQuasar()
 const { getAuthHeader, user } = useAuth()
+const authHeader = () => getAuthHeader() as Record<string, string>
 const { generateLabelSvg, printLabel } = useLabelPrinter()
 const { t } = useI18n()
 const { connect: connectMqtt, mqttClient } = useMqttLocalDevice()
@@ -36,31 +37,7 @@ const packageSize = ref(0)
 const isBatchSelected = ref(false)
 const ingredients = ref<any[]>([])
 
-const containerSizeOptions = [0.5, 1, 2, 5, 10, 20, 25]
-const containerSize = ref(25)
 
-// Watch containerSize to update packageSize
-watch(containerSize, (val) => {
-  if (val !== packageSize.value) {
-    packageSize.value = val
-  }
-})
-
-watch(packageSize, (val) => {
-  if (containerSizeOptions.includes(val)) {
-    containerSize.value = val
-  }
-})
-
-// Cast getAuthHeader for composable compatibility
-const authHeader = () => getAuthHeader() as Record<string, string>
-
-const currentPackageId = computed(() => {
-  if (selectedBatch.value && selectedReCode.value) {
-    return `${selectedBatch.value.batch_id}-${selectedReCode.value}-${nextPackageNo.value}`
-  }
-  return '-'
-})
 
 // ─── 1. Inventory ───
 const {
@@ -103,6 +80,51 @@ let _updatePrebatchItemStatus: (batchId: string, reCode: string, status: number)
 let _fetchPreBatchRecords: () => Promise<void> = async () => {}
 let _updateRequireVolume: () => void = () => {}
 let _finalizeBatchPreparation: (batchId: number) => Promise<void> = async () => {}
+let _onBatchIngredientClick: (batch: any, req: any, plan: any) => Promise<void> = async () => {}
+
+// ─── shared refs that depend on composables ───
+const baseContainerSizeOptions = [0.1, 0.2, 0.3, 0.5, 1, 2, 5, 10, 20, 25]
+const containerSizeOptions = computed(() => {
+  const options = [...baseContainerSizeOptions]
+  const config = selectableIngredients.value.find(i => i.re_code === selectedReCode.value)
+  if (config && config.std_package_size > 0 && !options.includes(config.std_package_size)) {
+    options.push(config.std_package_size)
+  }
+  return options.sort((a, b) => a - b)
+})
+const containerSize = ref(25)
+
+// Watch containerSize to update packageSize
+watch(containerSize, (val) => {
+  if (val !== packageSize.value) {
+    packageSize.value = val
+  }
+})
+
+watch(packageSize, (val) => {
+  if (containerSizeOptions.value.includes(val)) {
+    containerSize.value = val
+  }
+})
+
+// Watch selectedReCode to initialize containerSize from config
+watch(selectedReCode, (newReCode) => {
+  if (newReCode) {
+    const config = selectableIngredients.value.find(i => i.re_code === newReCode)
+    if (config && config.std_package_size > 0) {
+      containerSize.value = config.std_package_size
+    }
+  }
+})
+
+const currentPackageId = computed(() => {
+  if (selectedBatch.value && selectedReCode.value) {
+    return `${selectedBatch.value.batch_id}-${selectedReCode.value}-${nextPackageNo.value}`
+  }
+  return '-'
+})
+
+
 
 // ─── 3. Ingredients ───
 // selectedProductionPlan and selectedBatch are owned by production composable
@@ -128,6 +150,7 @@ const ingredientsComposable = usePreBatchIngredients({
   selectedInventoryItem,
   selectedIntakeLotId,
   updatePrebatchItemStatus: (...args: [string, string, number]) => _updatePrebatchItemStatus(...args),
+  onBatchIngredientClick: (...args: [any, any, any]) => _onBatchIngredientClick(...args),
 })
 const {
   prebatchItems, expandedIngredients, ingredientBatchDetail, expandedBatchRows,
@@ -157,12 +180,11 @@ const recordsComposable = usePreBatchRecords({
   finalizeBatchPreparation: (...args: [number]) => _finalizeBatchPreparation(...args),
 })
 const {
-  preBatchLogs, recordToDelete, showDeleteDialog, deleteInput,
-  isPackageSizeLocked, showAuthDialog, authPassword, selectedPreBatchLogs,
+  preBatchLogs, recordToDelete, showDeleteDialog, deleteInput, selectedPreBatchLogs,
   prebatchColumns, filteredPreBatchLogs, totalCompletedWeight,
   completedCount, nextPackageNo, preBatchSummary,
   fetchPreBatchRecords, executeDeletion, onDeleteRecord,
-  onConfirmDeleteManual, onDeleteScanEnter, unlockPackageSize, verifyAuth,
+  onConfirmDeleteManual, onDeleteScanEnter,
 } = recordsComposable
 
 // Wire forward refs
@@ -196,6 +218,7 @@ const production = usePreBatchProduction({
 })
 const {
   selectedBatchIndex, isLoading, productionPlans, planFilter, productionPlanOptions,
+  searchPlanId, searchSkuName,
   allBatches, filteredBatches, ingredientOptions, batchIngredients,
   filteredProductionPlans, plansWithBatches, batchIds, selectedBatch, selectedProductionPlan, selectedPlanDetails, structuredSkuList,
   fetchIngredients, fetchProductionPlans, fetchBatchIds,
@@ -205,6 +228,7 @@ const {
 
 // Wire forward ref & sync production-owned refs into ingredients/records composable
 _finalizeBatchPreparation = finalizeBatchPreparation
+_onBatchIngredientClick = onBatchIngredientClick
 watch(selectedProductionPlan, (val) => { _selectedProductionPlan.value = val }, { immediate: true })
 watch(selectedBatch, (val) => { _selectedBatch.value = val }, { immediate: true })
 
@@ -374,6 +398,40 @@ onMounted(() => {
               <q-badge color="white" text-color="blue-9" class="text-weight-bold">
                 {{ filteredProductionPlans.length }} Plans Found
               </q-badge>
+            </div>
+          </q-card-section>
+
+          <!-- Search Filters -->
+          <q-card-section class="q-py-xs bg-grey-2 border-bottom">
+            <div class="row q-col-gutter-xs">
+              <div class="col-6">
+                <q-input 
+                  v-model="searchPlanId" 
+                  dense 
+                  outlined 
+                  square
+                  bg-color="white"
+                  placeholder="Filter Plan ID..."
+                >
+                  <template v-slot:prepend>
+                    <q-icon name="search" size="xs" color="grey-6" />
+                  </template>
+                </q-input>
+              </div>
+              <div class="col-6">
+                <q-input 
+                  v-model="searchSkuName" 
+                  dense 
+                  outlined 
+                  square
+                  bg-color="white"
+                  placeholder="Filter Name/SKU..."
+                >
+                   <template v-slot:prepend>
+                    <q-icon name="search" size="xs" color="grey-6" />
+                  </template>
+                </q-input>
+              </div>
             </div>
           </q-card-section>
           <div class="col relative-position">
@@ -785,28 +843,15 @@ onMounted(() => {
                     <!-- Container Size -->
                     <div class="col-12 col-md-3">
                         <div class="text-subtitle2 q-mb-xs text-no-wrap">Container Size (kg)</div>
-                        <q-select
+                        \u003cq-select
                             outlined
-                            v-model="containerSize"
-                            :options="containerSizeOptions"
+                            v-model=\"containerSize\"
+                            :options=\"containerSizeOptions\"
                             dense
-                            bg-color="white"
-                            input-class="text-right"
-                        >
-                            <template v-slot:append>
-                                <q-btn 
-                                    :icon="isPackageSizeLocked ? 'lock' : 'lock_open'" 
-                                    flat 
-                                    round 
-                                    dense 
-                                    :color="isPackageSizeLocked ? 'grey-7' : 'primary'"
-                                    size="sm" 
-                                    @click="unlockPackageSize"
-                                >
-                                    <q-tooltip>{{ isPackageSizeLocked ? t('preBatch.unlockToEdit') : t('preBatch.lockField') }}</q-tooltip>
-                                </q-btn>
-                            </template>
-                        </q-select>
+                            bg-color=\"white\"
+                            input-class=\"text-right\"
+                        \u003e
+                        \u003c/q-select\u003e
                     </div>
 
                     <!-- Next Package No -->
@@ -909,7 +954,7 @@ onMounted(() => {
                 <!-- Expire Date Highlight -->
                 <template v-slot:body-cell-expire_date="props">
                     <q-td :props="props" class="text-center">
-                        <template v-if="filteredInventory.length > 0 && props.row.id === filteredInventory[0].id">
+                        <template v-if="filteredInventory.length > 0 && props.row.id === filteredInventory[0]?.id">
                             <q-badge color="green" text-color="white">{{ formatDate(props.value) }}</q-badge>
                         </template>
                         <template v-else>{{ formatDate(props.value) }}</template>
@@ -1074,40 +1119,6 @@ onMounted(() => {
         </q-card>
       </div>
     </div>
-
-    <!-- Authorization Required Dialog -->
-    <q-dialog v-model="showAuthDialog" persistent>
-        <q-card style="min-width: 350px">
-            <q-card-section class="bg-primary text-white row items-center">
-                <div class="text-h6">{{ t('preBatch.authRequired') }}</div>
-                <q-space />
-                <q-btn icon="close" flat round dense v-close-popup />
-            </q-card-section>
-
-            <q-card-section class="q-pa-md">
-                <p>{{ t('preBatch.enterPwdUnlock') }}</p>
-                <q-input 
-                    v-model="authPassword" 
-                    type="password" 
-                    outlined 
-                    dense 
-                    :label="t('preBatch.userPassword')" 
-                    autofocus
-                    @keyup.enter="verifyAuth"
-                />
-            </q-card-section>
-
-            <q-card-actions align="right" class="q-pa-md">
-                <q-btn :label="t('common.cancel')" flat color="grey-7" v-close-popup />
-                <q-btn 
-                    :label="t('preBatch.verifyUnlock')" 
-                    color="primary" 
-                    unelevated 
-                    @click="verifyAuth" 
-                />
-            </q-card-actions>
-        </q-card>
-    </q-dialog>
 
     <!-- Cancel & Repack Confirmation Dialog -->
     <q-dialog v-model="showDeleteDialog" persistent>

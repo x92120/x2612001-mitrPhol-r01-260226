@@ -8,7 +8,7 @@ import { appConfig } from '~/appConfig/config'
 import { useAuth } from '~/composables/useAuth'
 import { formatDate, type IngredientIntake } from '~/composables/intake/useIntakeHelpers'
 
-export function useIntakeTable() {
+export function useIntakeTable(intakeMode?: Ref<'supplier' | 'internal'>) {
     const $q = useQuasar()
     const { getAuthHeader } = useAuth()
     const { t } = useI18n()
@@ -48,6 +48,12 @@ export function useIntakeTable() {
         if (!showAll.value) {
             filtered = filtered.filter(row => row.status !== 'Cancelled' && row.status !== 'Reject')
         }
+        // Warehouse Filter (FH or SPP)
+        if (intakeMode?.value) {
+            const targetWh = intakeMode.value === 'supplier' ? 'FH' : 'SPP'
+            filtered = filtered.filter(row => row.intake_to === targetWh)
+        }
+
         return filtered.filter(row =>
             Object.keys(filters.value).every(key => {
                 const fv = filters.value[key]?.toLowerCase()
@@ -86,7 +92,7 @@ export function useIntakeTable() {
 
     const exportTable = () => {
         const cols = columns.value.filter(c => c.name !== 'xActions')
-        const stringCols = ['mat_sap_code', 're_code', 'lot_id', 'intake_lot_id', 'ingredient_id', 'po_number']
+        const stringCols = ['mat_sap_code', 're_code', 'lot_id', 'intake_lot_id', 'po_number']
         const content = [cols.map(c => wrapCsvValue(c.label))]
             .concat(filteredRows.value.map(row =>
                 cols.map(col =>
@@ -108,9 +114,10 @@ export function useIntakeTable() {
 
     const onFileSelected = async (event: Event) => {
         const target = event.target as HTMLInputElement
-        if (!target.files?.length) return
+        const file = target.files?.[0]
+        if (!file) return
         const formData = new FormData()
-        formData.append('file', target.files[0])
+        formData.append('file', file)
         try {
             $q.loading.show({ message: t('ingredient.importingData') })
             const response = await fetch(`${appConfig.apiBaseUrl}/ingredient-intake-lists/bulk-import`, {

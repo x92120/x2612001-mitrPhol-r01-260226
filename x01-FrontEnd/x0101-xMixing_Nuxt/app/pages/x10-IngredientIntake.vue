@@ -12,30 +12,34 @@ import { useIntakeReports } from '~/composables/intake/useIntakeReports'
 const { isConnected: mqttConnected } = useMqttLocalDevice()
 const { t } = useI18n()
 
+// ── State (Lifted for synchronization) ──
+const intakeMode = ref<'supplier' | 'internal'>('supplier')
+
+// ── Labels ──
+const { printLabel, printSinglePackageLabel, testPrint1Page, testPrint2Pages } = useIntakeLabels()
+
 // ── Table ──
 const {
   rows, isLoading, showAll, filters, showFilters, columns, filteredRows,
   showDetailDialog, selectedRecord, openDetailDialog,
   fileInput, fetchReceipts, resetFilters, exportTable, importTable, onFileSelected,
-} = useIntakeTable()
-
-// ── Labels ──
-const { printLabel, printSinglePackageLabel, testPrint1Page, testPrint2Pages } = useIntakeLabels()
+} = useIntakeTable(intakeMode)
 
 // ── Form ──
 const {
-  ingredientCodeRef, scannerReady, intakeFrom, intakeTo, lotNumber, expireDate,
-  ingredientId, xIngredientName, xMatSapCode, xReCode,
-  intakeVol, packageVol, numberOfPackages, manufacturingDate, poNumber, intakeLotId,
-  extDate, reservNo, stockZone, materialType,
+  ingredientCodeRef, scannerReady, intakeFrom, intakeTo, expireDate,
+  ingredientSearchQuery, xIngredientName, xMatSapCode, xReCode,
+  intakeVol, packageVol, numberOfPackages, manufacturingDate, intakeLotId,
   showIngredientDialog, tempIngredientId, isSaving,
   isEditing, editId,
+  showInternalScanDialog, internalScanBuffer,
   allIngredients, ingredientOptions, fetchAllIngredients, filterIngredients, lookupIngredient,
   onScannerEnter, focusScannerInput, generateIntakeLotId,
   openIngredientDialog, confirmIngredientCode, cancelIngredientDialog,
   statusOptions, getStatusColor, updateRecordStatus,
-  onClear, onSave, onEdit, onRejectIntake,
-} = useIntakeForm(rows, fetchReceipts, printLabel)
+  onClear, onSave, onEdit, onRejectIntake, onDelete, processInternalScan,
+  scanBuffer, saveAllInBuffer, isAutoSaving,
+} = useIntakeForm(rows, fetchReceipts, printLabel, intakeMode)
 
 // ── Config (Intake From/To) ──
 const {
@@ -97,13 +101,33 @@ onUnmounted(() => {
 <template>
   <q-page class="q-pa-md bg-white">
     <!-- Page Header -->
-    <div class="bg-blue-9 text-white q-pa-md rounded-borders q-mb-md shadow-2">
-      <div class="row justify-between items-center">
-        <div class="row items-center q-gutter-sm">
+    <div class="bg-blue-9 text-white q-pa-sm rounded-borders q-mb-md shadow-1">
+      <div class="row items-center no-wrap">
+        <div class="row items-center q-gutter-sm q-px-sm">
           <q-icon name="local_shipping" size="sm" />
-          <div class="text-h6 text-weight-bolder">{{ t('ingredient.title') }}</div>
+          <div class="text-subtitle1 text-weight-bolder no-wrap">{{ t('ingredient.title') }}</div>
         </div>
-        <div class="row items-center q-gutter-sm">
+
+        <q-separator vertical dark class="q-mx-md" />
+
+        <q-tabs
+          v-model="intakeMode"
+          dense
+          class="text-white"
+          active-color="yellow-4"
+          indicator-color="yellow-4"
+          align="left"
+          narrow-indicator
+          flat
+          style="min-height: 40px"
+        >
+          <q-tab name="supplier" icon="local_shipping" label="Intake to FH" no-caps />
+          <q-tab name="internal" icon="warehouse" label="Intake to SPP" no-caps />
+        </q-tabs>
+
+        <q-space />
+
+        <div class="row items-center q-gutter-sm q-px-sm">
           <q-btn icon="assessment" round flat text-color="white" @click="showSummaryReport = true" title="Stock Summary Report">
             <q-tooltip>Stock Summary Report</q-tooltip>
           </q-btn>
@@ -113,48 +137,34 @@ onUnmounted(() => {
           <q-btn icon="device_hub" round flat text-color="white" @click="onOpenTraceDialog" title="Traceability Report">
             <q-tooltip>Traceability Report</q-tooltip>
           </q-btn>
-          <q-btn icon="save" round flat text-color="white" @click="onSave" :loading="isSaving" title="Save Intake" />
+          <q-btn icon="save" round flat text-color="white" @click="onSave()" :loading="isSaving" title="Save Intake" />
           <q-btn icon="clear_all" round flat text-color="white" @click="onClear" title="Clear Form" />
         </div>
       </div>
     </div>
 
-    <!-- ═══ INGREDIENT INTAKE ═══ -->
-    <div>
+    <q-tab-panels v-model="intakeMode" animated keep-alive class="bg-transparent">
+      <q-tab-panel name="supplier" class="q-pa-none">
     <div class="row q-mb-lg">
       <div class="col-12">
         <q-card class="shadow-1">
           <q-form class="q-pa-md">
-            <!-- Row 1: Intake ID + Ingredient ID + MAT SAP + Re-Code -->
-            <div class="row q-col-gutter-sm">
-              <div class="col-12 col-md-3">
-                <q-input
-                  outlined
-                  dense
-                  hide-bottom-space
-                  v-model="intakeLotId"
-                  :label="t('ingredient.intakeId')"
-                  readonly
-                  bg-color="grey-2"
-                  :hint="t('ingredient.autoGenId')"
-                />
+            <!-- Row 1: Core Ingredient Identification -->
+            <div class="row q-col-gutter-xs">
+              <div class="col-12 col-sm-6 col-md-2">
+                <q-input outlined dense hide-bottom-space v-model="intakeLotId" :label="t('ingredient.intakeId')" readonly bg-color="grey-2" />
               </div>
-              <div class="col-12 col-md-3">
+              <div class="col-12 col-sm-6 col-md-4">
                 <q-select
                   ref="ingredientCodeRef"
-                  outlined
-                  dense
-                  hide-bottom-space
-                  v-model="ingredientId"
-                  use-input
-                  hide-selected
-                  fill-input
-                  input-debounce="0"
+                  outlined dense hide-bottom-space
+                  v-model="ingredientSearchQuery"
+                  v-model:input-value="ingredientSearchQuery"
+                  use-input hide-selected fill-input input-debounce="0"
                   :options="ingredientOptions"
-                  option-value="ingredient_id"
-                  option-label="ingredient_id"
-                  emit-value
-                  map-options
+                  option-value="mat_sap_code"
+                  option-label="mat_sap_code"
+                  emit-value map-options
                   :label="t('ingredient.ingredientCode')"
                   @filter="filterIngredients"
                   @keyup.enter="onScannerEnter"
@@ -163,218 +173,199 @@ onUnmounted(() => {
                   <template v-slot:option="scope">
                     <q-item v-bind="scope.itemProps">
                       <q-item-section>
-                        <q-item-label>{{ scope.opt.ingredient_id }}</q-item-label>
-                        <q-item-label caption>{{ scope.opt.name }} ({{ scope.opt.mat_sap_code }})</q-item-label>
+                        <q-item-label>{{ scope.opt.name }} [{{ scope.opt.mat_sap_code }} / {{ scope.opt.re_code }}]</q-item-label>
                       </q-item-section>
                     </q-item>
                   </template>
                   <template v-slot:prepend>
-                    <q-icon
-                      name="circle"
-                      color="positive"
-                    />
+                    <q-icon name="circle" color="positive" />
                   </template>
                   <template v-slot:append>
-                    <q-icon
-                      name="qr_code_scanner"
-                      class="cursor-pointer"
-                      @click="openIngredientDialog"
-                    />
+                    <q-icon name="qr_code_scanner" class="cursor-pointer" @click="openIngredientDialog" />
                   </template>
                 </q-select>
               </div>
-              <div class="col-12 col-md-3">
-                <q-input
-                  outlined
-                  dense
-                  hide-bottom-space
-                  v-model="xMatSapCode"
-                  :label="t('ingredient.matSapCode')"
-                  readonly
-                  bg-color="grey-2"
-                />
-              </div>
-              <div class="col-12 col-md-3">
+              <div class="col-12 col-sm-6 col-md-3">
                 <q-input outlined dense hide-bottom-space v-model="xReCode" :label="t('ingredient.reCode')" readonly bg-color="grey-2" />
               </div>
+              <div class="col-12 col-sm-6 col-md-3">
+                <q-input outlined dense hide-bottom-space v-model="xMatSapCode" :label="t('ingredient.matSapCode')" readonly bg-color="grey-2" />
+              </div>
             </div>
 
-            <!-- Row 1.5: Ingredient Name, Mfg Date, Expire Date -->
-            <div class="row q-col-gutter-sm q-mt-xs">
-                <div class="col-12 col-md-6">
-                     <q-input
-                        outlined
-                        dense
-                        hide-bottom-space
-                        v-model="xIngredientName"
-                        :label="t('ingredient.ingredientName')"
-                        readonly
-                        bg-color="grey-2"
-                        >
-                        <template v-slot:after>
-                            <q-btn
-                            icon="settings"
-                            color="primary"
-                            round
-                            flat
-                            to="/x11-IngredientConfig"
-                            title="Ingredient"
-                            />
-                        </template>
-                    </q-input>
-                </div>
-              <div class="col-12 col-md-3">
+            <!-- Row 2: Ingredient Name (Full Width) -->
+            <div class="row q-col-gutter-xs q-mt-xs">
+              <div class="col-12">
+                <q-input outlined dense hide-bottom-space v-model="xIngredientName" :label="t('ingredient.ingredientName')" readonly bg-color="grey-2">
+                  <template v-slot:append>
+                    <q-btn icon="settings" color="primary" round flat size="sm" to="/x11-IngredientConfig" />
+                  </template>
+                </q-input>
+              </div>
+            </div>
+
+            <!-- Row 3: Manufacturing Details -->
+            <div class="row q-col-gutter-xs q-mt-xs">
+              <div class="col-12 col-sm-6">
                 <q-input outlined dense hide-bottom-space v-model="manufacturingDate" :label="t('ingredient.manufacturingDate')" mask="##/##/####" placeholder="DD/MM/YYYY">
-                  <template v-slot:append>
-                    <q-icon name="event" class="cursor-pointer">
-                      <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                        <q-date v-model="manufacturingDate" mask="DD/MM/YYYY">
-                          <div class="row items-center justify-end">
-                            <q-btn v-close-popup :label="t('common.close')" color="primary" flat />
-                          </div>
-                        </q-date>
-                      </q-popup-proxy>
-                    </q-icon>
-                  </template>
+                   <template v-slot:append><q-icon name="event" class="cursor-pointer"><q-popup-proxy><q-date v-model="manufacturingDate" mask="DD/MM/YYYY" /></q-popup-proxy></q-icon></template>
                 </q-input>
               </div>
-              <div class="col-12 col-md-3">
-                <q-input outlined dense hide-bottom-space v-model="expireDate" :label="t('ingredient.expiryDate') + ' *'" mask="##/##/####" placeholder="DD/MM/YYYY">
-                  <template v-slot:append>
-                    <q-icon name="event" class="cursor-pointer">
-                      <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                        <q-date v-model="expireDate" mask="DD/MM/YYYY">
-                          <div class="row items-center justify-end">
-                            <q-btn v-close-popup :label="t('common.close')" color="primary" flat />
-                          </div>
-                        </q-date>
-                      </q-popup-proxy>
-                    </q-icon>
-                  </template>
+              <div class="col-12 col-sm-6">
+                <q-input outlined dense hide-bottom-space v-model="expireDate" :label="t('ingredient.expiryDate')" mask="##/##/####" placeholder="DD/MM/YYYY">
+                   <template v-slot:append><q-icon name="event" class="cursor-pointer"><q-popup-proxy><q-date v-model="expireDate" mask="DD/MM/YYYY" /></q-popup-proxy></q-icon></template>
                 </q-input>
               </div>
             </div>
 
-            <!-- Row 3: *Intake From, *Intake To, *Lot Number, PO Number -->
-            <div class="row q-col-gutter-sm q-mt-xs">
-              <div class="col-12 col-md-3">
-                <q-select
-                  outlined
-                  dense
-                  hide-bottom-space
-                  v-model="intakeFrom"
-                  :options="intakeFromOptions"
-                  label="Intake From *"
-                  map-options
-                  emit-value
-                  dropdown-icon="arrow_drop_down"
-                  bg-color="white"
-                >
-                  <template v-slot:after>
-                    <q-btn
-                      icon="settings"
-                      color="primary"
-                      round
-                      flat
-                      size="sm"
-                      @click="showIntakeFromDialog = true"
-                      title="Config Intake Destination"
-                    />
-                  </template>
-                </q-select>
+            <!-- Row 4: Logistics & Volumes -->
+            <div class="row q-col-gutter-xs q-mt-xs">
+              <div class="col-12 col-sm-2">
+                <q-select outlined dense hide-bottom-space v-model="intakeFrom" :options="intakeFromOptions" label="From *" map-options emit-value />
               </div>
-              <div class="col-12 col-md-3">
-                <q-select
-                  outlined
-                  dense
-                  hide-bottom-space
-                  v-model="intakeTo"
-                  :options="intakeToOptions"
-                  label="Intake To *"
-                  map-options
-                  emit-value
-                  dropdown-icon="arrow_drop_down"
-                  bg-color="white"
-                >
-                  <template v-slot:after>
-                    <q-btn
-                      icon="settings"
-                      color="primary"
-                      round
-                      flat
-                      size="sm"
-                      @click="showIntakeToDialog = true"
-                      title="Config Intake Destination"
-                    />
-                  </template>
-                </q-select>
+              <div class="col-12 col-sm-2">
+                <q-select outlined dense hide-bottom-space v-model="intakeTo" :options="intakeToOptions" label="To *" map-options emit-value />
               </div>
-              <div class="col-12 col-md-3">
-                <q-input outlined dense hide-bottom-space v-model="lotNumber" :label="t('ingredient.lotNumber') + ' *'" />
-              </div>
-              <div class="col-12 col-md-3">
-                <q-input outlined dense hide-bottom-space v-model="poNumber" :label="t('ingredient.poNumber')" />
-              </div>
-            </div>
-
-            <div class="row q-col-gutter-sm q-mt-xs">
-              <div class="col-12 col-md-4">
+              <div class="col-12 col-sm-3">
                 <q-input outlined dense hide-bottom-space v-model="intakeVol" :label="t('ingredient.intakeVolume') + ' *'" />
               </div>
-              <div class="col-12 col-md-4">
+              <div class="col-12 col-sm-3">
                 <q-input outlined dense hide-bottom-space v-model="packageVol" :label="t('ingredient.packageVol')" />
               </div>
-              <div class="col-12 col-md-4">
-                <q-input
-                  outlined
-                  dense
-                  hide-bottom-space
-                  v-model="numberOfPackages"
-                  :label="t('ingredient.numPackages')"
-                  readonly
-                  bg-color="grey-2"
-                  input-class="text-right"
-                />
-              </div>
-            </div>
-
-            <!-- Row 5: Ext Date, Reserv No, Stock Zone, Material Type -->
-            <div class="row q-col-gutter-sm q-mt-xs">
-              <div class="col-12 col-md-3">
-                <q-input outlined dense hide-bottom-space v-model="extDate" label="EXT. Date" mask="##/##/####" placeholder="DD/MM/YYYY">
-                  <template v-slot:append>
-                    <q-icon name="event" class="cursor-pointer">
-                      <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                        <q-date v-model="extDate" mask="DD/MM/YYYY">
-                          <div class="row items-center justify-end">
-                            <q-btn v-close-popup :label="t('common.close')" color="primary" flat />
-                          </div>
-                        </q-date>
-                      </q-popup-proxy>
-                    </q-icon>
-                  </template>
-                </q-input>
-              </div>
-              <div class="col-12 col-md-3">
-                <q-input outlined dense hide-bottom-space v-model="reservNo" label="Reserv No" />
-              </div>
-              <div class="col-12 col-md-3">
-                <q-input outlined dense hide-bottom-space v-model="stockZone" label="Stock Zone" />
-              </div>
-              <div class="col-12 col-md-3">
-                <q-input outlined dense hide-bottom-space v-model="materialType" label="Material Type" />
+              <div class="col-12 col-sm-2">
+                <q-input outlined dense hide-bottom-space v-model="numberOfPackages" label="Pkgs" readonly bg-color="grey-2" input-class="text-right" />
               </div>
             </div>
 
 
           </q-form>
         </q-card>
-      </div>
+        
+        <!-- Buffer Table for Batch Scan (Supplier Tab) -->
+        <div v-if="scanBuffer.length > 0" class="q-mt-md">
+          <q-card flat bordered>
+            <div class="q-pa-sm bg-blue-1 row items-center q-gutter-sm">
+              <div class="text-subtitle2 text-blue-9 text-weight-bolder">Pending Batch Scans ({{ scanBuffer.length }})</div>
+              <q-badge v-if="isAutoSaving" color="orange" flat class="q-pa-xs animate-pulse">Saving in 1.5s...</q-badge>
+              <q-space />
+              <q-btn label="Save All Now" color="positive" icon="save" dense flat @click="saveAllInBuffer" :loading="isSaving" />
+              <q-btn label="Clear" color="grey" dense flat @click="scanBuffer = []" />
+            </div>
+            <q-table
+              dense
+              flat
+              :rows="scanBuffer"
+              :columns="[
+                { name: 'id', label: 'Intake ID', field: 'intake_lot_id', align: 'left' },
+                { name: 'material', label: 'Material', field: 'material_description', align: 'left' },
+                { name: 'vol', label: 'Vol (kg)', field: 'intake_vol', align: 'right' },
+                { name: 'actions', label: '', field: 'actions', align: 'center' }
+              ]"
+              row-key="intake_lot_id"
+              hide-pagination
+              :rows-per-page-options="[0]"
+            >
+              <template v-slot:body-cell-actions="props">
+                <q-td :props="props">
+                  <q-btn icon="close" size="sm" flat round color="negative" @click="scanBuffer.splice(scanBuffer.indexOf(props.row), 1)" />
+                </q-td>
+              </template>
+            </q-table>
+          </q-card>
+        </div>
+       </div>
     </div>
+    </q-tab-panel>
+
+    <q-tab-panel name="internal" class="q-pa-none">
+       <div class="row q-mb-lg">
+         <div class="col-12">
+           <q-card class="shadow-1 q-pa-md text-center bg-blue-1" style="min-height: 180px">
+              <q-icon name="qr_code_scanner" size="80px" color="blue-9" class="q-mb-sm" />
+              <div class="text-h5 text-weight-bolder text-blue-9">{{ t('ingredient.internalScanning') }}</div>
+              <div class="text-subtitle2 text-grey-7 q-mb-md">{{ t('ingredient.scanHint') }}</div>
+              
+              <div style="max-width: 600px; margin: 0 auto">
+                <q-input
+                  v-model="internalScanBuffer"
+                  outlined
+                  rounded dense
+                  bg-color="white"
+                   :placeholder="t('ingredient.waitingScan')"
+                  autofocus
+                  @keyup.enter="processInternalScan"
+                >
+                  <template v-slot:prepend>
+                    <q-icon name="input" color="blue-9" />
+                  </template>
+                </q-input>
+              </div>
+
+              <div style="max-width: 600px; margin: 16px auto 0">
+                <q-input 
+                  outlined 
+                  dense 
+                  hide-bottom-space 
+                  v-model="xIngredientName" 
+                  :label="t('ingredient.ingredientName')" 
+                  readonly 
+                  bg-color="white"
+                  style="border: 2px dashed #ccc"
+                >
+                  <template v-slot:append>
+                    <q-btn icon="settings" color="primary" round flat size="sm" to="/x11-IngredientConfig" />
+                  </template>
+                </q-input>
+
+                <!-- Buffer Table for Batch Scan (Fast Trigger) -->
+                <div v-if="scanBuffer.length > 0" class="q-mt-xl text-left">
+                  <div class="row items-center q-gutter-sm q-mb-sm">
+                    <div class="text-subtitle1 text-weight-bold text-blue-9">Pending Scans ({{ scanBuffer.length }})</div>
+                    <q-badge v-if="isAutoSaving" color="orange" flat class="q-ml-sm q-pa-xs animate-pulse">
+                        <q-icon name="sync" size="14px" class="q-mr-xs" />
+                        Auto-saving in 1.5s...
+                    </q-badge>
+                    <q-space />
+                    <q-btn label="Save All" color="positive" icon="save" @click="saveAllInBuffer" :loading="isSaving" unelevated />
+                    <q-btn label="Clear" color="grey" flat @click="scanBuffer = []" dense />
+                  </div>
+                  <q-table
+                    dense
+                    flat bordered
+                    :rows="scanBuffer"
+                    :columns="[
+                      { name: 'id', label: 'Intake ID', field: 'intake_lot_id', align: 'left', style: 'width: 150px' },
+                      { name: 'name', label: 'Material', field: 'material_description', align: 'left' },
+                      { name: 'vol', label: 'Vol (kg)', field: 'intake_vol', align: 'right', style: 'width: 100px' },
+                      { name: 'actions', label: '', field: 'actions', align: 'center', style: 'width: 50px' }
+                    ]"
+                    row-key="intake_lot_id"
+                    hide-pagination
+                    :rows-per-page-options="[0]"
+                    class="bg-white"
+                  >
+                    <template v-slot:body-cell-actions="props">
+                      <q-td :props="props">
+                        <q-btn icon="close" size="sm" flat round color="negative" @click="scanBuffer.splice(scanBuffer.indexOf(props.row), 1)" />
+                      </q-td>
+                    </template>
+                  </q-table>
+                </div>
+              </div>
+              
+              <div class="q-mt-xl text-caption text-grey-6 row justify-center items-center">
+                  <q-icon name="flash_on" color="orange" class="q-mr-xs" />
+                  Hands-Free scanning active. Records are saved and cleared automatically.
+              </div>
+           </q-card>
+         </div>
+       </div>
+    </q-tab-panel>
+    </q-tab-panels>
 
     <!-- Ingredient Intake Table -->
     <div class="row items-center justify-between q-mb-sm">
-      <div class="text-h6">{{ t('ingredient.intakeList') }}</div>
+      <div class="text-h6">{{ t('ingredient.intakeList') }} ({{ intakeMode === 'supplier' ? 'FH' : 'SPP' }} Only)</div>
       <div class="row items-center q-gutter-sm">
         <q-btn
           icon="refresh"
@@ -552,6 +543,18 @@ onUnmounted(() => {
                     >
                       <q-tooltip>{{ t('ingredient.infoHistory') }}</q-tooltip>
                     </q-btn>
+                    <q-btn
+                      icon="delete"
+                      color="negative"
+                      unelevated
+                      round
+                      dense
+                      size="sm"
+                      class="q-ml-xs"
+                      @click="onDelete(props.row.id)"
+                    >
+                      <q-tooltip>Delete Record</q-tooltip>
+                    </q-btn>
                   </template>
 
                   <template v-else>
@@ -615,7 +618,7 @@ onUnmounted(() => {
                         <q-list bordered dense separator class="bg-white rounded-borders">
                           <q-item>
                             <q-item-section class="text-grey-7">{{ t('ingredient.lotId') }}</q-item-section>
-                            <q-item-section side>{{ props.row.lot_id }}</q-item-section>
+                            <q-item-section side>{{ formatDate(props.row.manufacturing_date) }}</q-item-section>
                           </q-item>
                           <q-item>
                             <q-item-section class="text-grey-7">{{ t('ingredient.poNo') }}</q-item-section>
@@ -803,6 +806,7 @@ onUnmounted(() => {
       </q-card>
     </q-dialog>
 
+
     <!-- Detail Dialog -->
     <q-dialog v-model="showDetailDialog">
       <q-card style="min-width: 500px" class="q-pa-md">
@@ -818,7 +822,7 @@ onUnmounted(() => {
             <div class="col-6">{{ selectedRecord?.intake_lot_id }}</div>
 
             <div class="col-6 text-weight-bold">{{ t('ingredient.lotId') }}:</div>
-            <div class="col-6">{{ selectedRecord?.lot_id }}</div>
+            <div class="col-6">{{ formatDate(selectedRecord?.manufacturing_date) }}</div>
 
             <div class="col-6 text-weight-bold">{{ t('ingredient.matSapCode') }}:</div>
             <div class="col-6">{{ selectedRecord?.mat_sap_code }}</div>
@@ -1054,7 +1058,6 @@ onUnmounted(() => {
       </q-card>
     </q-dialog>
 
-    </div><!-- end intake tab -->
 
     <!-- ═══ STOCK ADJUSTMENT DIALOG ═══ -->
     <q-dialog v-model="showAdjustDialog" maximized transition-show="slide-up" transition-hide="slide-down">
@@ -1168,7 +1171,7 @@ onUnmounted(() => {
                 :columns="[
                   { name: 'intake_lot_id', label: 'Lot ID', field: 'intake_lot_id', align: 'left' as const, sortable: true },
                   { name: 'intake_from', label: 'From', field: 'intake_from', align: 'left' as const },
-                  { name: 'lot_id', label: 'Lot Date', field: 'lot_id', align: 'center' as const },
+                  { name: 'mfg_date', label: 'Mfg Date', field: 'manufacturing_date', align: 'center' as const, format: (val: any) => formatDate(val) },
                   { name: 'mfg_date', label: 'Mfg Date', field: 'mfg_date', align: 'center' as const },
                   { name: 'expire_date', label: 'Expire', field: 'expire_date', align: 'center' as const },
                   { name: 'intake_vol', label: 'Intake (kg)', field: 'intake_vol', align: 'right' as const, sortable: true, format: (v: any) => v?.toFixed(3) },
@@ -1496,5 +1499,14 @@ onUnmounted(() => {
 .custom-table-border {
   border: 1px solid #777;
   border-radius: 8px;
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .4; }
 }
 </style>

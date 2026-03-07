@@ -47,14 +47,13 @@ class User(Base):
 class Ingredient(Base):
     __tablename__ = "ingredients"
     id = Column(Integer, primary_key=True, index=True)
-    blind_code = Column(String(50), index=True)
-    mat_sap_code = Column(String(50), index=True, nullable=True)
+    blind_code = Column(String(50), index=True,unique=True,nullable=False)
+    mat_sap_code = Column(String(50), index=True, nullable=False, unique=True)
     re_code = Column(String(50))
-    ingredient_id = Column(String(50), nullable=False, index=True)
     name = Column(String(150), nullable=False)
     unit = Column(String(20), default="kg")
     Group = Column(String(50))
-    std_package_size = Column(Float, default=25.0)
+    std_package_size = Column(Float, default=1.0)
     warehouse = Column(String(50), default="")
     package_container_type = Column(String(50), default="Bag")
     status = Column(String(20), default="Active")
@@ -89,13 +88,11 @@ class PackageContainerSize(Base):
 
 class IngredientIntakeList(Base):
     __tablename__ = "ingredient_intake_lists"
-    id = Column(Integer, primary_key=True, index=True)
-    intake_lot_id = Column(String(50), nullable=False, index=True)
-    lot_id = Column(String(50), nullable=False)
+    intake_lot_id = Column(String(50), primary_key=True, index=True)
     intake_from = Column(String(50))
     intake_to = Column(String(50))
     blind_code = Column(String(50), index=True)
-    mat_sap_code = Column(String(50), nullable=False, index=True)
+    mat_sap_code = Column(String(50), nullable=False, index=True, unique=True)
     re_code = Column(String(50))
     material_description = Column(String(200))
     uom = Column(String(20))
@@ -125,7 +122,7 @@ class IngredientIntakeList(Base):
 class IngredientIntakeHistory(Base):
     __tablename__ = "ingredient_intake_history"
     id = Column(Integer, primary_key=True, index=True)
-    intake_list_id = Column(Integer, ForeignKey("ingredient_intake_lists.id"), nullable=False)
+    intake_list_id = Column(String(50), ForeignKey("ingredient_intake_lists.intake_lot_id"), nullable=False)
     action = Column(String(50), nullable=False)
     old_status = Column(String(20))
     new_status = Column(String(20))
@@ -138,7 +135,7 @@ class IngredientIntakeHistory(Base):
 class IntakePackageReceive(Base):
     __tablename__ = "intake_package_receive"
     id = Column(Integer, primary_key=True, index=True)
-    intake_list_id = Column(Integer, ForeignKey("ingredient_intake_lists.id"), nullable=False)
+    intake_list_id = Column(String(50), ForeignKey("ingredient_intake_lists.intake_lot_id"), nullable=False)
     package_no = Column(Integer, nullable=False)
     weight = Column(Float, nullable=False)
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
