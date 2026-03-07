@@ -551,7 +551,7 @@ onUnmounted(() => {
                       dense
                       size="sm"
                       class="q-ml-xs"
-                      @click="onDelete(props.row.id)"
+                      @click="onDelete(props.row.intake_lot_id)"
                     >
                       <q-tooltip>Delete Record</q-tooltip>
                     </q-btn>
