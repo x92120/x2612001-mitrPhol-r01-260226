@@ -2,7 +2,7 @@
  * usePreBatchRecords — PreBatch CRUD, delete, auth
  */
 import { ref, computed, watch } from 'vue'
-import { appConfig } from '../appConfig/config'
+import { appConfig } from '~/appConfig/config'
 import type { QTableColumn } from 'quasar'
 
 export interface RecordDeps {

@@ -10,6 +10,7 @@ import { useIntakeStockAdjust } from '~/composables/intake/useIntakeStockAdjust'
 import { useIntakeReports } from '~/composables/intake/useIntakeReports'
 
 const { isConnected: mqttConnected } = useMqttLocalDevice()
+const { t } = useI18n()
 
 // ── Table ──
 const {
@@ -722,7 +723,7 @@ onUnmounted(() => {
                         <q-btn flat dense size="sm" color="primary" label="Load usage data"
                           @click="fetchLotUsage(props.row.intake_lot_id)" />
                       </div>
-                      <div v-else-if="lotUsageMap[props.row.intake_lot_id].length === 0" class="text-grey-7 italic q-pl-md">
+                      <div v-else-if="lotUsageMap[props.row.intake_lot_id]?.length === 0" class="text-grey-7 italic q-pl-md">
                         No pre-batch usage recorded for this lot.
                       </div>
                       <q-markup-table v-else dense flat bordered separator="cell" class="text-caption" style="max-height: 250px; overflow-y: auto;">
@@ -746,9 +747,9 @@ onUnmounted(() => {
                           <tr class="bg-grey-2">
                             <td colspan="3" class="text-right text-bold">Total Used:</td>
                             <td class="text-right text-red-9 text-bold">
-                              −{{ lotUsageMap[props.row.intake_lot_id].reduce((s: number, u: any) => s + (u.take_volume || 0), 0).toFixed(4) }} kg
+                              −{{ lotUsageMap[props.row.intake_lot_id]?.reduce((s: number, u: any) => s + (u.take_volume || 0), 0).toFixed(4) }} kg
                             </td>
-                            <td class="text-center text-grey-7">{{ lotUsageMap[props.row.intake_lot_id].length }} records</td>
+                            <td class="text-center text-grey-7">{{ lotUsageMap[props.row.intake_lot_id]?.length }} records</td>
                           </tr>
                         </tbody>
                       </q-markup-table>
@@ -932,7 +933,7 @@ onUnmounted(() => {
                     </span>
                   </q-item-label>
                   <q-item-label caption>
-                    By {{ h.update_by }} at {{ new Date(h.update_at).toLocaleString('en-GB') }}
+                    By {{ h.changed_by }} at {{ new Date(h.changed_at).toLocaleString('en-GB') }}
                   </q-item-label>
                   <q-item-label v-if="h.remarks" caption italic> "{{ h.remarks }}" </q-item-label>
                 </q-item-section>

@@ -2,7 +2,7 @@
  * usePreBatchInventory — Inventory, FIFO, warehouses, scanning
  */
 import { ref, computed, watch, nextTick } from 'vue'
-import { appConfig } from '../appConfig/config'
+import { appConfig } from '~/appConfig/config'
 import type { QTableColumn } from 'quasar'
 
 export interface InventoryItem {

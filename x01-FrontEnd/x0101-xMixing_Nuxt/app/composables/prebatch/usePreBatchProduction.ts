@@ -2,7 +2,7 @@
  * usePreBatchProduction — Plan/batch selection, filtering, navigation
  */
 import { ref, computed, watch } from 'vue'
-import { appConfig } from '../appConfig/config'
+import { appConfig } from '~/appConfig/config'
 
 export interface ProductionDeps {
     $q: any

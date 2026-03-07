@@ -69,35 +69,50 @@ def parse_protocol_A(payload: str) -> dict | None:
       [8]  decimal places
       [10:12] unit (optional)
     """
-    # Strip any header char (A, B, C, etc.)
-    data = payload
-    for prefix in ('A', 'B', 'C'):
-        if data.startswith(prefix):
-            data = data[1:]
-            break
-
-    data = data.strip()
-    if len(data) < 9:
-        return None
-
+    # Clean the string from control characters but keep sign and digits
+    data = "".join(c for c in payload if c.isprintable() or c in '+-.' )
+    
     try:
-        status_char = data[0]
-        sign_char = data[1]
-        data_str = data[2:8]
-        decimal_char = data[8]
+        # Looking for pattern: [+-]6_digits + decimal_place_character
+        # E.g. "+0001043" or "-0001043" or "KA0-0001043"
+        # We search from the right to find the 7-digit numeric group preceded by sign
+        match = re.search(r'([+-])(\d{6})(\d)', data)
+        if not match:
+            # Try without sign if not found? No, Protocol A usually has sign
+            # Maybe it's missing sign in some frames? 
+            # Let's be more permissive: find 7 digits
+            match = re.search(r'(\d{6})(\d)', data)
+            if not match:
+                return None
+            sign_part = '+'
+            val_str = match.group(1)
+            decimal_char = match.group(2)
+        else:
+            sign_part = match.group(1)
+            val_str = match.group(2)
+            decimal_char = match.group(3)
 
-        raw_val = float(data_str)
+        raw_val = float(val_str)
         decimal_places = int(decimal_char)
         final_weight = raw_val / (10 ** decimal_places)
-        if sign_char == '-':
+        if sign_part == '-':
             final_weight = -final_weight
+        
+        # Stability: assume the character before the sign is status
+        # In frame "0-0001043", the '0' is at index relative to sign
+        status_char = '0' # default
+        sign_index = payload.find(sign_part)
+        if sign_index > 0:
+            status_char = payload[sign_index-1]
+        
         is_stable = (status_char == '0')
 
         unit_part = "kg"
-        if len(data) >= 12:
-            extracted = data[10:12].strip()
-            if extracted:
-                unit_part = extracted.lower()
+        # Often unit is Kg or g at the end
+        if "kg" in payload.lower():
+            unit_part = "kg"
+        elif "g" in payload.lower():
+            unit_part = "g"
 
         return {
             "weight": final_weight,

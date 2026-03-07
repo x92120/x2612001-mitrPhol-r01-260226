@@ -43,7 +43,9 @@ export const formatDateToApi = (val: string | null | undefined) => {
 export interface IngredientIntakeHistory {
     id: number
     action: string
-    details: string
+    old_status?: string
+    new_status?: string
+    remarks?: string
     changed_by: string
     changed_at: string
 }

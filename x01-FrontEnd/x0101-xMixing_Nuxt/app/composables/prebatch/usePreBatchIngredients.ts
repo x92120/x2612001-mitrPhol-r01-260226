@@ -2,7 +2,7 @@
  * usePreBatchIngredients — Ingredient requirements, expand/collapse, package plan
  */
 import { ref, computed, watch } from 'vue'
-import { appConfig } from '../appConfig/config'
+import { appConfig } from '~/appConfig/config'
 import type { QTableColumn } from 'quasar'
 
 export interface IngredientDeps {

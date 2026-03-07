@@ -2,7 +2,7 @@
  * usePreBatchLabels — Label data, print/reprint, label dialogs
  */
 import { ref, computed, watch } from 'vue'
-import { appConfig } from '../appConfig/config'
+import { appConfig } from '~/appConfig/config'
 
 export interface LabelDeps {
     $q: any
