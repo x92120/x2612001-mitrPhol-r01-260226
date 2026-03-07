@@ -30,7 +30,6 @@ def test_create_intake_list(client):
         "/ingredient-intake-lists/",
         json={
             "intake_lot_id": "INTAKE-TEST-001",
-            "lot_id": "LOT-TEST-01",
             "mat_sap_code": "MAT-TEST-001",
             "re_code": "RE-TEST-001",
             "material_description": "Test Ingredient Description",
@@ -60,7 +59,6 @@ def test_get_intake_by_id(client):
         "/ingredient-intake-lists/",
         json={
             "intake_lot_id": "INTAKE-GET-TEST",
-            "lot_id": "LOT-GET-TEST",
             "mat_sap_code": "MAT-TEST-001",
             "re_code": "RE-TEST-001",
             "material_description": "Get Test",

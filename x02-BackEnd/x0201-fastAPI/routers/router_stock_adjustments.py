@@ -316,7 +316,6 @@ def get_summary_report(
 
         lot_data = {
             "intake_lot_id": intake.intake_lot_id,
-            "lot_id": intake.lot_id,
             "mat_sap_code": intake.mat_sap_code,
             "re_code": intake.re_code or "",
             "material_description": intake.material_description or "",

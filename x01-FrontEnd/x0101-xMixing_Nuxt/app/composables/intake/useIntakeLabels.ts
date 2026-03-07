@@ -30,7 +30,7 @@ async function fillTemplate(templateStr: string, record: IngredientIntake, pkgNo
         .replace(/\{\{ExtDate\}\}/g, formatDate(record.ext_date))
         .replace(/\{\{PackageVol\}\}/g, pkgWeight.toFixed(4))
         .replace(/\{\{UOM\}\}/g, record.uom || 'kg')
-        .replace(/\{\{LodNo\}\}/g, record.lot_id || '-')
+        .replace(/\{\{LodNo\}\}/g, formatDate(record.manufacturing_date) || '-')
         .replace(/\{\{MaterialType\}\}/g, record.material_type || '-')
         .replace(/\{\{ReservNo\}\}/g, record.reserv_no || '-')
         .replace(/\{\{ReceiveDate\}\}/g, formatDate(record.intake_at))
@@ -121,7 +121,7 @@ export function useIntakeLabels() {
     /** Test print (1 page) */
     const testPrint1Page = () => {
         printLabel({
-            intake_lot_id: 'TEST-1PG', mat_sap_code: 'MAT-1', re_code: 'RE-1', lot_id: 'LOT-1',
+            intake_lot_id: 'TEST-1PG', mat_sap_code: 'MAT-1', re_code: 'RE-1',
             intake_at: new Date().toISOString(), expire_date: new Date().toISOString(),
             manufacturing_date: new Date().toISOString(), intake_vol: 10, package_intake: 1,
             intake_package_vol: 10, intake_by: 'tester',
@@ -131,7 +131,7 @@ export function useIntakeLabels() {
     /** Test print (2 pages) */
     const testPrint2Pages = () => {
         printLabel({
-            intake_lot_id: 'FIX-TEST-001', mat_sap_code: 'MAT12345', re_code: 'RE-TEST', lot_id: 'LOT-TEST-999',
+            intake_lot_id: 'FIX-TEST-001', mat_sap_code: 'MAT12345', re_code: 'RE-TEST',
             intake_at: new Date().toISOString(), expire_date: new Date().toISOString(),
             manufacturing_date: new Date().toISOString(), intake_vol: 50, package_intake: 2,
             intake_package_vol: 25, intake_by: user.value?.username || 'tester',

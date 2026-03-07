@@ -1375,8 +1375,8 @@ onMounted(() => {
                                 <div class="text-h6 text-weight-bold">{{ formatDate(intakeLabelData?.expire_date) }}</div>
                             </div>
                             <div class="col-6">
-                                <div class="text-caption text-weight-bold text-grey-7 uppercase">Supplier Lot</div>
-                                <div class="text-subtitle1 text-weight-bold word-break-all">{{ intakeLabelData?.lot_id }}</div>
+                                <div class="text-caption text-weight-bold text-grey-7 uppercase">Mfg Date</div>
+                                <div class="text-subtitle1 text-weight-bold word-break-all">{{ formatDate(intakeLabelData?.manufacturing_date) }}</div>
                             </div>
                         </div>
                     </div>

@@ -31,7 +31,6 @@ export function useIntakeTable(intakeMode?: Ref<'supplier' | 'internal'>) {
         { name: 'intake_lot_id', align: 'center', label: t('ingredient.intakeLotId'), field: 'intake_lot_id', sortable: true },
         { name: 'intake_from', align: 'center', label: 'Intake From', field: 'intake_from', sortable: true },
         { name: 'intake_to', align: 'center', label: 'Intake To', field: 'intake_to', sortable: true },
-        { name: 'lot_id', align: 'center', label: t('ingredient.lotId'), field: 'lot_id', sortable: true },
         { name: 'mat_sap_code', align: 'center', label: t('ingredient.matSapCode'), field: 'mat_sap_code', sortable: true },
         { name: 're_code', align: 'center', label: t('ingredient.reCode'), field: 're_code', sortable: true },
         { name: 'material_description', align: 'left', label: t('ingredient.materialDesc'), field: 'material_description', sortable: true },
@@ -92,7 +91,7 @@ export function useIntakeTable(intakeMode?: Ref<'supplier' | 'internal'>) {
 
     const exportTable = () => {
         const cols = columns.value.filter(c => c.name !== 'xActions')
-        const stringCols = ['mat_sap_code', 're_code', 'lot_id', 'intake_lot_id', 'po_number']
+        const stringCols = ['mat_sap_code', 're_code', 'intake_lot_id', 'po_number']
         const content = [cols.map(c => wrapCsvValue(c.label))]
             .concat(filteredRows.value.map(row =>
                 cols.map(col =>

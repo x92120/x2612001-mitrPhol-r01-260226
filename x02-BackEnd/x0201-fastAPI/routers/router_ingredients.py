@@ -309,7 +309,6 @@ async def bulk_import_ingredient_intake(file: UploadFile = File(...), db: Sessio
 
                 item = schemas.IngredientIntakeListCreate(
                     intake_lot_id=crud.get_next_intake_id(db),
-                    lot_id=row_clean.get('Lot_ID') or row_clean.get('Material') or 'Unknown',
                     intake_from=row_clean.get('Storage Location') or row_clean.get('Storage Loca'),
                     mat_sap_code=mat_code,
                     re_code=row_clean.get('Re-Code'),

@@ -51,7 +51,6 @@ def test_intake_history_tracking(client):
         "/ingredient-intake-lists/",
         json={
             "intake_lot_id": "HISTORY-TEST-001",
-            "lot_id": "LOT-HIST-01",
             "mat_sap_code": "MAT-TEST-001",
             "re_code": "RE-TEST-001",
             "material_description": "History Test",
@@ -70,7 +69,6 @@ def test_intake_history_tracking(client):
         f"/ingredient-intake-lists/{intake_id}",
         json={
             "intake_lot_id": "HISTORY-TEST-001",
-            "lot_id": "LOT-HIST-01",
             "mat_sap_code": "MAT-TEST-001",
             "re_code": "RE-TEST-001",
             "material_description": "History Test",
